@@ -1,8 +1,4 @@
-// Top-level build file. Declares which versions of the Android Gradle
-// Plugin (AGP) and Kotlin the project uses, but does not apply them here
-// (apply false) - the ":app" module applies them itself.
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
 plugins {
-    id("com.android.application") version "8.6.0" apply false
-    id("org.jetbrains.kotlin.android") version "2.0.0" apply false
-    id("org.jetbrains.kotlin.plugin.compose") version "2.0.0" apply false
+    alias(libs.plugins.android.application) apply false
 }
