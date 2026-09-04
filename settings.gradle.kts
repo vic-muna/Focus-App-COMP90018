@@ -1,19 +1,13 @@
+// Tells Gradle where to find plugins and dependencies for the whole project,
+// and which modules make up the project (just ":app" for now).
 pluginManagement {
     repositories {
-        google {
-            content {
-                includeGroupByRegex("com\\.android.*")
-                includeGroupByRegex("com\\.google.*")
-                includeGroupByRegex("androidx.*")
-            }
-        }
+        google()
         mavenCentral()
         gradlePluginPortal()
     }
 }
-plugins {
-    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
-}
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
@@ -22,6 +16,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "FocusApp"
+rootProject.name = "Focus"
 include(":app")
- 
