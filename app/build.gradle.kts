@@ -78,4 +78,7 @@ dependencies {
     //     "Run Tests" action has somewhere to look) ---
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
+
+    // Needed for GPS location
+    implementation("com.google.android.gms:play-services-location:21.0.1")
 }
