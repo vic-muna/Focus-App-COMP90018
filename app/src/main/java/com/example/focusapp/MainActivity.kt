@@ -8,7 +8,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import com.example.focusapp.ui.navigation.FocusAppNavGraph
-
+import com.google.android.gms.location.FusedLocationProviderClient
 /**
  * MainActivity
  * -------------
