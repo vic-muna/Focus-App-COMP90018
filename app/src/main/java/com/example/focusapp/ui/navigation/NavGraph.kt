@@ -73,8 +73,8 @@ fun FocusAppNavGraph() {
         ) {
             composable(Destinations.APPS) {
                 AppsScreen(
-                    onEditGroupClick = { groupName ->
-                        navController.navigate(Destinations.editAppGroupRoute(groupName))
+                    onEditGroupClick = { groupId ->
+                        navController.navigate(Destinations.editAppGroupRoute(groupId))
                     },
                     onAddGroupClick = {
                         navController.navigate(Destinations.ADD_APP_GROUP)
@@ -87,14 +87,17 @@ fun FocusAppNavGraph() {
             // Secondary screens - not tabs themselves, only reached via Apps.
             composable(
                 route = Destinations.EDIT_APP_GROUP,
-                arguments = listOf(navArgument("groupName") { type = NavType.StringType })
+                arguments = listOf(navArgument("groupId") { type = NavType.StringType })
             ) { backStackEntry ->
-                val groupName = backStackEntry.arguments?.getString("groupName") ?: "X"
+                val groupId = backStackEntry.arguments?.getString("groupId") ?: ""
                 EditAppGroupScreen(
-                    groupName = groupName,
+                    groupId = groupId,
                     onSaveClick = {
-                        // "Save" has no real effect yet (nothing is
-                        // persisted) - it just returns to the Apps list.
+                        // "Save" has no real effect on the schedule fields
+                        // yet (nothing is persisted for those) - it just
+                        // returns to the Apps list. The group's name/apps
+                        // themselves were already persisted back when the
+                        // group was created on AddAppGroupScreen.
                         navController.popBackStack()
                     }
                 )
