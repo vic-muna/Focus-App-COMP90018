@@ -1,4 +1,7 @@
 package com.example.focusapp.data.sensor
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.Priority
 
 /**
  * SensorDataSource
@@ -21,6 +24,15 @@ package com.example.focusapp.data.sensor
  *    plain sensor reading)
  */
 class SensorDataSource {
+    private val DEFAULT_UPDATE_INTERVAL_GPS: Long = 30
+    private val FAST_UPDATE_INTERVAL_GPS: Long = 5
+
+    private lateinit var fusedLocationProviderClient: FusedLocationProviderClient
+    private val locationRequest: LocationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000 * DEFAULT_UPDATE_INTERVAL_GPS)
+        .setMinUpdateIntervalMillis(1000 * FAST_UPDATE_INTERVAL_GPS)
+        .setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY)
+        .build()
+
 
     /** TODO: to be implemented later - returns current lat/lng from GPS/Wi-Fi. */
     fun getCurrentLocation(): Pair<Double, Double>? {

@@ -25,11 +25,11 @@ object Destinations {
     const val SETTINGS = "settings"
 
     // Secondary screens, reachable only from the Apps tab.
-    const val EDIT_APP_GROUP = "edit_app_group/{groupName}"
+    const val EDIT_APP_GROUP = "edit_app_group/{groupId}"
     const val ADD_APP_GROUP = "add_app_group"
 
-    /** Builds a real, navigable route for [EDIT_APP_GROUP] with a given group name filled in. */
-    fun editAppGroupRoute(groupName: String) = "edit_app_group/$groupName"
+    /** Builds a real, navigable route for [EDIT_APP_GROUP] with a given group id filled in. */
+    fun editAppGroupRoute(groupId: String) = "edit_app_group/$groupId"
 }
 
 /**
