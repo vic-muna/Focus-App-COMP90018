@@ -4,27 +4,42 @@
     <!--
         NOTE (Permissions - intentionally left commented out):
         The mechanisms described in the project plan (location zones, shake/
-        face-down gestures, ambient volume detection, app restriction, and
-        cloud sync) will each need a runtime permission below. They are
-        commented out for now because this skeleton does not access any of
-        them yet - uncomment the ones you need as you implement each feature,
-        and remember Android also requires you to *request* dangerous
-        permissions at runtime, not just declare them here.
+        face-down gestures, ambient volume detection, cloud sync) will each
+        need a runtime permission below. They are commented out for now
+        because this skeleton does not access any of them yet - uncomment
+        the ones you need as you implement each feature, and remember
+        Android also requires you to *request* dangerous permissions at
+        runtime, not just declare them here.
 
         <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
         <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
         <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
         <uses-permission android:name="android.permission.RECORD_AUDIO" />
-        <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
         <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
         <uses-permission android:name="android.permission.INTERNET" />
         <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     -->
 
+    <!--
+        Required since Android 11 (API 30): apps can no longer see every
+        other installed package by default ("package visibility"
+        restrictions). This <queries> block tells the OS "let me see any
+        app that has a launcher icon" - exactly what the app-picker dialog
+        needs (PackageManager.queryIntentActivities with this same intent
+        filter), without requiring the much more sensitive
+        QUERY_ALL_PACKAGES permission.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="true"
         android:label="@string/app_name"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar"
+        android:theme="@style/Theme.Material3.DayNight.NoActionBar"
         android:supportsRtl="true">
 
         <!--
@@ -40,6 +55,35 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+            FocusAccessibilityService - prototype for detecting/restricting
+            other apps. A few things here are NOT optional boilerplate:
+
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+                Required by the OS on every AccessibilityService, so that
+                only the system itself is allowed to bind to (i.e. start
+                talking to) it - prevents other apps from impersonating
+                the accessibility framework to control your service.
+
+            The <intent-filter> action is how Android's Settings app finds
+            this class and lists it as an available accessibility service
+            in the first place.
+
+            The <meta-data> points at res/xml/accessibility_service_config.xml,
+            which is where we declare WHICH events we want to be told about.
+        -->
+        <service
+            android:name=".data.accessibility.FocusAccessibilityService"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
 
     </application>
 
