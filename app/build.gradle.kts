@@ -1,4 +1,7 @@
 // Module-level build file for the ":app" module - the actual Android app.
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.google.services)
@@ -7,6 +10,29 @@ plugins {
     // Kotlin 2.0's Compose compiler plugin (replaces the old
     // composeOptions { kotlinCompilerExtensionVersion = ... } approach).
     alias(libs.plugins.kotlin.compose)
+}
+
+//Adding auto api importer
+val localProps = Properties()
+val localPropsFile = rootProject.file("local.properties")
+if (localPropsFile.exists()) {
+    localProps.load(FileInputStream(localPropsFile))
+}
+
+tasks.register("generateGoogleServicesJson") {
+    doLast {
+        val templateFile = file("google-services.json.template")
+        val outputFile = file("google-services.json")
+        val content = templateFile.readText().replace(
+            "REPLACE_WITH_YOUR_KEY",
+            localProps.getProperty("FIREBASE_API_KEY", "").trim()
+        )
+        outputFile.writeText(content)
+    }
+}
+
+tasks.named("preBuild") {
+    dependsOn("generateGoogleServicesJson")
 }
 
 android {
