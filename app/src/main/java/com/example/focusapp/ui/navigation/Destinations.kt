@@ -23,6 +23,7 @@ object Destinations {
     const val APPS = "apps"
     const val MAP = "map"
     const val SETTINGS = "settings"
+    const val HOME = "home"
 
     // Secondary screens, reachable only from the Apps tab.
     const val EDIT_APP_GROUP = "edit_app_group/{groupId}"
@@ -32,22 +33,3 @@ object Destinations {
     fun editAppGroupRoute(groupId: String) = "edit_app_group/$groupId"
 }
 
-/**
- * BottomNavItem
- * ---------------
- * Describes one tab in the bottom navigation bar: which route it navigates
- * to, and what text label to show under its icon.
- */
-data class BottomNavItem(
-    val route: String,
-    val label: String
-)
-
-/**
- * The 3 tabs shown in the bottom navigation bar, in display order.
- */
-val bottomNavItems = listOf(
-    BottomNavItem(Destinations.APPS, "Apps"),
-    BottomNavItem(Destinations.MAP, "Map"),
-    BottomNavItem(Destinations.SETTINGS, "Settings")
-)

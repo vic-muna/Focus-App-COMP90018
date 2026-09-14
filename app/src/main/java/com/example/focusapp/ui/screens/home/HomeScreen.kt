@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
+    modifier: Modifier = Modifier,
     onAvatarClick: () -> Unit = {},
     onQuickFocusClick: () -> Unit = {},
     onMapClick: () -> Unit = {},              // Study Party
@@ -26,7 +27,7 @@ fun HomeScreen(
     onSettingsClick: () -> Unit = {}
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(30.dp),
+        modifier = modifier.fillMaxSize().padding(30.dp),
         verticalArrangement = Arrangement.SpaceBetween,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -89,7 +90,7 @@ fun HomeScreen(
             Column(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .fillMaxWidth(0.85f)
+                    .fillMaxWidth(0.75f)
             ) {
                 HorizontalPager(
                     state = pagerState,
