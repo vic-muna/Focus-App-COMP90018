@@ -25,6 +25,26 @@ object Destinations {
     const val SETTINGS = "settings"
     const val HOME = "home"
 
+    // Replaces the old bottom-left "Map" shortcut on Home - Party Mode is the
+    // planned "Study Party" feature (see the doc comments in
+    // data/remote/RemoteDataSource.kt and data/repository/FocusRepositoryImpl.kt).
+    // UI scaffolding only for now; no networking/P2P logic behind it yet.
+    const val PARTY_MODE = "party_mode"
+
+    // Blocked Apps group flow (reachable from Home's bottom sheet).
+    const val GROUP_LIST = "group_list"
+
+    const val GROUP_SECTION = "group_section/{groupId}"
+    fun groupSectionRoute(groupId: String) = "group_section/$groupId"
+
+    const val EDIT_BLOCKED_APPS_GROUP = "edit_blocked_apps_group/{groupId}"
+    const val NEW_GROUP_ID = "new"
+    fun editBlockedAppsGroupRoute(groupId: String) = "edit_blocked_apps_group/$groupId"
+
+    // Location Zone edit flow (reachable from Home's bottom sheet). Single
+    // zone only - no id/argument needed, unlike the blocked-apps group flow.
+    const val EDIT_LOCATION_ZONE = "edit_location_zone"
+
     // Secondary screens, reachable only from the Apps tab.
     const val EDIT_APP_GROUP = "edit_app_group/{groupId}"
     const val ADD_APP_GROUP = "add_app_group"
@@ -32,4 +52,3 @@ object Destinations {
     /** Builds a real, navigable route for [EDIT_APP_GROUP] with a given group id filled in. */
     fun editAppGroupRoute(groupId: String) = "edit_app_group/$groupId"
 }
-

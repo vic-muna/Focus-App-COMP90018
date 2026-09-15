@@ -17,10 +17,10 @@ import com.example.focusapp.domain.model.FocusZone
  */
 interface FocusRepository {
 
-    /** TODO: to be implemented later - read saved focus zones from local storage. */
-    suspend fun getFocusZones(): List<FocusZone>
+    /** Reads the user's single saved focus zone, or null if none has been set yet. */
+    suspend fun getFocusZone(): FocusZone?
 
-    /** TODO: to be implemented later - persist a new/edited focus zone. */
+    /** Persists the user's one focus zone, overwriting any previously saved value. */
     suspend fun saveFocusZone(zone: FocusZone)
 
     /** TODO: to be implemented later - read saved app groups from local storage. */

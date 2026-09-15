@@ -10,11 +10,11 @@ import org.json.JSONObject
 /**
  * LocalDataSource
  * ------------------
- * Offline storage for the app. As of this update, AppGroup persistence is
+ * Offline storage for the app. AppGroup and FocusZone persistence are both
  * REAL (backed by SharedPreferences + hand-rolled JSON, both built into
- * the Android SDK - no new dependency needed) - it genuinely survives an
- * app restart. FocusZone/FocusSession are still the original in-memory
- * placeholder from before; they weren't part of this round of work.
+ * the Android SDK - no new dependency needed) - they genuinely survive an
+ * app restart. FocusSession is still the original in-memory placeholder
+ * from before; it wasn't part of this round of work.
  *
  * WHY SharedPreferences + JSON, NOT ROOM, "AT THIS STAGE": Room needs an
  * extra Gradle dependency, an annotation-processor setup, and Entity/DAO
@@ -36,23 +36,51 @@ class LocalDataSource(context: Context) {
 
     private val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    // Temporary in-memory placeholders, unchanged from before - see class
+    // Temporary in-memory placeholder, unchanged from before - see class
     // doc comment. Not part of this round of work.
-    private val cachedZones = mutableListOf<FocusZone>()
     private val cachedSessions = mutableListOf<FocusSession>()
+
+    // -----------------------------------------------------------------
+    // FocusZone - REAL persistence (SharedPreferences + JSON). Only ever
+    // one zone at a time - saving always overwrites whatever was there.
+    // -----------------------------------------------------------------
+
+    suspend fun getFocusZone(): FocusZone? = readFocusZoneFromPrefs()
+
+    suspend fun saveFocusZone(zone: FocusZone) {
+        writeFocusZoneToPrefs(zone)
+    }
+
+    private fun readFocusZoneFromPrefs(): FocusZone? {
+        val json = prefs.getString(KEY_FOCUS_ZONE, null) ?: return null
+        return runCatching {
+            val obj = JSONObject(json)
+            FocusZone(
+                id = obj.getString("id"),
+                name = obj.getString("name"),
+                latitude = obj.getDouble("latitude"),
+                longitude = obj.getDouble("longitude"),
+                radiusMeters = obj.getDouble("radiusMeters").toFloat()
+            )
+        }.getOrNull()
+        // If the stored JSON is ever malformed for any reason, fail safe
+        // to null rather than crashing the Location Zone sheet.
+    }
+
+    private fun writeFocusZoneToPrefs(zone: FocusZone) {
+        val obj = JSONObject().apply {
+            put("id", zone.id)
+            put("name", zone.name)
+            put("latitude", zone.latitude)
+            put("longitude", zone.longitude)
+            put("radiusMeters", zone.radiusMeters.toDouble())
+        }
+        prefs.edit().putString(KEY_FOCUS_ZONE, obj.toString()).apply()
+    }
 
     // -----------------------------------------------------------------
     // AppGroup - REAL persistence (SharedPreferences + JSON)
     // -----------------------------------------------------------------
-
-    /** TODO: to be implemented later - replace with a real Room query. */
-    suspend fun getFocusZones(): List<FocusZone> = cachedZones
-
-    /** TODO: to be implemented later - replace with a real Room insert/update. */
-    suspend fun saveFocusZone(zone: FocusZone) {
-        cachedZones.removeAll { it.id == zone.id }
-        cachedZones.add(zone)
-    }
 
     /**
      * Reads every saved [AppGroup] out of SharedPreferences. Genuinely
@@ -130,5 +158,6 @@ class LocalDataSource(context: Context) {
     private companion object {
         const val PREFS_NAME = "focus_local_data"
         const val KEY_APP_GROUPS = "app_groups_json"
+        const val KEY_FOCUS_ZONE = "focus_zone_json"
     }
 }

@@ -1,23 +1,17 @@
 package com.example.focusapp.ui.screens.home
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.SheetValue
-import androidx.compose.material3.rememberBottomSheetScaffoldState
-import androidx.compose.material3.rememberStandardBottomSheetState
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
 enum class SheetType { NONE, BLOCKED_APPS, LOCATION_ZONE }
@@ -25,83 +19,87 @@ enum class SheetType { NONE, BLOCKED_APPS, LOCATION_ZONE }
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreenWithSheet(
+    groups: List<BlockedAppGroup>,
+    selectedGroupId: String,
+    reopenSheetSignal: Boolean,
+    reopenSheetType: String = "blocked_apps",
+    onReopenSheetHandled: () -> Unit,
+    onBlockerClick: () -> Unit,
     onAvatarClick: () -> Unit = {},
     onQuickFocusClick: () -> Unit = {},
-    onMapClick: () -> Unit = {},
-    onSettingsClick: () -> Unit = {}
+    onPartyModeClick: () -> Unit = {},
+    onSettingsClick: () -> Unit = {},
+    onEditBlockedAppsClick: () -> Unit = {},
+    onEditLocationZoneClick: () -> Unit = {}
 ) {
-    var activeSheet by remember { mutableStateOf(SheetType.NONE) }
-
-    // 關鍵:skipHiddenState = false,才允許 Sheet 完全隱藏,不是只能停在 peek
-    val scaffoldState = rememberBottomSheetScaffoldState(
-        bottomSheetState = rememberStandardBottomSheetState(
-            initialValue = SheetValue.Hidden,
-            skipHiddenState = false
-        )
-    )
     val scope = rememberCoroutineScope()
 
-    var apps by remember { mutableStateOf(generateFakeApps(8)) }
+    // ModalBottomSheet 專用的 State
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    val peekHeight = if (activeSheet == SheetType.NONE) 0.dp else 300.dp
-    var timeSlots by remember { mutableStateOf(generateFakeTimeSlots()) }
+    var activeSheet by remember { mutableStateOf(SheetType.NONE) }
 
-    fun closeSheet() {
-        activeSheet = SheetType.NONE
-        scope.launch { scaffoldState.bottomSheetState.hide() }
+    fun openSheet(type: SheetType) {
+        activeSheet = type
     }
 
-    BottomSheetScaffold(
-        scaffoldState = scaffoldState,
-        sheetPeekHeight = peekHeight,
-        sheetContent = {
-            when (activeSheet) {
-                SheetType.BLOCKED_APPS -> {
-                    BlockedAppsSheetContent(
-                        apps = apps,
-                        timeSlots = timeSlots,
-                        onEditClick = { /* TODO: 進入編輯模式 */ }
-                    )
-                }
-                SheetType.LOCATION_ZONE -> {
-
-                    LocationZoneSheetContent(onEditClick = { /* TODO: 進入編輯模式 */ }
-                    )
-                }
-                SheetType.NONE -> {}
+    fun closeSheet(onFinished: () -> Unit = {}) {
+        scope.launch {
+            sheetState.hide()
+        }.invokeOnCompletion {
+            if (!sheetState.isVisible) {
+                activeSheet = SheetType.NONE
+                onFinished()
             }
         }
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            HomeScreen(
-                // Sheet 開啟時,點畫面空白處(卡片以外的地方)會觸發收合
-                modifier = if (activeSheet != SheetType.NONE) {
-                    Modifier.clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ) { closeSheet() }
-                } else {
-                    Modifier
-                },
-                onAvatarClick = onAvatarClick,
-                onQuickFocusClick = onQuickFocusClick,
-                onMapClick = onMapClick,
-                onBlockedAppCardClick = {
-                    activeSheet = SheetType.BLOCKED_APPS
-                    scope.launch { scaffoldState.bottomSheetState.partialExpand() }
-                },
-                onLocationCardClick = {
-                    activeSheet = SheetType.LOCATION_ZONE
-                    scope.launch { scaffoldState.bottomSheetState.partialExpand() }
-                },
-                onSettingsClick = onSettingsClick
+    }
+
+    // 重開 Sheet 的 Signal 處理
+    LaunchedEffect(reopenSheetSignal) {
+        if (reopenSheetSignal) {
+            onReopenSheetHandled()
+            openSheet(
+                if (reopenSheetType == "location_zone") SheetType.LOCATION_ZONE
+                else SheetType.BLOCKED_APPS
             )
         }
     }
-}
 
-@Preview(showBackground = true)
-@Composable
-fun HomeScreenWithSheetPreview() {
-    HomeScreenWithSheet()
+    // 1. 主要畫面
+    HomeScreen(
+        onAvatarClick = onAvatarClick,
+        onQuickFocusClick = onQuickFocusClick,
+        onPartyModeClick = onPartyModeClick,
+        onBlockedAppCardClick = { openSheet(SheetType.BLOCKED_APPS) },
+        onLocationCardClick = { openSheet(SheetType.LOCATION_ZONE) },
+        onSettingsClick = onSettingsClick
+    )
+
+    // 2. 只有當 activeSheet != NONE 時才掛載 BottomSheet (徹底解決閃現與叫不出來的問題)
+    if (activeSheet != SheetType.NONE) {
+        ModalBottomSheet(
+            onDismissRequest = { activeSheet = SheetType.NONE },
+            sheetState = sheetState,
+            containerColor = Color(0xFFF5C8C8)
+        ) {
+            when (activeSheet) {
+                SheetType.BLOCKED_APPS -> BlockedAppsSheetContent(
+                    groups = groups,
+                    selectedGroupId = selectedGroupId,
+                    onBlockerClick = {
+                        closeSheet { onBlockerClick() }
+                    },
+                    onEditClick = {
+                        closeSheet { onEditBlockedAppsClick() }
+                    }
+                )
+
+                SheetType.LOCATION_ZONE -> LocationZoneSheetContent(
+                    onEditClick = { closeSheet { onEditLocationZoneClick() } }
+                )
+
+                SheetType.NONE -> Unit
+            }
+        }
+    }
 }

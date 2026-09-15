@@ -1,11 +1,8 @@
 package com.example.focusapp.ui.screens.home
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -15,13 +12,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
     modifier: Modifier = Modifier,
     onAvatarClick: () -> Unit = {},
     onQuickFocusClick: () -> Unit = {},
-    onMapClick: () -> Unit = {},              // Study Party
+    onPartyModeClick: () -> Unit = {},
     onBlockedAppCardClick: () -> Unit = {},
     onLocationCardClick: () -> Unit = {},
     onSettingsClick: () -> Unit = {}
@@ -52,7 +48,7 @@ fun HomeScreen(
         // 底部:Map + Carousel(Blocked Apps / Location Zone)+ Settings
         // 底部:用 Box 疊層做出卡片蓋過圖示的效果
         Box(
-            modifier = Modifier.fillMaxWidth().height(155.dp)
+            modifier = Modifier.fillMaxWidth().height(180.dp)
         ) {
             // 背景層:Map + Settings,貼在左右下角
             Row(
@@ -66,9 +62,9 @@ fun HomeScreen(
                     Box(
                         modifier = Modifier.size(48.dp)
                             .background(Color(0xFFE0E0E0))
-                            .clickable { onMapClick() }
+                            .clickable { onPartyModeClick() }
                     )
-                    Text("Map")
+                    Text("Party")
                 }
 
                 Column(
@@ -85,47 +81,29 @@ fun HomeScreen(
             }
 
             // 前景層:卡片故意做寬一點(佔 85% 版面),疊在上面
-            val pagerState = rememberPagerState(pageCount = { 2 })
-
-            Column(
+            // 兩張卡片並排同一列,不用滑動切換
+            Row(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .fillMaxWidth(0.75f)
+                    .height(100.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                HorizontalPager(
-                    state = pagerState,
-                    modifier = Modifier.fillMaxWidth().height(84.dp)
-                ) { page ->
-                    when (page) {
-                        0 -> Box(
-                            modifier = Modifier.fillMaxSize()
-                                .background(Color(0xFFF5F5F5))
-                                .clickable { onBlockedAppCardClick() }
-                        ) { Text("Blocked Apps", modifier = Modifier.align(Alignment.Center)) }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .background(Color(0xFFF5F5F5))
+                        .clickable { onBlockedAppCardClick() }
+                ) { Text("Blocked Apps", modifier = Modifier.align(Alignment.Center)) }
 
-                        1 -> Box(
-                            modifier = Modifier.fillMaxSize()
-                                .background(Color(0xFFF5F5F5))
-                                .clickable { onLocationCardClick() }
-                        ) { Text("Location Zone", modifier = Modifier.align(Alignment.Center)) }
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    repeat(2) { index ->
-                        val isSelected = pagerState.currentPage == index
-                        Box(
-                            modifier = Modifier.padding(4.dp).size(6.dp)
-                                .background(
-                                    if (isSelected) Color.DarkGray else Color.LightGray,
-                                    CircleShape
-                                )
-                        )
-                    }
-                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .background(Color(0xFFF5F5F5))
+                        .clickable { onLocationCardClick() }
+                ) { Text("Location Zone", modifier = Modifier.align(Alignment.Center)) }
             }
         }
     }
