@@ -1,7 +1,6 @@
 package com.example.focusapp.data.sensor
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.Priority
+import android.content.Context
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * SensorDataSource
@@ -14,7 +13,8 @@ import com.google.android.gms.location.Priority
  * Domain layer has a stable interface to depend on later.
  *
  * TODO: to be implemented later:
- *  - GPS + Geofencing API + Wi-Fi (location zone detection)
+ *  - GPS + Geofencing API + Wi-Fi (location zone dete
+ *  ction)
  *  - Accelerometer + Gyroscope (shake / face-down gesture detection)
  *  - Light sensor (supplementary face-down detection signal)
  *  - AudioRecord (ambient volume detection)
@@ -24,19 +24,56 @@ import com.google.android.gms.location.Priority
  *    plain sensor reading)
  */
 class SensorDataSource {
-    private val DEFAULT_UPDATE_INTERVAL_GPS: Long = 30
-    private val FAST_UPDATE_INTERVAL_GPS: Long = 5
 
-    private lateinit var fusedLocationProviderClient: FusedLocationProviderClient
-    private val locationRequest: LocationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000 * DEFAULT_UPDATE_INTERVAL_GPS)
-        .setMinUpdateIntervalMillis(1000 * FAST_UPDATE_INTERVAL_GPS)
-        .setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY)
-        .build()
+    // --- 1. EXPOSE THE DATA STREAM ---
+    /**
+     * A continuous, observable stream of the latest GPS coordinates.
+     *
+     * HOW IT WORKS:
+     * Unlike a standard function that executes instantly and returns a single value,
+     * hardware sensors operate asynchronously. A `StateFlow` acts like a radio tower.
+     * It holds the latest known `Pair<Double, Double>` (starting as `null`) and
+     * continuously broadcasts new coordinates every time the GPS hardware updates.
+     *
+     * HOW OTHER PARTS OF THE APP ACCESS IT:
+     *
+     * 1. From Jetpack Compose (The UI Layer)
+     *    Compose can "tune in" to this flow using `collectAsState()`. Whenever a new
+     *    location is broadcast, Compose automatically redraws the screen with the new data.
+     *
+     *    Example:
+     *    val location by sensorDataSource.locationFlow.collectAsState()
+     *    if (location != null) {
+     *        Text("Lat: ${location.first}, Lng: ${location.second}")
+     *    }
+     *
+     * 2. From a ViewModel (The Logic Layer)
+     *    A ViewModel can `collect` the flow inside a background coroutine to run
+     *    calculations, check if the user entered a focus zone, or save the path to a database.
+     *
+     *    Example:
+     *    viewModelScope.launch {
+     *        sensorDataSource.locationFlow.collect { location ->
+     *            if (location != null) {
+     *                checkGeofenceTriggers(location)
+     *            }
+     *        }
+     *    }
+     */
+    val locationFlow: StateFlow<Pair<Double, Double>?> = currentLocationFlow
 
+    // --- 2. FACADE CONTROLS ---
 
-    /** TODO: to be implemented later - returns current lat/lng from GPS/Wi-Fi. */
-    fun getCurrentLocation(): Pair<Double, Double>? {
-        return null
+    fun startTracking(context: Context) {
+        startGPSUpdates(context)
+    }
+
+    fun stopTracking(context: Context) {
+        stopGPSUpdates(context)
+    }
+
+    fun setTrackingPriority(context: Context, isHigh: Boolean) {
+        setGpsPriority(context, isHigh)
     }
 
     /** TODO: to be implemented later - true if a shake gesture was just detected. */
