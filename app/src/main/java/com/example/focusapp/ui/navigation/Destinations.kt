@@ -31,15 +31,11 @@ object Destinations {
     // UI scaffolding only for now; no networking/P2P logic behind it yet.
     const val PARTY_MODE = "party_mode"
 
-    // Blocked Apps group flow (reachable from Home's bottom sheet).
+    // Blocked Apps group flow (reachable from Home's bottom sheet). Editing
+    // now happens in pickers layered on the summary sheet itself - this is
+    // the only extra destination, for choosing/creating/renaming/deleting
+    // which group is selected.
     const val GROUP_LIST = "group_list"
-
-    const val GROUP_SECTION = "group_section/{groupId}"
-    fun groupSectionRoute(groupId: String) = "group_section/$groupId"
-
-    const val EDIT_BLOCKED_APPS_GROUP = "edit_blocked_apps_group/{groupId}"
-    const val NEW_GROUP_ID = "new"
-    fun editBlockedAppsGroupRoute(groupId: String) = "edit_blocked_apps_group/$groupId"
 
     // Location Zone edit flow (reachable from Home's bottom sheet). Single
     // zone only - no id/argument needed, unlike the blocked-apps group flow.

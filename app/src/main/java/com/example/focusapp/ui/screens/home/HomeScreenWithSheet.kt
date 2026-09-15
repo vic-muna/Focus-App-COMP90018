@@ -25,11 +25,12 @@ fun HomeScreenWithSheet(
     reopenSheetType: String = "blocked_apps",
     onReopenSheetHandled: () -> Unit,
     onBlockerClick: () -> Unit,
+    onGroupAppsChange: (groupId: String, apps: List<AppItem>) -> Unit,
+    onGroupScheduleChange: (groupId: String, schedule: TimeSlot) -> Unit,
     onAvatarClick: () -> Unit = {},
     onQuickFocusClick: () -> Unit = {},
     onPartyModeClick: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
-    onEditBlockedAppsClick: () -> Unit = {},
     onEditLocationZoneClick: () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
@@ -80,17 +81,16 @@ fun HomeScreenWithSheet(
         ModalBottomSheet(
             onDismissRequest = { activeSheet = SheetType.NONE },
             sheetState = sheetState,
-            containerColor = Color(0xFFF5C8C8)
+            containerColor = if (activeSheet == SheetType.BLOCKED_APPS) Color(0xFF3B3B96) else Color(0xFFF5C8C8)
         ) {
             when (activeSheet) {
-                SheetType.BLOCKED_APPS -> BlockedAppsSheetContent(
+                SheetType.BLOCKED_APPS -> AutoBlockingSheetContent(
                     groups = groups,
                     selectedGroupId = selectedGroupId,
+                    onAppsChange = onGroupAppsChange,
+                    onScheduleChange = onGroupScheduleChange,
                     onBlockerClick = {
                         closeSheet { onBlockerClick() }
-                    },
-                    onEditClick = {
-                        closeSheet { onEditBlockedAppsClick() }
                     }
                 )
 

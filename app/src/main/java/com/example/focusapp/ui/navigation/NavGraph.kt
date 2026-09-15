@@ -27,13 +27,11 @@ import com.example.focusapp.ui.screens.apps.AddAppGroupScreen
 import com.example.focusapp.ui.screens.apps.AppsScreen
 import com.example.focusapp.ui.screens.apps.EditAppGroupScreen
 import com.example.focusapp.ui.screens.home.BlockedAppGroup
-import com.example.focusapp.ui.screens.home.EditBlockedAppsScreen
 import com.example.focusapp.ui.screens.home.EditLocationZoneScreen
 import com.example.focusapp.ui.screens.home.GroupListScreen
-import com.example.focusapp.ui.screens.home.GroupSectionScreen
 import com.example.focusapp.ui.screens.home.HomeScreenWithSheet
 import com.example.focusapp.ui.screens.home.generateFakeGroups
-import com.example.focusapp.ui.screens.home.generateFakeTimeSlots
+import com.example.focusapp.ui.screens.home.generateFakeTimeSlot
 import com.example.focusapp.ui.screens.map.MapScreen
 import com.example.focusapp.ui.screens.party.PartyModeScreen
 import com.example.focusapp.ui.screens.settings.SettingsScreen
@@ -96,13 +94,19 @@ fun FocusAppNavGraph() {
                     onReopenSheetHandled = {
                         backStackEntry.savedStateHandle["reopenSheet"] = false
                         // Reset so a later reopen that doesn't explicitly set a
-                        // type (Blocked Apps' GroupList/GroupSection back button,
-                        // EDIT_BLOCKED_APPS_GROUP save) doesn't reuse a stale
-                        // "location_zone" value from a previous zone edit.
+                        // type (GroupList's back button or group selection)
+                        // doesn't reuse a stale "location_zone" value from a
+                        // previous zone edit.
                         backStackEntry.savedStateHandle["reopenSheetType"] = "blocked_apps"
                     },
                     onBlockerClick = {
                         navController.navigate(Destinations.GROUP_LIST)
+                    },
+                    onGroupAppsChange = { groupId, apps ->
+                        groups = groups.map { g -> if (g.id == groupId) g.copy(apps = apps) else g }
+                    },
+                    onGroupScheduleChange = { groupId, schedule ->
+                        groups = groups.map { g -> if (g.id == groupId) g.copy(schedule = schedule) else g }
                     },
                     onAvatarClick = {
                         // TODO: Report screen (History + Rewards merged) not built yet
@@ -112,11 +116,6 @@ fun FocusAppNavGraph() {
                     },
                     onPartyModeClick = { navController.navigate(Destinations.PARTY_MODE) },
                     onSettingsClick = { navController.navigate(Destinations.SETTINGS) },
-                    onEditBlockedAppsClick = {
-                        navController.navigate(
-                            Destinations.editBlockedAppsGroupRoute(selectedGroupId)
-                        )
-                    },
                     onEditLocationZoneClick = {
                         navController.navigate(Destinations.EDIT_LOCATION_ZONE)
                     }
@@ -148,99 +147,36 @@ fun FocusAppNavGraph() {
                         navController.popBackStack()
                     },
                     onGroupClick = { groupId ->
+                        // No detail screen anymore - selecting a group just
+                        // returns to Home with the sheet reopened on it.
                         selectedGroupId = groupId
-                        navController.navigate(Destinations.groupSectionRoute(groupId))
+                        navController.getBackStackEntry(Destinations.HOME)
+                            .savedStateHandle["reopenSheet"] = true
+                        navController.popBackStack(Destinations.HOME, inclusive = false)
                     },
-                    onAddGroupClick = {
-                        navController.navigate(
-                            Destinations.editBlockedAppsGroupRoute(Destinations.NEW_GROUP_ID)
+                    onCreateGroup = { name ->
+                        val newGroup = BlockedAppGroup(
+                            id = "group_${System.currentTimeMillis()}",
+                            name = name.ifBlank { "New Group" },
+                            apps = emptyList(),
+                            schedule = generateFakeTimeSlot()
                         )
-                    }
-                )
-            }
-
-            // Single group detail page.
-            composable(
-                route = Destinations.GROUP_SECTION,
-                arguments = listOf(navArgument("groupId") { type = NavType.StringType }),
-                enterTransition = enterFromBottom,
-                exitTransition = exitToBottom
-            ) { backStackEntry ->
-                val groupId = backStackEntry.arguments?.getString("groupId")
-                val group = groups.find { it.id == groupId }
-
-                if (group != null) {
-                    GroupSectionScreen(
-                        group = group,
-                        onBackClick = {
-                            // Skip the list page: go straight Home and reopen the sheet.
-                            navController.getBackStackEntry(Destinations.HOME)
-                                .savedStateHandle["reopenSheet"] = true
-                            navController.popBackStack(Destinations.HOME, inclusive = false)
-                        },
-                        onEditClick = {
-                            navController.navigate(
-                                Destinations.editBlockedAppsGroupRoute(group.id)
-                            )
-                        }
-                    )
-                }
-            }
-
-            // Edit / Add group — one screen for both, told apart by NEW_GROUP_ID.
-            composable(
-                route = Destinations.EDIT_BLOCKED_APPS_GROUP,
-                arguments = listOf(navArgument("groupId") { type = NavType.StringType }),
-                enterTransition = enterFromBottom,
-                exitTransition = exitToBottom
-            ) { backStackEntry ->
-                val groupId = backStackEntry.arguments?.getString("groupId")
-                    ?: Destinations.NEW_GROUP_ID
-                val isNewGroup = groupId == Destinations.NEW_GROUP_ID
-                val existingGroup = if (isNewGroup) null else groups.find { it.id == groupId }
-
-                var editedApps by remember(groupId) {
-                    mutableStateOf(existingGroup?.apps ?: emptyList())
-                }
-
-                EditBlockedAppsScreen(
-                    initialGroupName = existingGroup?.name ?: "",
-                    apps = editedApps,
-                    onAppsChange = { editedApps = it },
-                    onSaveClick = { finalName ->
-                        if (isNewGroup) {
-                            val newGroup = BlockedAppGroup(
-                                id = "group_${System.currentTimeMillis()}",
-                                name = finalName.ifBlank { "New Group" },
-                                apps = editedApps,
-                                timeSlots = generateFakeTimeSlots()
-                            )
-                            groups = groups + newGroup
-                            selectedGroupId = newGroup.id
-                        } else {
-                            groups = groups.map { group ->
-                                if (group.id == groupId) {
-                                    group.copy(
-                                        name = finalName.ifBlank { group.name },
-                                        apps = editedApps
-                                    )
-                                } else {
-                                    group
-                                }
+                        groups = groups + newGroup
+                        selectedGroupId = newGroup.id
+                        navController.getBackStackEntry(Destinations.HOME)
+                            .savedStateHandle["reopenSheet"] = true
+                        navController.popBackStack(Destinations.HOME, inclusive = false)
+                    },
+                    onRenameGroup = { groupId, newName ->
+                        groups = groups.map { g -> if (g.id == groupId) g.copy(name = newName) else g }
+                    },
+                    onDeleteGroup = { groupId ->
+                        if (groups.size > 1) {
+                            groups = groups.filterNot { it.id == groupId }
+                            if (groupId == selectedGroupId) {
+                                selectedGroupId = groups.first().id
                             }
                         }
-
-                        // Go back to wherever this screen was actually opened
-                        // from - Home's "Edit" sheet button, GroupList's "+",
-                        // or GroupSection's "Edit" - rather than always
-                        // force-jumping to Home. Only Home needs the
-                        // reopenSheet signal, since GroupList/GroupSection
-                        // aren't behind a bottom sheet.
-                        if (navController.previousBackStackEntry?.destination?.route == Destinations.HOME) {
-                            navController.getBackStackEntry(Destinations.HOME)
-                                .savedStateHandle["reopenSheet"] = true
-                        }
-                        navController.popBackStack()
                     }
                 )
             }
