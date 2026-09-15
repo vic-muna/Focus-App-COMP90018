@@ -1,16 +1,12 @@
 package com.example.focusapp.ui.screens.map
 
+import android.Manifest
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -19,14 +15,23 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.Button
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import com.example.focusapp.ui.theme.WireframeColors
+
+import com.example.focusapp.data.sensor.SensorDataSource
+
 
 /**
  * UiFocusLocation
@@ -56,9 +61,27 @@ private data class UiFocusLocation(val id: String, val name: String)
  */
 @Composable
 fun MapScreen() {
+    val context = LocalContext.current
+    val sensorDataSource = remember { SensorDataSource() }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            // Permission was granted
+            Toast.makeText(context, "GPS Permission Granted!", Toast.LENGTH_SHORT).show()
+            sensorDataSource.startTracking(context)
+
+        } else {
+            // Permission was denied
+            Toast.makeText(context, "Permission denied. GPS won't work.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     // TODO: to be implemented later - replace this with real data from
     // FocusRepository.getFocusZones() (via a ViewModel), instead of a
     // hard-coded local list.
+    var isFastTracking by remember { mutableStateOf(true) }
     val locations = remember { mutableStateListOf(UiFocusLocation(id = "l1", name = "Location 1")) }
 
     Column(
@@ -72,7 +95,41 @@ fun MapScreen() {
             Box(modifier = Modifier.height(24.dp)) // spacer between cards
         }
 
-        AddLocationPillButton()
+        AddLocationPillButton(
+            onClick = {
+                permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+            }
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Switch(
+                checked = isFastTracking,
+                onCheckedChange = { isChecked ->
+                    isFastTracking = isChecked
+                    // Update the GPS priority on the fly
+                    sensorDataSource.setTrackingPriority(context, isHigh = isChecked)
+                }
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Text(
+                text = if (isFastTracking) "High Accuracy (5s)" else "Power Saving (30s)",
+                color = WireframeColors.OnLight // Assuming this exists in your WireframeColors
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Button(onClick = {
+            sensorDataSource.stopTracking(context)
+        }) {
+            Text("Turn off Tracking")
+        }
 
         // TODO: to be implemented later - empty-state message when there
         // are no saved locations yet, once `locations` is no longer
@@ -154,12 +211,14 @@ private fun FocusLocationRow(location: UiFocusLocation) {
  * (presumably an embedded map) once that screen is designed.
  */
 @Composable
-private fun AddLocationPillButton() {
+private fun AddLocationPillButton(onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(WireframeColors.Card, shape = RoundedCornerShape(50))
-            .clickable { /* TODO: to be implemented later - no destination screen designed yet. */ }
+            .clickable { /* TODO: to be implemented later - no destination screen designed yet. */
+                onClick() //temporary test
+             }
             .padding(vertical = 18.dp),
         horizontalArrangement = Arrangement.Center
     ) {
