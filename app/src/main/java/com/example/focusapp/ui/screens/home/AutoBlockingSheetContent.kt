@@ -16,10 +16,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -74,11 +77,13 @@ fun AutoBlockingSheetContent(
     selectedGroupId: String,
     onAppsChange: (groupId: String, apps: List<AppItem>) -> Unit,
     onScheduleChange: (groupId: String, schedule: TimeSlot) -> Unit,
+    onRenameGroup: (groupId: String, newName: String) -> Unit = { _, _ -> },
     onBlockerClick: () -> Unit
 ) {
     val selectedGroup = groups.find { it.id == selectedGroupId } ?: groups.firstOrNull() ?: return
 
     var activePicker by remember { mutableStateOf(ActivePicker.NONE) }
+    var showRenameDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -91,7 +96,8 @@ fun AutoBlockingSheetContent(
             text = selectedGroup.name,
             fontSize = 32.sp,
             fontWeight = FontWeight.Bold,
-            color = OnSheet
+            color = OnSheet,
+            modifier = Modifier.clickable { showRenameDialog = true }
         )
 
         Spacer(Modifier.height(10.dp))
@@ -155,6 +161,53 @@ fun AutoBlockingSheetContent(
             )
         }
     }
+
+    if (showRenameDialog) {
+        RenameGroupDialog(
+            currentName = selectedGroup.name,
+            onConfirm = { newName ->
+                onRenameGroup(selectedGroup.id, newName)
+                showRenameDialog = false
+            },
+            onDismiss = { showRenameDialog = false }
+        )
+    }
+}
+
+/** Tapping the sheet's title opens this to rename the currently selected group. */
+@Composable
+private fun RenameGroupDialog(
+    currentName: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var name by remember { mutableStateOf(currentName) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Rename Group") },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("Group name") },
+                singleLine = true
+            )
+        },
+        confirmButton = {
+            TextButton(
+                enabled = name.isNotBlank(),
+                onClick = { onConfirm(name.trim()) }
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 /** Tapping this card opens the app picker. */

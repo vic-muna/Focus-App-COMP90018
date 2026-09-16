@@ -34,6 +34,10 @@ import com.example.focusapp.ui.screens.home.generateFakeGroups
 import com.example.focusapp.ui.screens.home.generateFakeTimeSlot
 import com.example.focusapp.ui.screens.map.MapScreen
 import com.example.focusapp.ui.screens.party.PartyModeScreen
+import com.example.focusapp.ui.screens.session.ActiveFocusSession
+import com.example.focusapp.ui.screens.session.FOCUS_SESSION_WIPE_DURATION_MILLIS
+import com.example.focusapp.ui.screens.session.FocusSessionScreen
+import com.example.focusapp.ui.screens.session.FocusSessionSource
 import com.example.focusapp.ui.screens.settings.SettingsScreen
 import com.example.focusapp.ui.theme.WireframeColors
 
@@ -60,6 +64,23 @@ private val partyModeExit: AnimatedContentTransitionScope<NavBackStackEntry>.() 
     fadeOut(tween(300))
 }
 
+// Home's own exit, EXCEPT when the target is Focus Session: there, Home fades out
+// over the same FOCUS_SESSION_WIPE_DURATION_MILLIS as FocusSessionScreen's own
+// reveal wipe (see FocusSessionScreen.kt), so Home's disappearance and the new
+// screen's reveal read as one continuous motion instead of Home cutting away
+// quickly (the shared exitToBottom's default ~300ms) before the reveal even starts.
+private val homeExitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
+    if (targetState.destination.route == Destinations.FOCUS_SESSION) {
+        fadeOut(tween(FOCUS_SESSION_WIPE_DURATION_MILLIS))
+    } else {
+        exitToBottom()
+    }
+}
+
+private val focusSessionEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
+    fadeIn(tween(FOCUS_SESSION_WIPE_DURATION_MILLIS))
+}
+
 @Composable
 fun FocusAppNavGraph() {
     val navController = rememberNavController()
@@ -67,6 +88,20 @@ fun FocusAppNavGraph() {
     // Hoisted here so Home / GroupList / GroupSection / Edit share one source of truth.
     var groups by remember { mutableStateOf(generateFakeGroups()) }
     var selectedGroupId by remember { mutableStateOf(groups.first().id) }
+
+    // null = no focus session running. Set by any of the three trigger sources
+    // (Quick Focus, Party Mode's Go Focus Mode, Home's auto-suggestion banner),
+    // cleared when FocusSessionScreen's End Session action fires.
+    var activeFocusSession by remember { mutableStateOf<ActiveFocusSession?>(null) }
+
+    fun startFocusSession(source: FocusSessionSource) {
+        activeFocusSession = ActiveFocusSession(
+            startTimeMillis = System.currentTimeMillis(),
+            source = source,
+            groupId = (source as? FocusSessionSource.Schedule)?.groupId
+        )
+        navController.navigate(Destinations.FOCUS_SESSION)
+    }
 
     Scaffold(containerColor = WireframeColors.Background) { innerPadding ->
         NavHost(
@@ -77,7 +112,14 @@ fun FocusAppNavGraph() {
             composable(
                 route = Destinations.HOME,
                 enterTransition = enterFromBottom,
-                exitTransition = exitToBottom
+                exitTransition = homeExitTransition,
+                // DIAGNOSTIC (temporary): no animation at all on the way back to
+                // Home, to isolate whether the reported "scaling" artifact comes
+                // from this transition or from something else (e.g. a layout
+                // remeasure) entirely. A plain fadeIn here did NOT fix it, and
+                // fadeIn alone cannot produce a scale/position effect - so this
+                // rules the transition system in or out definitively.
+                popEnterTransition = { EnterTransition.None }
             ) { backStackEntry ->
                 val reopenSheet by backStackEntry.savedStateHandle
                     .getStateFlow("reopenSheet", false)
@@ -108,12 +150,13 @@ fun FocusAppNavGraph() {
                     onGroupScheduleChange = { groupId, schedule ->
                         groups = groups.map { g -> if (g.id == groupId) g.copy(schedule = schedule) else g }
                     },
+                    onGroupRename = { groupId, newName ->
+                        groups = groups.map { g -> if (g.id == groupId) g.copy(name = newName) else g }
+                    },
                     onAvatarClick = {
                         // TODO: Report screen (History + Rewards merged) not built yet
                     },
-                    onQuickFocusClick = {
-                        // TODO: manual Focus Mode trigger, no ViewModel/logic yet
-                    },
+                    onFocusSessionStart = { source -> startFocusSession(source) },
                     onPartyModeClick = { navController.navigate(Destinations.PARTY_MODE) },
                     onSettingsClick = { navController.navigate(Destinations.SETTINGS) },
                     onEditLocationZoneClick = {
@@ -128,8 +171,26 @@ fun FocusAppNavGraph() {
                 exitTransition = partyModeExit
             ) {
                 PartyModeScreen(
-                    onBackClick = { navController.popBackStack() }
+                    onBackClick = { navController.popBackStack() },
+                    onGoFocusModeClick = { startFocusSession(FocusSessionSource.Party) }
                 )
+            }
+
+            composable(
+                route = Destinations.FOCUS_SESSION,
+                enterTransition = focusSessionEnter,
+                exitTransition = partyModeExit,
+                popExitTransition = partyModeExit
+            ) {
+                activeFocusSession?.let { session ->
+                    FocusSessionScreen(
+                        session = session,
+                        onEndSessionClick = {
+                            activeFocusSession = null
+                            navController.popBackStack(Destinations.HOME, inclusive = false)
+                        }
+                    )
+                }
             }
 
             composable(
@@ -139,14 +200,8 @@ fun FocusAppNavGraph() {
             ) {
                 GroupListScreen(
                     groups = groups,
-                    activeGroupId = selectedGroupId,
-                    onBackClick = {
-                        navController.previousBackStackEntry
-                            ?.savedStateHandle
-                            ?.set("reopenSheet", true)
-                        navController.popBackStack()
-                    },
-                    onGroupClick = { groupId ->
+                    selectedGroupId = selectedGroupId,
+                    onGroupSelect = { groupId ->
                         // No detail screen anymore - selecting a group just
                         // returns to Home with the sheet reopened on it.
                         selectedGroupId = groupId
@@ -154,7 +209,7 @@ fun FocusAppNavGraph() {
                             .savedStateHandle["reopenSheet"] = true
                         navController.popBackStack(Destinations.HOME, inclusive = false)
                     },
-                    onCreateGroup = { name ->
+                    onAddGroupClick = { name ->
                         val newGroup = BlockedAppGroup(
                             id = "group_${System.currentTimeMillis()}",
                             name = name.ifBlank { "New Group" },
@@ -167,16 +222,11 @@ fun FocusAppNavGraph() {
                             .savedStateHandle["reopenSheet"] = true
                         navController.popBackStack(Destinations.HOME, inclusive = false)
                     },
-                    onRenameGroup = { groupId, newName ->
-                        groups = groups.map { g -> if (g.id == groupId) g.copy(name = newName) else g }
-                    },
-                    onDeleteGroup = { groupId ->
-                        if (groups.size > 1) {
-                            groups = groups.filterNot { it.id == groupId }
-                            if (groupId == selectedGroupId) {
-                                selectedGroupId = groups.first().id
-                            }
-                        }
+                    onBackClick = {
+                        navController.previousBackStackEntry
+                            ?.savedStateHandle
+                            ?.set("reopenSheet", true)
+                        navController.popBackStack()
                     }
                 )
             }

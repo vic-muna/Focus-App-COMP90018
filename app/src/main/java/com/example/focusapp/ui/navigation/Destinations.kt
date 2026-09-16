@@ -41,6 +41,12 @@ object Destinations {
     // zone only - no id/argument needed, unlike the blocked-apps group flow.
     const val EDIT_LOCATION_ZONE = "edit_location_zone"
 
+    // Focus Session screen - reached from Home's Quick Focus button, Party
+    // Mode's "Go Focus Mode" button, or Home's auto-suggestion banner. See
+    // ui.screens.session.FocusSessionScreen and NavGraph.kt's hoisted
+    // `activeFocusSession` state.
+    const val FOCUS_SESSION = "focus_session"
+
     // Secondary screens, reachable only from the Apps tab.
     const val EDIT_APP_GROUP = "edit_app_group/{groupId}"
     const val ADD_APP_GROUP = "add_app_group"
