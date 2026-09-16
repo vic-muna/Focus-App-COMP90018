@@ -61,6 +61,7 @@ class SensorDataSource {
      *    }
      */
     val locationFlow: StateFlow<Pair<Double, Double>?> = currentLocationFlow
+    // val geofenceEventFlow: SharedFlow<GeofenceEvent>
 
     // --- 2. FACADE CONTROLS ---
 
@@ -74,6 +75,14 @@ class SensorDataSource {
 
     fun setTrackingPriority(context: Context, isHigh: Boolean) {
         setGpsPriority(context, isHigh)
+    }
+
+    fun addFocusZone(context: Context, lat: Double, lng: Double, rad: Float) {
+        addFocusZoneGeofence(context, lat, lng, rad)
+    }
+
+    fun removeFocusZone(id: String) {
+
     }
 
     /** TODO: to be implemented later - true if a shake gesture was just detected. */
