@@ -18,7 +18,7 @@ import androidx.compose.ui.graphics.Color
  */
 object WireframeColors {
     /** Overall screen background - matches the mid-grey mockup backdrop. */
-    val Background = Color(0xFFAFAFAF)
+    val Background = Color(0xFFC5C5C5)
 
     /** Dark rounded "pill" cards/buttons (app group rows, add button, etc.). */
     val Card = Color(0xFF4A4A4A)

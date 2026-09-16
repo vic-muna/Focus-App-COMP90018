@@ -45,12 +45,10 @@ import kotlinx.coroutines.withContext
 private const val CANCEL_HOLD_DURATION_MILLIS = 3_000L
 private const val CANCEL_HOLD_STEP_MILLIS = 50L
 
-// Slower than Party Mode's own 800ms wipe (see PartyModeScreen.kt) - this
-// screen's entrance/exit is meant to be noticeably played, not a quick cut.
-// Non-private: NavGraph.kt reuses it so Home's own fade-out (see
-// homeExitTransition there) lasts exactly as long as this reveal, instead
-// of Home cutting away quickly before this finishes revealing.
-const val FOCUS_SESSION_WIPE_DURATION_MILLIS = 3_000
+// Same fixed duration Party Mode's own wipe uses (see PartyModeScreen.kt),
+// applied symmetrically to both the entrance reveal and the cancel/reverse-cover -
+// no separate "calculated"/synced enter-vs-exit timing.
+private const val WIPE_DURATION_MILLIS = 800
 
 /** Where a focus session was started from - lets a saved [FocusSession] carry which
  *  group triggered it, for a schedule match. */
@@ -78,15 +76,11 @@ data class ActiveFocusSession(
  * PartyModeScreen.kt's doc comment for the full rationale of why it's a sweeping
  * gradient band rather than a translated/scaled box) - an independent copy of that
  * mechanism rather than shared code, matching how other small self-contained UI
- * pieces in this project are duplicated per-screen. Here it runs over
- * [FOCUS_SESSION_WIPE_DURATION_MILLIS] (3s, slower than Party Mode's 800ms) so it's
- * actually visible as its own moment rather than a quick cut - and NavGraph.kt fades
- * Home out over that exact same duration, so Home's disappearance and this screen's
- * reveal are one continuous 3s motion instead of Home cutting away quickly first.
- * Home also waits its own separate ~3s beat BEFORE that transition even starts (see
- * HomeScreenWithSheet.kt's startFocusSessionAfterDelay), so the full sequence from
- * tapping Quick Focus is: Home unchanged (~3s) -> Home fades out / this screen wipes
- * in together (~3s).
+ * pieces in this project are duplicated per-screen, using the exact same fixed
+ * [WIPE_DURATION_MILLIS] (800ms) for both the entrance reveal and the cancel's
+ * reverse-cover. The NavGraph-level transition into/out of this screen is also
+ * just a plain fade (see NavGraph.kt's partyModeEnter/partyModeExit, reused
+ * as-is) - no synced durations or special-cased transitions of its own.
  *
  * Deliberately minimal otherwise: just the elapsed time at the top, on a full-bleed
  * placeholder background - the real "idle-game style" animation is separate future
@@ -96,6 +90,8 @@ data class ActiveFocusSession(
  * the same wipe in reverse before actually leaving - same as the system back
  * gesture, intercepted via BackHandler so it can't skip the animation either.
  */
+
+
 @Composable
 fun FocusSessionScreen(
     session: ActiveFocusSession,
@@ -110,12 +106,22 @@ fun FocusSessionScreen(
     var screenHeightPx by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(Unit) {
-        revealProgress.animateTo(1f, tween(FOCUS_SESSION_WIPE_DURATION_MILLIS, easing = FastOutSlowInEasing))
+        revealProgress.animateTo(1f, tween(WIPE_DURATION_MILLIS, easing = FastOutSlowInEasing))
     }
+
+    // True from the moment cancellation starts until this screen is gone. Stops
+    // the tick loop below (and further hold-gesture handling) from continuing to
+    // recompose this screen while it's mid pop-exit - AnimatedContent's exit
+    // transition (see NavGraph.kt) doesn't dispose this composable until the
+    // transition finishes, so without this guard the tick loop keeps mutating
+    // state and recomposing this screen for the whole fade-out, which is what
+    // was producing the "reopening" artifact on the way back to Home (Party
+    // Mode has no such ongoing ticker, which is why it never showed this).
+    var isEnding by remember { mutableStateOf(false) }
 
     var tick by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
-        while (true) {
+        while (!isEnding) {
             delay(1000)
             tick = System.currentTimeMillis()
         }
@@ -144,8 +150,10 @@ fun FocusSessionScreen(
     }
 
     fun cancelSession() {
+        if (isEnding) return
+        isEnding = true
         scope.launch {
-            revealProgress.animateTo(0f, tween(FOCUS_SESSION_WIPE_DURATION_MILLIS, easing = FastOutSlowInEasing))
+            revealProgress.animateTo(0f, tween(WIPE_DURATION_MILLIS, easing = FastOutSlowInEasing))
             saveAndFinish()
         }
     }
@@ -182,11 +190,13 @@ fun FocusSessionScreen(
             .pointerInput(Unit) {
                 detectTapGestures(
                     onPress = {
-                        isHolding = true
-                        try {
-                            tryAwaitRelease()
-                        } finally {
-                            isHolding = false
+                        if (!isEnding) {
+                            isHolding = true
+                            try {
+                                tryAwaitRelease()
+                            } finally {
+                                isHolding = false
+                            }
                         }
                     }
                 )
@@ -223,7 +233,13 @@ fun FocusSessionScreen(
         // Wipe layer - stays put, fillMaxSize, never translated or scaled;
         // only the gradient's own transition band sweeps along the
         // bottom-left -> top-right diagonal as revealProgress goes 0 -> 1.
+        // The "covering" color MUST match the real screen background
+        // (WireframeColors.Background, the same color the outer Box below
+        // uses) - using anything else (e.g. plain white) means the wipe
+        // never actually blends into the background it's supposed to be
+        // covering/revealing, showing a mismatched color instead.
         val bandWidth = 0.18f
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
