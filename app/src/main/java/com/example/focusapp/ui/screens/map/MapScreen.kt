@@ -2,6 +2,8 @@ package com.example.focusapp.ui.screens.map
 
 import android.Manifest
 import android.widget.Toast
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -15,8 +17,11 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.Switch
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -28,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import com.example.focusapp.ui.theme.WireframeColors
 
 import com.example.focusapp.data.sensor.SensorDataSource
@@ -64,25 +70,76 @@ fun MapScreen() {
     val context = LocalContext.current
     val sensorDataSource = remember { SensorDataSource() }
 
+    var showBackgroundRationale by remember { mutableStateOf(false) }
+
+    // --- NEW: State to hold the ID typed by the user for testing ---
+    var zoneIdToRemove by remember { mutableStateOf("") }
+    var isFastTracking by remember { mutableStateOf(false) }
+
+    val backgroundPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            Toast.makeText(context, "Background tracking enabled!", Toast.LENGTH_SHORT).show()
+            // TODO: Replace 0.0 with actual map coordinates later
+            sensorDataSource.startTracking(context)
+            sensorDataSource.setTrackingPriority(context, isHigh = isFastTracking)
+            sensorDataSource.addFocusZone(context, lat = 0.0, lng = 0.0, rad = 100.0f)
+        } else {
+            Toast.makeText(context, "Background denied. Geofences won't work.", Toast.LENGTH_LONG).show()
+        }
+    }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
         if (isGranted) {
-            // Permission was granted
             Toast.makeText(context, "GPS Permission Granted!", Toast.LENGTH_SHORT).show()
             sensorDataSource.startTracking(context)
 
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val hasBackground = ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.ACCESS_BACKGROUND_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
+
+                if (!hasBackground) {
+                    showBackgroundRationale = true
+                } else {
+                    sensorDataSource.addFocusZone(context, lat = 0.0, lng = 0.0, rad = 100f)
+                }
+            } else {
+                sensorDataSource.addFocusZone(context, lat = 0.0, lng = 0.0, rad = 100f)
+            }
         } else {
-            // Permission was denied
             Toast.makeText(context, "Permission denied. GPS won't work.", Toast.LENGTH_SHORT).show()
         }
     }
 
-    // TODO: to be implemented later - replace this with real data from
-    // FocusRepository.getFocusZones() (via a ViewModel), instead of a
-    // hard-coded local list.
-    var isFastTracking by remember { mutableStateOf(true) }
+
     val locations = remember { mutableStateListOf(UiFocusLocation(id = "l1", name = "Location 1")) }
+
+    if (showBackgroundRationale) {
+        AlertDialog(
+            onDismissRequest = { showBackgroundRationale = false },
+            title = { Text("Background Tracking Required") },
+            text = { Text("To automatically start focus sessions when your phone is in your pocket, this app needs background location access. On the next screen, please select 'Allow all the time'.") },
+            confirmButton = {
+                Button(onClick = {
+                    showBackgroundRationale = false
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        backgroundPermissionLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                    }
+                }) {
+                    Text("Continue")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBackgroundRationale = false }) {
+                    Text("No Thanks")
+                }
+            }
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -97,7 +154,29 @@ fun MapScreen() {
 
         AddLocationPillButton(
             onClick = {
-                permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                val hasFine = ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.ACCESS_FINE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
+
+                if (hasFine) {
+                    sensorDataSource.startTracking(context)
+                    sensorDataSource.setTrackingPriority(context, isHigh = isFastTracking)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        val hasBg = ContextCompat.checkSelfPermission(
+                            context, Manifest.permission.ACCESS_BACKGROUND_LOCATION
+                        ) == PackageManager.PERMISSION_GRANTED
+
+                        if (!hasBg) {
+                            showBackgroundRationale = true
+                        } else {
+                            sensorDataSource.addFocusZone(context, lat = 0.0, lng = 0.0, rad = 100f)
+                        }
+                    } else {
+                        sensorDataSource.addFocusZone(context, lat = 0.0, lng = 0.0, rad = 100f)
+                    }
+                } else {
+                    permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                }
             }
         )
 
@@ -110,7 +189,6 @@ fun MapScreen() {
                 checked = isFastTracking,
                 onCheckedChange = { isChecked ->
                     isFastTracking = isChecked
-                    // Update the GPS priority on the fly
                     sensorDataSource.setTrackingPriority(context, isHigh = isChecked)
                 }
             )
@@ -119,7 +197,7 @@ fun MapScreen() {
 
             Text(
                 text = if (isFastTracking) "High Accuracy (5s)" else "Power Saving (30s)",
-                color = WireframeColors.OnLight // Assuming this exists in your WireframeColors
+                color = WireframeColors.OnLight
             )
         }
 
@@ -131,9 +209,37 @@ fun MapScreen() {
             Text("Turn off Tracking")
         }
 
-        // TODO: to be implemented later - empty-state message when there
-        // are no saved locations yet, once `locations` is no longer
-        // hard-coded.
+        // --- NEW: Test UI for removing geofences ---
+        Spacer(modifier = Modifier.height(32.dp))
+
+        Text(
+            text = "Geofence Testing",
+            color = WireframeColors.OnLight
+        )
+
+        OutlinedTextField(
+            value = zoneIdToRemove,
+            onValueChange = { zoneIdToRemove = it },
+            label = { Text("Enter UUID to remove") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Button(
+            onClick = {
+                if (zoneIdToRemove.isNotBlank()) {
+                    sensorDataSource.removeFocusZone(context, zoneIdToRemove)
+                    Toast.makeText(context, "Attempting to remove: $zoneIdToRemove", Toast.LENGTH_SHORT).show()
+                    zoneIdToRemove = "" // Clear the field after clicking
+                } else {
+                    Toast.makeText(context, "Please enter an ID first", Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Remove Focus Zone")
+        }
     }
 }
 

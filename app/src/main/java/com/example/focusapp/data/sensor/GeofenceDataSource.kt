@@ -13,6 +13,8 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingRequest
 
+private const val TAG = "GeofenceTracker"
+
 fun addFocusZoneGeofence(context: Context, lat: Double, lng: Double, radius: Float) {
     // 1. Initialize the client using the context you passed in
     val geofencingClient = LocationServices.getGeofencingClient(context)
@@ -39,14 +41,14 @@ fun addFocusZoneGeofence(context: Context, lat: Double, lng: Double, radius: Flo
 
         geofencingClient.addGeofences(geofencingRequest, pendingIntent)
             .addOnSuccessListener {
-                Log.d("GeofenceData", "Successfully registered Focus Zone: $newLocationId")
+                Log.d(TAG, "Successfully registered Focus Zone: $lat, $lng, $radius, $newLocationId")
             }
             .addOnFailureListener { exception ->
-                Log.e("GeofenceData", "Failed to register Focus Zone: ${exception.message}")
+                Log.e(TAG, "Failed to register Focus Zone: ${exception.message}")
             }
 
     } else {
-        Log.e("GeofenceData", "Cannot add geofence: Missing fine location permission.")
+        Log.e(TAG, "Cannot add geofence: Missing fine location permission.")
     }
 }
 
@@ -72,9 +74,9 @@ fun removeFocusZoneGeofence(context: Context, id: String) {
     // Remove the specific geofence by passing its ID in a list
     geofencingClient.removeGeofences(listOf(id))
         .addOnSuccessListener {
-            Log.d("GeofenceData", "Successfully removed Focus Zone: $id")
+            Log.d(TAG, "Successfully removed Focus Zone: $id")
         }
         .addOnFailureListener { exception ->
-            Log.e("GeofenceData", "Failed to remove Focus Zone $id: ${exception.message}")
+            Log.e(TAG, "Failed to remove Focus Zone $id: ${exception.message}")
         }
 }
