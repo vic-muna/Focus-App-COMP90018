@@ -81,8 +81,8 @@ class SensorDataSource {
         addFocusZoneGeofence(context, lat, lng, rad)
     }
 
-    fun removeFocusZone(id: String) {
-
+    fun removeFocusZone(context: Context, id: String) {
+        removeFocusZoneGeofence(context, id)
     }
 
     /** TODO: to be implemented later - true if a shake gesture was just detected. */

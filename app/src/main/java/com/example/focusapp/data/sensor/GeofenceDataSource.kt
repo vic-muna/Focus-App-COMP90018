@@ -65,3 +65,16 @@ private fun getGeofencePendingIntent(context: Context): PendingIntent {
         flags
     )
 }
+
+fun removeFocusZoneGeofence(context: Context, id: String) {
+    val geofencingClient = LocationServices.getGeofencingClient(context)
+
+    // Remove the specific geofence by passing its ID in a list
+    geofencingClient.removeGeofences(listOf(id))
+        .addOnSuccessListener {
+            Log.d("GeofenceData", "Successfully removed Focus Zone: $id")
+        }
+        .addOnFailureListener { exception ->
+            Log.e("GeofenceData", "Failed to remove Focus Zone $id: ${exception.message}")
+        }
+}
