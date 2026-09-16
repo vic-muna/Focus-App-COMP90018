@@ -56,6 +56,11 @@ enum class SheetType { NONE, BLOCKED_APPS, LOCATION_ZONE }
  *  boundaries only need minute-granularity, so there's no need for anything tighter. */
 private const val AUTO_TRIGGER_CHECK_INTERVAL_MILLIS = 60_000L
 
+/** How long Home waits, unchanged, before actually navigating to Focus Session -
+ *  time for a background animation to play first (not built yet; this is just the
+ *  timing seam for it). Mirrored on the way out by FocusSessionScreen's own delay. */
+private const val FOCUS_SESSION_START_DELAY_MILLIS = 4_000L
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreenWithSheet(
@@ -97,9 +102,13 @@ fun HomeScreenWithSheet(
         }
     }
 
-    // 移除 3 秒延遲，按下觸發時立刻啟動轉場動畫
-    fun startFocusSessionImmediate(source: FocusSessionSource) {
-        onFocusSessionStart(source)
+    // Home stays fully visible/unchanged for a beat before actually navigating -
+    // gives a background animation time to play first (not built yet).
+    fun startFocusSessionAfterDelay(source: FocusSessionSource) {
+        scope.launch {
+            delay(FOCUS_SESSION_START_DELAY_MILLIS)
+            onFocusSessionStart(source)
+        }
     }
 
     // 重開 Sheet 的 Signal 處理
@@ -162,7 +171,7 @@ fun HomeScreenWithSheet(
         // 1. 主要畫面
         HomeScreen(
             onAvatarClick = onAvatarClick,
-            onQuickFocusClick = { startFocusSessionImmediate(FocusSessionSource.Manual) },
+            onQuickFocusClick = { startFocusSessionAfterDelay(FocusSessionSource.Manual) },
             onPartyModeClick = onPartyModeClick,
             onBlockedAppCardClick = { openSheet(SheetType.BLOCKED_APPS) },
             onLocationCardClick = { openSheet(SheetType.LOCATION_ZONE) },
@@ -184,7 +193,7 @@ fun HomeScreenWithSheet(
                                 FocusSessionSource.Location(suggestion.zoneName)
                             FocusTriggerResult.NoTrigger -> return@AutoFocusSuggestionBanner
                         }
-                        startFocusSessionImmediate(source)
+                        startFocusSessionAfterDelay(source)
                     },
                     onDismiss = { dismissedKey = suggestionKey }
                 )

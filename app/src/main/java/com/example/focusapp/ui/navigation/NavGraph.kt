@@ -57,6 +57,16 @@ private val partyModeExit: AnimatedContentTransitionScope<NavBackStackEntry>.() 
     fadeOut(tween(300))
 }
 
+// Home fades out (matching Party Mode/Focus Session's own fade-in, no slide)
+// specifically when heading to one of those two destinations - every other
+// destination Home can go to keeps the normal slide-down.
+private val homeExitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
+    when (targetState.destination.route) {
+        Destinations.PARTY_MODE, Destinations.FOCUS_SESSION -> partyModeExit()
+        else -> exitToBottom()
+    }
+}
+
 @Composable
 fun FocusAppNavGraph() {
     val navController = rememberNavController()
@@ -86,7 +96,7 @@ fun FocusAppNavGraph() {
             composable(
                 route = Destinations.HOME,
                 enterTransition = enterFromBottom,
-                exitTransition = exitToBottom
+                exitTransition = homeExitTransition
             ) { backStackEntry ->
                 val reopenSheet by backStackEntry.savedStateHandle
                     .getStateFlow("reopenSheet", false)

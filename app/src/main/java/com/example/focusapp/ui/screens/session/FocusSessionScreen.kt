@@ -48,7 +48,12 @@ private const val CANCEL_HOLD_STEP_MILLIS = 50L
 // Same fixed duration Party Mode's own wipe uses (see PartyModeScreen.kt),
 // applied symmetrically to both the entrance reveal and the cancel/reverse-cover -
 // no separate "calculated"/synced enter-vs-exit timing.
-private const val WIPE_DURATION_MILLIS = 800
+private const val WIPE_DURATION_MILLIS = 600
+
+/** How long this screen waits, unchanged, after cancellation is triggered before
+ *  actually starting the reverse wipe/leaving - time for a background animation to
+ *  play first (not built yet). Mirrors Home's own delay before entering. */
+private const val FOCUS_SESSION_END_DELAY_MILLIS = 2_000L
 
 /** Where a focus session was started from - lets a saved [FocusSession] carry which
  *  group triggered it, for a schedule match. */
@@ -86,9 +91,12 @@ data class ActiveFocusSession(
  * placeholder background - the real "idle-game style" animation is separate future
  * visual work, not designed here. There's no button to end the session - holding
  * anywhere on screen for CANCEL_HOLD_DURATION_MILLIS cancels focus (mirrors a "hold
- * to confirm" pattern so it can't be triggered by an accidental tap), which plays
- * the same wipe in reverse before actually leaving - same as the system back
- * gesture, intercepted via BackHandler so it can't skip the animation either.
+ * to confirm" pattern so it can't be triggered by an accidental tap). Cancelling
+ * freezes the screen immediately (isEnding), waits [FOCUS_SESSION_END_DELAY_MILLIS]
+ * (time for a background animation to play, mirroring the delay Home applies before
+ * entering - see HomeScreenWithSheet.kt's startFocusSessionAfterDelay), then plays
+ * the wipe in reverse before actually leaving - same as the system back gesture,
+ * intercepted via BackHandler so it can't skip either step.
  */
 
 
@@ -153,6 +161,7 @@ fun FocusSessionScreen(
         if (isEnding) return
         isEnding = true
         scope.launch {
+            delay(FOCUS_SESSION_END_DELAY_MILLIS)
             revealProgress.animateTo(0f, tween(WIPE_DURATION_MILLIS, easing = FastOutSlowInEasing))
             saveAndFinish()
         }
