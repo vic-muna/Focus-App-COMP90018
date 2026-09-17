@@ -17,4 +17,7 @@ package com.example.focusapp.data.remote
  * made - e.g. suspend fun syncFocusZones(...),
  * suspend fun observePartyMembers(...), etc.
  */
+// [HANDOFF -> Victor Munacoha (Cloud REST API) + Yu-Hao Lu (Firebase) | README Group Member Tasks]
+// Resolve the REST-vs-Firebase decision noted above together first, then
+// implement this interface (whichever is chosen, or both behind it).
 interface RemoteDataSource

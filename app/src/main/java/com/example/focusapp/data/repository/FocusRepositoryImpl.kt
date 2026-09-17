@@ -29,8 +29,8 @@ class FocusRepositoryImpl(
     private val remoteDataSource: RemoteDataSource
 ) : FocusRepository {
 
-    override suspend fun getFocusZones(): List<FocusZone> {
-        return localDataSource.getFocusZones()
+    override suspend fun getFocusZone(): FocusZone? {
+        return localDataSource.getFocusZone()
         // TODO: to be implemented later - merge with remoteDataSource results.
     }
 
