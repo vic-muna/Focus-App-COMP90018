@@ -126,6 +126,10 @@ fun FocusAppNavGraph() {
                     onGroupRename = { groupId, newName ->
                         groups = groups.map { g -> if (g.id == groupId) g.copy(name = newName) else g }
                     },
+                    // [HANDOFF -> Kai-Jiun Chan | README task: "Reward/Progress UI"]
+                    // 首頁規格.md: tapping the avatar should navigate to a Report
+                    // screen with two tabs (Focus History / Rewards). Create that
+                    // screen and route to it here instead of leaving this empty.
                     onAvatarClick = { },
                     onFocusSessionStart = { source -> startFocusSession(source) },
                     onPartyModeClick = { navController.navigate(Destinations.PARTY_MODE) },

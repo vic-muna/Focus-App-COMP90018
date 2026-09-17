@@ -13,4 +13,5 @@ import androidx.lifecycle.ViewModel
  * TODO: to be implemented later - intentionally empty for now, no real
  * data loading happens yet.
  */
+// [HANDOFF -> Yu-Hao Lu (Room-backed session data) + Kai-Jiun Chan (reactive ViewModel/LiveData binding) | README Group Member Tasks]
 class HistoryViewModel : ViewModel()

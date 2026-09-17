@@ -55,6 +55,10 @@ private data class UiFocusLocation(val id: String, val name: String)
  *    than guessed at.
  */
 @Composable
+// [HANDOFF -> Victor Munacoha | README task: "GPS + Geofencing + Accelerometer sensor integration"]
+// Replace the hard-coded `locations` list below with FocusRepository data
+// (see domain/repository/FocusRepository.kt) via a ViewModel, and wire the
+// pencil / "+" buttons to a real map-based picker once one is designed.
 fun MapScreen() {
     // TODO: to be implemented later - replace this with real data from
     // FocusRepository.getFocusZones() (via a ViewModel), instead of a

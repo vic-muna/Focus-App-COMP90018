@@ -23,6 +23,10 @@ import com.google.android.gms.location.Priority
  *    from this class since it behaves more like a system service than a
  *    plain sensor reading)
  */
+// [HANDOFF -> Victor Munacoha | README task: "GPS + Geofencing + Accelerometer sensor integration"]
+// This whole class is your entry point. Implement getCurrentLocation() via
+// FusedLocationProviderClient + the Geofencing API, and the shake/face-down
+// methods via SensorManager (accelerometer + gyroscope) listeners.
 class SensorDataSource {
     private val DEFAULT_UPDATE_INTERVAL_GPS: Long = 30
     private val FAST_UPDATE_INTERVAL_GPS: Long = 5

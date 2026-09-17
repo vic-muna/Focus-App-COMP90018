@@ -91,6 +91,11 @@ private fun generatePartyCode(): String {
  * so it also intercepts the system back gesture via BackHandler to play
  * the same reverse animation.
  */
+// [HANDOFF -> Yu-Hao Lu | README task: "Firebase real-time sync for Study Party feature"]
+// Wire onInviteClick / onJoinClick / onInviteFriendClick into real
+// create-room / join-room calls (see data/remote/RemoteDataSource.kt),
+// replacing generatePartyCode() and the local participant lists with
+// live Firebase-backed data.
 @Composable
 fun PartyModeScreen(
     onBackClick: () -> Unit = {},

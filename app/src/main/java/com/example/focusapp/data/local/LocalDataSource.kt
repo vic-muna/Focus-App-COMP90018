@@ -30,6 +30,10 @@ import org.json.JSONObject
  *        take `.applicationContext` so this class can't accidentally
  *        leak an Activity.
  */
+// [HANDOFF -> Yu-Hao Lu | README task: "Local data layer (Room/SQLite)"]
+// Migrate this class's SharedPreferences+JSON storage to Room when ready
+// (see the class doc comment above for why SharedPreferences was used as
+// a stopgap), and implement getSessionHistory()/saveFocusSession() for real.
 class LocalDataSource(context: Context) {
 
     private val appContext = context.applicationContext

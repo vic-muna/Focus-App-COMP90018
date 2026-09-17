@@ -31,6 +31,10 @@ sealed class FocusTriggerResult {
  * or a Geofencing API callback for location checks) can call this exact
  * same function without any change to this class.
  */
+// [HANDOFF -> Victor Munacoha | README task: "Geofencing API + Wi-Fi", "GPS ... sensor integration"]
+// Once SensorDataSource.getCurrentLocation() (and a real Geofencing
+// callback) exist, call this execute() from that real location update
+// instead of only from Home's simulated LaunchedEffect polling.
 class EvaluateFocusTriggerUseCase {
 
     /**

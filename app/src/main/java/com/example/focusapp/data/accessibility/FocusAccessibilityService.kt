@@ -72,6 +72,7 @@ class FocusAccessibilityService : AccessibilityService() {
             // home screen, which is what GLOBAL_ACTION_HOME does.
             performGlobalAction(GLOBAL_ACTION_HOME)
 
+            // [HANDOFF -> David Shiau | README task: "AccessibilityService integration (App Restriction, Screen Usage Detection)"]
             // TODO: to be implemented later:
             //  - A nicer version would show a full-screen "This app is
             //    blocked" overlay (TYPE_APPLICATION_OVERLAY window, which
