@@ -243,7 +243,7 @@ file, and search for `[HANDOFF -> <your name>` to find your spot.
 | `ui/screens/history/HistoryViewModel.kt` | Yu-Hao Lu (data) + Kai-Jiun Chan (binding) | Local data layer / Reactive UI updates |
 | `ui/screens/map/MapScreen.kt` | Victor Munacoha | GPS + Geofencing sensor integration |
 | `ui/screens/party/PartyModeScreen.kt` | Yu-Hao Lu | Firebase real-time sync for Study Party feature |
-| `ui/navigation/NavGraph.kt` (`onAvatarClick`) | Kai-Jiun Chan | Reward/Progress UI — route the avatar tap to the Report screen (History/Rewards tabs, see `首頁(MainActivity)畫面規格.md`) |
+| `ui/navigation/NavGraph.kt` (`onAvatarClick`) | Kai-Jiun Chan | Reward/Progress UI — route the avatar tap to the Report screen (History/Rewards tabs, see `MainActivity.md`) |
 
 Note: these are comment-only edits — no logic or function signatures were
 changed, so the project still compiles as-is.
