@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Configuration for FocusAccessibilityService, referenced from
+    AndroidManifest.xml via <meta-data android:resource="@xml/accessibility_service_config" />.
+
+    android:accessibilityEventTypes="typeWindowStateChanged"
+        We only ask Android to notify us when the foreground WINDOW
+        changes (i.e. the user switched to a different app/screen) -
+        not every tap, scroll, or text change. Narrowing this is both
+        more efficient and all we need for "which app is in front".
+
+    android:canRetrieveWindowContent="false"
+        We never read what's ON screen (no text, no view hierarchy) -
+        we only care WHICH APP owns the window. Leaving this false is
+        more private and requires less justification if this were ever
+        published to the Play Store.
+
+    android:packageNames is intentionally omitted, meaning "listen for
+    every app on the device", not just a fixed list - which is exactly
+    what a general-purpose app restriction feature needs.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault"
+    android:canRetrieveWindowContent="false"
+    android:notificationTimeout="100"
+    android:description="@string/accessibility_service_description" />

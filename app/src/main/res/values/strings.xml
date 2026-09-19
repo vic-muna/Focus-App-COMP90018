@@ -1,3 +1,9 @@
 <resources>
     <string name="app_name">Focus</string>
+
+    <!-- Shown to the user in Settings > Accessibility when deciding
+         whether to turn FocusAccessibilityService on. Android requires
+         every accessibility service to have a description explaining
+         what it does, since these services can read screen content. -->
+    <string name="accessibility_service_description">Lets Focus detect which app is currently in the foreground, so it can enforce app restrictions.</string>
 </resources>

@@ -109,6 +109,10 @@ dependencies {
 
     debugImplementation(libs.androidx.ui.tooling)
 
+    // Needed for GPS location + Geofencing (data/sensor/LocationDataSource.kt,
+    // data/sensor/GeofenceDataSource.kt).
+    implementation(libs.play.services.location)
+
     // --- Testing (empty for now, but kept so Android Studio's default
     //     "Run Tests" action has somewhere to look) ---
     testImplementation(libs.junit)
