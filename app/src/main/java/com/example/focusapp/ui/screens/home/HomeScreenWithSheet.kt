@@ -2,6 +2,8 @@ package com.example.focusapp.ui.screens.home
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,13 +18,16 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.data.repository.FocusRepositoryProvider
 import com.example.focusapp.domain.model.FocusZone
 import com.example.focusapp.domain.usecase.EvaluateFocusTriggerUseCase
@@ -111,6 +117,22 @@ fun HomeScreenWithSheet(
         }
     }
 
+    // [David Shiau, 2026-09-20] Blocking only works while
+    // FocusAccessibilityService is enabled - the user has to grant that
+    // themselves in system Settings (Android never lets an app enable its
+    // own AccessibilityService). Quick Focus checks this first rather than
+    // silently starting a session that blocks nothing.
+    val isAccessibilityEnabled by AccessibilityBridge.isServiceConnected.collectAsState()
+    var showAccessibilityPermissionDialog by remember { mutableStateOf(false) }
+
+    fun onQuickFocusClick() {
+        if (isAccessibilityEnabled) {
+            startFocusSessionAfterDelay(FocusSessionSource.Manual)
+        } else {
+            showAccessibilityPermissionDialog = true
+        }
+    }
+
     // 重開 Sheet 的 Signal 處理
     LaunchedEffect(reopenSheetSignal) {
         if (reopenSheetSignal) {
@@ -171,7 +193,7 @@ fun HomeScreenWithSheet(
         // 1. 主要畫面
         HomeScreen(
             onAvatarClick = onAvatarClick,
-            onQuickFocusClick = { startFocusSessionAfterDelay(FocusSessionSource.Manual) },
+            onQuickFocusClick = { onQuickFocusClick() },
             onPartyModeClick = onPartyModeClick,
             onBlockedAppCardClick = { openSheet(SheetType.BLOCKED_APPS) },
             onLocationCardClick = { openSheet(SheetType.LOCATION_ZONE) },
@@ -227,7 +249,48 @@ fun HomeScreenWithSheet(
                 }
             }
         }
+
+        if (showAccessibilityPermissionDialog) {
+            AccessibilityPermissionDialog(
+                onConfirm = {
+                    showAccessibilityPermissionDialog = false
+                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                },
+                onDismiss = { showAccessibilityPermissionDialog = false }
+            )
+        }
     }
+}
+
+/**
+ * Explains why Quick Focus needs the Accessibility permission before
+ * sending the user to system Settings to grant it - Android requires this
+ * to be an explicit, informed action there, it can't be requested as an
+ * ordinary runtime permission dialog (see FocusAccessibilityService's doc
+ * comment).
+ */
+@Composable
+private fun AccessibilityPermissionDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Accessibility permission needed") },
+        text = {
+            Text(
+                "To block apps during a focus session, Focus needs the " +
+                    "Accessibility permission. Turn it on for Focus in the " +
+                    "Settings screen that opens next."
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text("Open Settings") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
 
 /** Dismissible banner for an auto-detected trigger - accepting starts a session, but nothing here ever navigates on its own. */

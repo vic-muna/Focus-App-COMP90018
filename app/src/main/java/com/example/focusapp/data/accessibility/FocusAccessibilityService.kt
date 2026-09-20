@@ -1,7 +1,9 @@
 package com.example.focusapp.data.accessibility
 
 import android.accessibilityservice.AccessibilityService
+import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
+import com.example.focusapp.BlockedActivity
 
 /**
  * FocusAccessibilityService
@@ -64,25 +66,27 @@ class FocusAccessibilityService : AccessibilityService() {
         // THE restriction check: is this package one the UI told us to block?
         if (packageName in AccessibilityBridge.restrictedPackages.value) {
             AccessibilityBridge.recordBlockEvent(packageName)
-
-            // We can't literally "close" another app - Android does not
-            // allow that without root/device-owner privileges, for good
-            // reason. The standard technique real parental-control apps
-            // use instead is to immediately bounce the user back to the
-            // home screen, which is what GLOBAL_ACTION_HOME does.
-            performGlobalAction(GLOBAL_ACTION_HOME)
-
-            // [HANDOFF -> David Shiau | README task: "AccessibilityService integration (App Restriction, Screen Usage Detection)"]
-            // TODO: to be implemented later:
-            //  - A nicer version would show a full-screen "This app is
-            //    blocked" overlay (TYPE_APPLICATION_OVERLAY window, which
-            //    needs the SYSTEM_ALERT_WINDOW permission) instead of
-            //    silently bouncing to home.
-            //  - Check a real time-based schedule (AppGroup's
-            //    "Block during" field) instead of a flat always-blocked list.
-            //  - Group multiple package names under one AppGroup instead
-            //    of blocking one raw package name at a time.
+            launchBlockedScreen(packageName)
         }
+    }
+
+    /**
+     * [David Shiau, 2026-09-20] We can't literally "close" another app -
+     * Android does not allow that without root/device-owner privileges, for
+     * good reason. The standard technique real parental-control apps use
+     * instead is to immediately put something else on top of it - here,
+     * [BlockedActivity], launched into its own task (FLAG_ACTIVITY_NEW_TASK)
+     * so it doesn't join the blocked app's back stack. Starting an Activity
+     * from a Service (not itself an Activity) requires this flag.
+     * Replaces the earlier `performGlobalAction(GLOBAL_ACTION_HOME)`
+     * approach, which only bounced the user home with no explanation.
+     */
+    private fun launchBlockedScreen(packageName: String) {
+        val intent = Intent(this, BlockedActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            putExtra(BlockedActivity.EXTRA_BLOCKED_PACKAGE, packageName)
+        }
+        startActivity(intent)
     }
 
     /**

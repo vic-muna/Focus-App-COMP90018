@@ -247,3 +247,19 @@ file, and search for `[HANDOFF -> <your name>` to find your spot.
 
 Note: these are comment-only edits — no logic or function signatures were
 changed, so the project still compiles as-is.
+
+---
+
+## 09202026 Update (David Shiau)
+
+- **Real app picker**: "Blocked Apps" now shows the phone's actual installed
+  apps (real icons + names) instead of placeholder data, with multi-select
+  to build a block group.
+- **App blocking now works end-to-end**: starting Quick Focus restricts the
+  currently selected group's apps via `FocusAccessibilityService`; opening a
+  restricted app shows a full-screen "blocked" screen with a button back to
+  the home screen, instead of silently bouncing home. Prompts the user to
+  grant the Accessibility permission first if it isn't on yet.
+- **Settings**: added a "Check App Usage Duration" button that queries the
+  real Android `UsageStatsManager` and displays today's per-app usage
+  totals (display-only for now).
