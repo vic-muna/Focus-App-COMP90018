@@ -3,6 +3,7 @@ package com.example.focusapp.ui.screens.home
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -12,11 +13,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -31,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -43,10 +48,19 @@ private val SelectedItemBg = Color(0xFF474E91)       // 選中項目的醒目背
 private val TextPrimary = Color(0xFFFFFFFF)          // 主要白色文字
 private val TextSecondary = Color(0xFFA5ABC7)        // 次要淡藍灰色文字
 
+/**
+ * [David Shiau, 2026-09-20] Now backed by the phone's real installed apps
+ * (passed in by AutoBlockingSheetContent via InstalledAppsProvider)
+ * instead of fake placeholder rows, with real launcher icons and an
+ * [isLoading] state for while that PackageManager query is running.
+ * Multi-select was already supported here - each row just toggles its own
+ * `isBlocked` flag independently - this only swaps in real data.
+ */
 @Composable
 fun AppPickerSheet(
     apps: List<AppItem>,
-    onAppsChange: (List<AppItem>) -> Unit
+    onAppsChange: (List<AppItem>) -> Unit,
+    isLoading: Boolean = false
 ) {
     var query by remember { mutableStateOf("") }
     val filtered = remember(apps, query) {
@@ -106,15 +120,26 @@ fun AppPickerSheet(
 
         Spacer(Modifier.height(12.dp))
 
-        // 3. 列表項目
+        if (isLoading && apps.isEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                CircularProgressIndicator(color = Color(0xFF6C75CE))
+            }
+            return
+        }
+
+        // 3. 列表項目 - multi-select: tapping any row just toggles that one
+        // app's isBlocked flag, nothing here limits how many can be checked.
         LazyColumn(
             contentPadding = PaddingValues(vertical = 4.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            items(items = filtered, key = { it.id }) { app ->
+            items(items = filtered, key = { it.packageName }) { app ->
                 val toggle = {
                     onAppsChange(
-                        apps.map { if (it.id == app.id) it.copy(isBlocked = !it.isBlocked) else it }
+                        apps.map { if (it.packageName == app.packageName) it.copy(isBlocked = !it.isBlocked) else it }
                     )
                 }
 
@@ -137,6 +162,24 @@ fun AppPickerSheet(
                             checked = app.isBlocked,
                             onCheckedChange = { toggle() }
                         )
+                        Spacer(Modifier.width(12.dp))
+                        val icon = app.icon
+                        if (icon != null) {
+                            Image(
+                                bitmap = icon.asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(InputBgColor)
+                            )
+                        }
                         Spacer(Modifier.width(12.dp))
                         Text(
                             text = app.name,

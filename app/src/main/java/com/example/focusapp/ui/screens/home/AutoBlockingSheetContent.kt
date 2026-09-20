@@ -1,5 +1,6 @@
 package com.example.focusapp.ui.screens.home
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,11 +35,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import com.example.focusapp.data.apps.InstalledAppInfo
+import com.example.focusapp.data.apps.getLaunchableApps
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private const val MAX_VISIBLE_APPS_IN_CARD = 4
 
@@ -84,6 +92,21 @@ fun AutoBlockingSheetContent(
 
     var activePicker by remember { mutableStateOf(ActivePicker.NONE) }
     var showRenameDialog by remember { mutableStateOf(false) }
+
+    // [David Shiau, 2026-09-20] Real installed apps for the picker - loaded
+    // once (lazily, on first open) and reused afterwards rather than
+    // re-querying PackageManager every time the sheet is reopened.
+    val context = LocalContext.current
+    var installedApps by remember { mutableStateOf<List<InstalledAppInfo>>(emptyList()) }
+    var isLoadingInstalledApps by remember { mutableStateOf(false) }
+
+    LaunchedEffect(activePicker) {
+        if (activePicker == ActivePicker.APP_PICKER && installedApps.isEmpty() && !isLoadingInstalledApps) {
+            isLoadingInstalledApps = true
+            installedApps = withContext(Dispatchers.Default) { getLaunchableApps(context) }
+            isLoadingInstalledApps = false
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -135,6 +158,25 @@ fun AutoBlockingSheetContent(
     }
 
     if (activePicker == ActivePicker.APP_PICKER) {
+        // [David Shiau, 2026-09-20] Merge every real installed app with
+        // this group's already-blocked packages, so the picker shows the
+        // whole phone's app list with the group's current selection
+        // pre-checked (multi-select - any number of rows can be checked
+        // at once).
+        val blockedPackageNames = remember(selectedGroup.apps) {
+            selectedGroup.apps.filter { it.isBlocked }.map { it.packageName }.toSet()
+        }
+        val pickerApps = remember(installedApps, blockedPackageNames) {
+            installedApps.map { info ->
+                AppItem(
+                    packageName = info.packageName,
+                    name = info.label,
+                    isBlocked = info.packageName in blockedPackageNames,
+                    icon = info.icon
+                )
+            }
+        }
+
         ModalBottomSheet(
             onDismissRequest = { activePicker = ActivePicker.NONE },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -143,8 +185,14 @@ fun AutoBlockingSheetContent(
             scrimColor = Color.Transparent
         ) {
             AppPickerSheet(
-                apps = selectedGroup.apps,
-                onAppsChange = { onAppsChange(selectedGroup.id, it) }
+                apps = pickerApps,
+                isLoading = isLoadingInstalledApps,
+                // Only the checked apps are worth persisting on the group -
+                // storing the full installed-app list would balloon storage
+                // and break "N apps blocked" counts elsewhere.
+                onAppsChange = { updated ->
+                    onAppsChange(selectedGroup.id, updated.filter { it.isBlocked })
+                }
             )
         }
     }
@@ -210,7 +258,11 @@ private fun RenameGroupDialog(
     )
 }
 
-/** Tapping this card opens the app picker. */
+/**
+ * Tapping this card opens the app picker.
+ * [David Shiau, 2026-09-20] Icons now draw each app's real launcher icon
+ * (falls back to the old colored placeholder box only if it's unavailable).
+ */
 @Composable
 private fun BlockAppsCard(group: BlockedAppGroup, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Column(
@@ -231,15 +283,28 @@ private fun BlockAppsCard(group: BlockedAppGroup, modifier: Modifier = Modifier,
                 modifier = Modifier.weight(1f, fill = false),
                 contentAlignment = Alignment.CenterStart
             ) {
-                visibleApps.forEachIndexed { index, _ ->
-                    Box(
-                        modifier = Modifier
-                            .padding(start = (index * 24).dp)
-                            .zIndex(index.toFloat())
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(CardIconPlaceholderColors[index % CardIconPlaceholderColors.size])
-                    )
+                visibleApps.forEachIndexed { index, app ->
+                    val icon = app.icon
+                    if (icon != null) {
+                        Image(
+                            bitmap = icon.asImageBitmap(),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .padding(start = (index * 24).dp)
+                                .zIndex(index.toFloat())
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .padding(start = (index * 24).dp)
+                                .zIndex(index.toFloat())
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(CardIconPlaceholderColors[index % CardIconPlaceholderColors.size])
+                        )
+                    }
                 }
             }
             if (overflowCount > 0) {

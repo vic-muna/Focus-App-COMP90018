@@ -25,6 +25,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.ui.screens.apps.AddAppGroupScreen
 import com.example.focusapp.ui.screens.apps.AppsScreen
 import com.example.focusapp.ui.screens.apps.EditAppGroupScreen
@@ -75,7 +76,26 @@ fun FocusAppNavGraph() {
     var selectedGroupId by remember { mutableStateOf(groups.first().id) }
     var activeFocusSession by remember { mutableStateOf<ActiveFocusSession?>(null) }
 
+    // [David Shiau, 2026-09-20] Which packages a session should restrict,
+    // resolved per source: a schedule-triggered session blocks the group
+    // that matched it; a manual Quick Focus blocks whichever group is
+    // currently selected on Home; and Party/Location sessions (no single
+    // specific group) fall back to the union of every saved group's packages.
+    fun restrictedPackagesFor(source: FocusSessionSource): List<String> {
+        return when (source) {
+            is FocusSessionSource.Schedule ->
+                groups.find { it.id == source.groupId }?.apps?.map { it.packageName } ?: emptyList()
+            FocusSessionSource.Manual ->
+                groups.find { it.id == selectedGroupId }?.apps?.map { it.packageName } ?: emptyList()
+            FocusSessionSource.Party, is FocusSessionSource.Location ->
+                groups.flatMap { group -> group.apps.map { it.packageName } }.distinct()
+        }
+    }
+
+    // [David Shiau, 2026-09-20] Activates real app blocking for the
+    // session's resolved packages via FocusAccessibilityService.
     fun startFocusSession(source: FocusSessionSource) {
+        AccessibilityBridge.setRestrictedPackages(restrictedPackagesFor(source))
         activeFocusSession = ActiveFocusSession(
             startTimeMillis = System.currentTimeMillis(),
             source = source,
@@ -160,6 +180,8 @@ fun FocusAppNavGraph() {
                     FocusSessionScreen(
                         session = session,
                         onEndSessionClick = {
+                            // [David Shiau, 2026-09-20] Lifts blocking once the session is over.
+                            AccessibilityBridge.clearRestrictedPackages()
                             activeFocusSession = null
                             navController.popBackStack(Destinations.HOME, inclusive = false)
                         }
