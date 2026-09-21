@@ -2,123 +2,27 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!--
-        NOTE (Permissions - intentionally left commented out):
-        The mechanisms described in the project plan (location zones, shake/
-        face-down gestures, ambient volume detection, cloud sync) will each
-        need a runtime permission below. They are commented out for now
-        because this skeleton does not access any of them yet - uncomment
-        the ones you need as you implement each feature, and remember
-        Android also requires you to *request* dangerous permissions at
-        runtime, not just declare them here.
-
-        <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
-        <uses-permission android:name="android.permission.RECORD_AUDIO" />
-        <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-        <uses-permission android:name="android.permission.INTERNET" />
-        <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    -->
-
-    <!-- Needed by the Location Zone edit page's "Use current location" button. -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-
-    <!--
-        Required since Android 11 (API 30): apps can no longer see every
-        other installed package by default ("package visibility"
-        restrictions). This <queries> block tells the OS "let me see any
-        app that has a launcher icon" - exactly what the app-picker dialog
-        needs (PackageManager.queryIntentActivities with this same intent
-        filter), without requiring the much more sensitive
-        QUERY_ALL_PACKAGES permission.
-    -->
-    <queries>
-        <intent>
-            <action android:name="android.intent.action.MAIN" />
-            <category android:name="android.intent.category.LAUNCHER" />
-        </intent>
-    </queries>
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-
-    <!--
-        [David Shiau, 2026-09-20] Needed for UsageStatsManager (Settings'
-        "Check App Usage Duration" button). This is a "special" permission -
-        declaring it here does NOT grant it; the user must still flip it on
-        manually via Settings.ACTION_USAGE_ACCESS_SETTINGS (see
-        data/usagestats/UsageStatsProvider.kt), the same two-step pattern as
-        BIND_ACCESSIBILITY_SERVICE. tools:ignore="ProtectedPermissions"
-        silences Lint's warning that this permission is normally
-        system-only - it isn't, for this specific one.
-    -->
-    <uses-permission
-        android:name="android.permission.PACKAGE_USAGE_STATS"
-        tools:ignore="ProtectedPermissions" />
-
     <application
         android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:theme="@style/Theme.Material3.DayNight.NoActionBar"
-        android:supportsRtl="true">
-
-        <!--
-            Single-Activity app: every screen is a Composable, navigated
-            between with Jetpack Navigation Compose (see
-            ui/navigation/NavGraph.kt). No other Activities are needed.
-        -->
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.App2">
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.App2"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
+
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
-        <!--
-            FocusAccessibilityService - prototype for detecting/restricting
-            other apps. A few things here are NOT optional boilerplate:
-
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
-                Required by the OS on every AccessibilityService, so that
-                only the system itself is allowed to bind to (i.e. start
-                talking to) it - prevents other apps from impersonating
-                the accessibility framework to control your service.
-
-            The <intent-filter> action is how Android's Settings app finds
-            this class and lists it as an available accessibility service
-            in the first place.
-
-            The <meta-data> points at res/xml/accessibility_service_config.xml,
-            which is where we declare WHICH events we want to be told about.
-        -->
-        <!--
-            [David Shiau, 2026-09-20] BlockedActivity - the "this app is
-            blocked" screen FocusAccessibilityService launches over whatever
-            restricted app just came to the foreground. launchMode="singleTask"
-            + taskAffinity="" put it in its own isolated task, separate from
-            the blocked app's task, so dismissing it (or the system Back
-            gesture) can go straight Home without revealing the blocked app
-            underneath - see BlockedActivity.kt's doc comment.
-        -->
-        <activity
-            android:name=".BlockedActivity"
-            android:exported="false"
-            android:launchMode="singleTask"
-            android:taskAffinity="" />
-
-        <service
-            android:name=".data.accessibility.FocusAccessibilityService"
-            android:exported="true"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config" />
-        </service>
-
     </application>
 
 </manifest>
