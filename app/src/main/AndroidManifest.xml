@@ -55,6 +55,24 @@
         android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
 
+    <!--
+        [Claude, 2026-09-21] Needed for FocusTimerService, the persistent
+        "focus session active" notification-shade entry. FOREGROUND_SERVICE
+        is required on all API levels to run any foreground service;
+        FOREGROUND_SERVICE_SPECIAL_USE is additionally required on API 34+
+        since this service doesn't fit any of the OS's predefined
+        foreground-service types (mediaPlayback, location, etc). SPECIAL_USE
+        is itself a "special" permission like PACKAGE_USAGE_STATS above -
+        it doesn't need user grant, but Play Store review does require the
+        matching <property> tag on the <service> below explaining why.
+        POST_NOTIFICATIONS is the separate, API 33+ *runtime* permission
+        needed to actually display any notification at all (requested in
+        MainActivity.onCreate).
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:allowBackup="true"
         android:label="@string/app_name"
@@ -117,6 +135,23 @@
             <meta-data
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <!--
+            [Claude, 2026-09-21] FocusTimerService - shows a persistent,
+            non-dismissable notification-shade entry with a live timer for
+            as long as a focus session is active (see NavGraph.kt's
+            startFocusSession/onEndSessionClick). Entirely separate from
+            FocusAccessibilityService above: this only owns the
+            notification, it does not do any app-blocking itself.
+        -->
+        <service
+            android:name=".data.notification.FocusTimerService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Shows a persistent timer notification while a focus session is blocking distracting apps" />
         </service>
 
     </application>

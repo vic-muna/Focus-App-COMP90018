@@ -250,7 +250,7 @@ changed, so the project still compiles as-is.
 
 ---
 
-## 09202026 Update (David Shiau)
+## 20/09/2026 Update (David Shiau)
 
 - **Real app picker**: "Blocked Apps" now shows the phone's actual installed
   apps (real icons + names) instead of placeholder data, with multi-select
@@ -263,3 +263,16 @@ changed, so the project still compiles as-is.
 - **Settings**: added a "Check App Usage Duration" button that queries the
   real Android `UsageStatsManager` and displays today's per-app usage
   totals (display-only for now).
+
+## 21/09/2026 Update (David Shiau)                                                                                                                              
+- **Persistent notification-shade timer**: while a focus session is active,
+    a foreground service (`FocusTimerService`) now shows an ongoing, non-
+    dismissable notification with a live timer alongside the 
+    existing full-screen session timer. Tapping it brings the app back to 
+    the foreground. The notification is removed automatically when a session
+    ends, whether by completing normally or by the existing hold-to-cancel
+    gesture.
+  - Requests the Android 13+ `POST_NOTIFICATIONS` runtime permission on
+    launch so the notification can actually be shown.
+  - No changes to existing app-blocking (`FocusAccessibilityService`) or
+    in-app timer logic — this is purely additive.  
