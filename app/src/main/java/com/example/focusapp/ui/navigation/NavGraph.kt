@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -26,6 +27,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.focusapp.data.accessibility.AccessibilityBridge
+import com.example.focusapp.data.notification.FocusTimerService
 import com.example.focusapp.ui.screens.apps.AddAppGroupScreen
 import com.example.focusapp.ui.screens.apps.AppsScreen
 import com.example.focusapp.ui.screens.apps.EditAppGroupScreen
@@ -71,6 +73,7 @@ private val homeExitTransition: AnimatedContentTransitionScope<NavBackStackEntry
 @Composable
 fun FocusAppNavGraph() {
     val navController = rememberNavController()
+    val context = LocalContext.current
 
     var groups by remember { mutableStateOf(generateFakeGroups()) }
     var selectedGroupId by remember { mutableStateOf(groups.first().id) }
@@ -96,11 +99,17 @@ fun FocusAppNavGraph() {
     // session's resolved packages via FocusAccessibilityService.
     fun startFocusSession(source: FocusSessionSource) {
         AccessibilityBridge.setRestrictedPackages(restrictedPackagesFor(source))
+        val startTimeMillis = System.currentTimeMillis()
         activeFocusSession = ActiveFocusSession(
-            startTimeMillis = System.currentTimeMillis(),
+            startTimeMillis = startTimeMillis,
             source = source,
             groupId = (source as? FocusSessionSource.Schedule)?.groupId
         )
+        // [Claude, 2026-09-21] Mirrors the in-app timer with a persistent
+        // notification-shade entry - see FocusTimerService's doc comment.
+        // Additive only: does not change anything about the blocking call
+        // above or the navigation below.
+        FocusTimerService.start(context, startTimeMillis)
         navController.navigate(Destinations.FOCUS_SESSION)
     }
 
@@ -182,6 +191,11 @@ fun FocusAppNavGraph() {
                         onEndSessionClick = {
                             // [David Shiau, 2026-09-20] Lifts blocking once the session is over.
                             AccessibilityBridge.clearRestrictedPackages()
+                            // [Claude, 2026-09-21] Removes the persistent notification-shade
+                            // entry started in startFocusSession above. Runs on both the
+                            // normal-completion and hold-to-cancel paths, since both funnel
+                            // through this same callback (see FocusSessionScreen.kt).
+                            FocusTimerService.stop(context)
                             activeFocusSession = null
                             navController.popBackStack(Destinations.HOME, inclusive = false)
                         }
