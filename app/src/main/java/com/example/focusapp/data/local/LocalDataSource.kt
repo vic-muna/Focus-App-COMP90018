@@ -11,11 +11,11 @@ import org.json.JSONObject
 /**
  * LocalDataSource
  * ------------------
- * Offline storage for the app. As of this update, AppGroup persistence is
+ * Offline storage for the app. AppGroup and FocusZone persistence are both
  * REAL (backed by SharedPreferences + hand-rolled JSON, both built into
- * the Android SDK - no new dependency needed) - it genuinely survives an
- * app restart. FocusZone/FocusSession are still the original in-memory
- * placeholder from before; they weren't part of this round of work.
+ * the Android SDK - no new dependency needed) - they genuinely survive an
+ * app restart. FocusSession is still the original in-memory placeholder
+ * from before; it wasn't part of this round of work.
  *
  * WHY SharedPreferences + JSON, NOT ROOM, "AT THIS STAGE": Room needs an
  * extra Gradle dependency, an annotation-processor setup, and Entity/DAO
@@ -32,18 +32,23 @@ import org.json.JSONObject
  *        leak an Activity.
  */
 
+// [HANDOFF -> Yu-Hao Lu | README task: "Local data layer (Room/SQLite)"]
+// Migrate this class's SharedPreferences+JSON storage to Room when ready
+// (see the class doc comment above for why SharedPreferences was used as
+// a stopgap), and implement getSessionHistory()/saveFocusSession() for real.
+
 private const val TAG = "LocalDataSource"
+
 class LocalDataSource(context: Context) {
 
     private val appContext = context.applicationContext
 
     private val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    // Temporary in-memory placeholders, unchanged from before - see class
+    // Temporary in-memory placeholder, unchanged from before - see class
     // doc comment. Not part of this round of work.
-    private val cachedZones = mutableListOf<FocusZone>()
     private val cachedSessions = mutableListOf<FocusSession>()
-
+    
     // -----------------------------------------------------------------
     // FocusZone - REAL persistence (SharedPreferences + JSON)
     // -----------------------------------------------------------------
@@ -78,6 +83,38 @@ class LocalDataSource(context: Context) {
             Log.e(TAG, "Failed to delete Geofence locally: ${e.message}")
             false
         }
+    }
+
+    private fun readFocusZonesFromPrefs(): List<FocusZone> {
+        val json = prefs.getString(KEY_FOCUS_ZONES, null) ?: return emptyList()
+        return runCatching {
+            val array = JSONArray(json)
+            (0 until array.length()).map { index ->
+                val obj = array.getJSONObject(index)
+                FocusZone(
+                    id = obj.getString("id"),
+                    name = obj.getString("name"),
+                    latitude = obj.getDouble("latitude"),
+                    longitude = obj.getDouble("longitude"),
+                    radiusMeters = obj.getDouble("radiusMeters").toFloat()
+                )
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    private fun writeFocusZonesToPrefs(zones: List<FocusZone>) {
+        val array = JSONArray()
+        zones.forEach { zone ->
+            val obj = JSONObject().apply {
+                put("id", zone.id)
+                put("name", zone.name)
+                put("latitude", zone.latitude)
+                put("longitude", zone.longitude)
+                put("radiusMeters", zone.radiusMeters.toDouble())
+            }
+            array.put(obj)
+        }
+        prefs.edit().putString(KEY_FOCUS_ZONES, array.toString()).apply()
     }
 
     // -----------------------------------------------------------------

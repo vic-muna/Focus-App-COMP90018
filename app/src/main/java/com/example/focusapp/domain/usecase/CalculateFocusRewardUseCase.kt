@@ -17,6 +17,10 @@ import com.example.focusapp.domain.model.RewardProgress
  * TODO: to be implemented later - currently always returns a default/empty
  * result.
  */
+// [HANDOFF -> David Shiau | README task: "Focus Points algorithm & rule engine (Domain layer logic)"]
+// Decide the reward formula (see class doc comment above) and implement execute().
+// Kai-Jiun Chan's RewardsViewModel/RewardsScreen will display whatever
+// RewardProgress this returns, so agree on the field meanings with him.
 class CalculateFocusRewardUseCase {
 
     fun execute(sessions: List<FocusSession>): RewardProgress {

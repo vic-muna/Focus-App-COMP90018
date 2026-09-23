@@ -106,6 +106,26 @@ object AccessibilityBridge {
         _restrictedPackages.value = _restrictedPackages.value - packageName
     }
 
+    /**
+     * [David Shiau, 2026-09-20] Replaces the whole restricted set at once -
+     * called when a focus session starts, with whichever group's packages
+     * that session is blocking (see NavGraph.kt's `startFocusSession`).
+     * Unlike [addRestrictedPackages], this does not merge with whatever was
+     * restricted before, since a new session should only block its own
+     * group, not accumulate leftovers from a previous one.
+     */
+    fun setRestrictedPackages(packageNames: Collection<String>) {
+        _restrictedPackages.value = packageNames.map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+    }
+
+    /**
+     * [David Shiau, 2026-09-20] Called when a focus session ends or is
+     * cancelled - nothing should stay blocked afterwards.
+     */
+    fun clearRestrictedPackages() {
+        _restrictedPackages.value = emptySet()
+    }
+
     // ---------------------------------------------------------------
     // 4) A short rolling log of "this package got blocked at this time"
     // ---------------------------------------------------------------

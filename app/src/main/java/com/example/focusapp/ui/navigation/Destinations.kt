@@ -23,6 +23,29 @@ object Destinations {
     const val APPS = "apps"
     const val MAP = "map"
     const val SETTINGS = "settings"
+    const val HOME = "home"
+
+    // Replaces the old bottom-left "Map" shortcut on Home - Party Mode is the
+    // planned "Study Party" feature (see the doc comments in
+    // data/remote/RemoteDataSource.kt and data/repository/FocusRepositoryImpl.kt).
+    // UI scaffolding only for now; no networking/P2P logic behind it yet.
+    const val PARTY_MODE = "party_mode"
+
+    // Blocked Apps group flow (reachable from Home's bottom sheet). Editing
+    // now happens in pickers layered on the summary sheet itself - this is
+    // the only extra destination, for choosing/creating/renaming/deleting
+    // which group is selected.
+    const val GROUP_LIST = "group_list"
+
+    // Location Zone edit flow (reachable from Home's bottom sheet). Single
+    // zone only - no id/argument needed, unlike the blocked-apps group flow.
+    const val EDIT_LOCATION_ZONE = "edit_location_zone"
+
+    // Focus Session screen - reached from Home's Quick Focus button, Party
+    // Mode's "Go Focus Mode" button, or Home's auto-suggestion banner. See
+    // ui.screens.session.FocusSessionScreen and NavGraph.kt's hoisted
+    // `activeFocusSession` state.
+    const val FOCUS_SESSION = "focus_session"
 
     // Secondary screens, reachable only from the Apps tab.
     const val EDIT_APP_GROUP = "edit_app_group/{groupId}"
@@ -31,23 +54,3 @@ object Destinations {
     /** Builds a real, navigable route for [EDIT_APP_GROUP] with a given group id filled in. */
     fun editAppGroupRoute(groupId: String) = "edit_app_group/$groupId"
 }
-
-/**
- * BottomNavItem
- * ---------------
- * Describes one tab in the bottom navigation bar: which route it navigates
- * to, and what text label to show under its icon.
- */
-data class BottomNavItem(
-    val route: String,
-    val label: String
-)
-
-/**
- * The 3 tabs shown in the bottom navigation bar, in display order.
- */
-val bottomNavItems = listOf(
-    BottomNavItem(Destinations.APPS, "Apps"),
-    BottomNavItem(Destinations.MAP, "Map"),
-    BottomNavItem(Destinations.SETTINGS, "Settings")
-)

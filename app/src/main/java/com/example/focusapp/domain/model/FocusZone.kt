@@ -1,5 +1,7 @@
 package com.example.focusapp.domain.model
 
+import android.location.Location
+
 /**
  * FocusZone
  * -----------
@@ -17,3 +19,10 @@ data class FocusZone(
     val longitude: Double,
     val radiusMeters: Float
 )
+
+/** True if (latitude, longitude) falls within this zone's radius. */
+fun FocusZone.containsLocation(latitude: Double, longitude: Double): Boolean {
+    val results = FloatArray(1)
+    Location.distanceBetween(latitude, longitude, this.latitude, this.longitude, results)
+    return results[0] <= radiusMeters
+}

@@ -1,12 +1,17 @@
 package com.example.focusapp
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import androidx.core.content.ContextCompat
 import com.example.focusapp.ui.navigation.FocusAppNavGraph
 import com.google.android.gms.location.FusedLocationProviderClient
 /**
@@ -24,8 +29,24 @@ import com.google.android.gms.location.FusedLocationProviderClient
  */
 class MainActivity : ComponentActivity() {
 
+    // [Claude, 2026-09-21] POST_NOTIFICATIONS is a runtime (not just
+    // manifest-declared) permission on API 33+ - without this request the
+    // OS silently drops FocusTimerService's notification, it doesn't
+    // crash or error. Fire-and-forget: does not gate or otherwise affect
+    // setContent below, since the rest of the app doesn't depend on the
+    // result either way.
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
 
         setContent {
             // MaterialTheme with no custom arguments = default Material3
