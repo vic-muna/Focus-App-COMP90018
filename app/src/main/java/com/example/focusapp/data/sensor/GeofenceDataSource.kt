@@ -39,7 +39,13 @@ fun addFocusZoneGeofence(context: Context, lat: Double, lng: Double, radius: Flo
     )
 
     CoroutineScope(Dispatchers.IO).launch {
-        localDataSource.saveFocusZone(newZone)
+        val saveSuccessful = localDataSource.saveFocusZone(newZone)
+
+        if (!saveSuccessful) {
+            Log.e(TAG, "Aborting OS registration because local save failed.")
+            // You can optionally surface this error back to the UI here
+            return@launch
+        }
     }
 
     val geofence = Geofence.Builder()
@@ -100,7 +106,11 @@ fun removeFocusZoneGeofence(context: Context, id: String) {
         .addOnSuccessListener {
             Log.d(TAG, "Successfully removed Focus Zone: $id")
             CoroutineScope(Dispatchers.IO).launch {
-                localDataSource.deleteFocusZone(id)
+                val deleteSuccessful = localDataSource.deleteFocusZone(id)
+
+                if (!deleteSuccessful) {
+                    Log.e(TAG, "Warning: OS removal succeeded, but local deletion failed.")
+                }
             }
         }
         .addOnFailureListener { exception ->

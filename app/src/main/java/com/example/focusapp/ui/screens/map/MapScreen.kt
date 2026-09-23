@@ -240,6 +240,18 @@ fun MapScreen() {
         ) {
             Text("Remove Focus Zone")
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Button(
+            onClick = {
+                sensorDataSource.logLocalFocusZones(context)
+                Toast.makeText(context, "Checking local storage in Logcat...", Toast.LENGTH_SHORT).show()
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Print Locally Saved Zones")
+        }
     }
 }
 

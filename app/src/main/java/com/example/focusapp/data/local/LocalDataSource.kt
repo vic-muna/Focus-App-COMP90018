@@ -1,6 +1,7 @@
 package com.example.focusapp.data.local
 
 import android.content.Context
+import android.util.Log
 import com.example.focusapp.domain.model.AppGroup
 import com.example.focusapp.domain.model.FocusSession
 import com.example.focusapp.domain.model.FocusZone
@@ -30,6 +31,8 @@ import org.json.JSONObject
  *        take `.applicationContext` so this class can't accidentally
  *        leak an Activity.
  */
+
+private const val TAG = "LocalDataSource"
 class LocalDataSource(context: Context) {
 
     private val appContext = context.applicationContext
@@ -49,18 +52,32 @@ class LocalDataSource(context: Context) {
     suspend fun getFocusZones(): List<FocusZone> = readFocusZonesFromPrefs()
 
     /** Adds a new FocusZone, or overwrites an existing one with the same ID. */
-    suspend fun saveFocusZone(zone: FocusZone) {
-        val updated = readFocusZonesFromPrefs().toMutableList()
-        updated.removeAll { it.id == zone.id }
-        updated.add(zone)
-        writeFocusZonesToPrefs(updated)
+    suspend fun saveFocusZone(zone: FocusZone): Boolean {
+        return try {
+            val updated = readFocusZonesFromPrefs().toMutableList()
+            updated.removeAll { it.id == zone.id }
+            updated.add(zone)
+            writeFocusZonesToPrefs(updated)
+            Log.d(TAG, "Geofence Saved Locally!")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save Geofence locally: ${e.message}")
+            false
+        }
     }
 
     /** Deletes a specific FocusZone by its ID. */
-    suspend fun deleteFocusZone(zoneId: String) {
-        val updated = readFocusZonesFromPrefs().toMutableList()
-        updated.removeAll { it.id == zoneId }
-        writeFocusZonesToPrefs(updated)
+    suspend fun deleteFocusZone(zoneId: String): Boolean {
+        return try {
+            val updated = readFocusZonesFromPrefs().toMutableList()
+            updated.removeAll { it.id == zoneId }
+            writeFocusZonesToPrefs(updated)
+            Log.d(TAG, "Geofence Deleted Locally!")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to delete Geofence locally: ${e.message}")
+            false
+        }
     }
 
     // -----------------------------------------------------------------
