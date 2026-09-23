@@ -30,7 +30,7 @@ class FocusRepositoryImpl(
 ) : FocusRepository {
 
     override suspend fun getFocusZone(): FocusZone? {
-        return localDataSource.getFocusZone()
+        return localDataSource.getFocusZones().firstOrNull()
         // TODO: to be implemented later - merge with remoteDataSource results.
     }
 
