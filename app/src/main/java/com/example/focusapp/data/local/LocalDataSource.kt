@@ -149,50 +149,6 @@ class LocalDataSource(context: Context) {
         cachedSessions.add(session)
     }
 
-    /**
-     * readAppGroupsFromPrefs
-     * -------------------------
-     * Parses the single JSON-array string stored under [KEY_APP_GROUPS]
-     * back into a `List<AppGroup>`. Storing all groups as ONE string
-     * under ONE key (rather than one SharedPreferences key per group) is
-     * deliberate: SharedPreferences has no query language, so "one key
-     * per group" would still require reading every key and parsing every
-     * value just to list them all - a single combined key is no less
-     * capable here and is simpler to reason about.
-     */
-    private fun readFocusZonesFromPrefs(): List<FocusZone> {
-        val json = prefs.getString(KEY_FOCUS_ZONES, null) ?: return emptyList()
-        return runCatching {
-            val array = JSONArray(json)
-            (0 until array.length()).map { index ->
-                val obj = array.getJSONObject(index)
-                FocusZone(
-                    id = obj.getString("id"),
-                    name = obj.getString("name"),
-                    latitude = obj.getDouble("latitude"),
-                    longitude = obj.getDouble("longitude"),
-                    radiusMeters = obj.getDouble("radius").toFloat()
-                )
-            }
-        }.getOrDefault(emptyList())
-        // If the stored JSON is ever malformed for any reason, fail safe
-        // to an empty list rather than crashing the Apps screen.
-    }
-
-    private fun writeFocusZonesToPrefs(zones: List<FocusZone>) {
-        val array = JSONArray()
-        zones.forEach { zone ->
-            val obj = JSONObject()
-            obj.put("id", zone.id)
-            obj.put("name", zone.name)
-            obj.put("latitude", zone.latitude)
-            obj.put("longitude", zone.longitude)
-            obj.put("radius", zone.radiusMeters.toDouble())
-            array.put(obj)
-        }
-        prefs.edit().putString(KEY_FOCUS_ZONES, array.toString()).apply()
-    }
-
     private fun readAppGroupsFromPrefs(): List<AppGroup> {
         val json = prefs.getString(KEY_APP_GROUPS, null) ?: return emptyList()
         return runCatching {
