@@ -275,4 +275,19 @@ changed, so the project still compiles as-is.
   - Requests the Android 13+ `POST_NOTIFICATIONS` runtime permission on
     launch so the notification can actually be shown.
   - No changes to existing app-blocking (`FocusAccessibilityService`) or
-    in-app timer logic — this is purely additive.  
+    in-app timer logic — this is purely additive.
+
+## 23/09/2026 Update (David Shiau)
+- **Today's Focus Time**: added a Settings button showing total focus time
+  for today; `FocusSession` now has real persistence (was in-memory only).
+- **Blocked-app-group persistence fix**: the selected group and its apps/
+  schedule now survive an app restart (were only held in memory before).
+- **Auto-suggestion banner permission fix**: accepting the "start a focus
+  session?" banner now prompts for the Accessibility permission on first
+  use, same as Quick Focus already did.
+- **Wi-Fi source trigger, phase 1**: added a "Check Wi-Fi Network" Settings
+  button that displays the currently-connected SSID.
+- **Wi-Fi source trigger, phase 2**: added an on/off switch, tap-to-tag on
+  the checked SSID, and a "Stored Wi-Fi Source List" button to view/untag
+  saved networks. Connecting to a tagged network now shows the same
+  auto-suggestion banner as schedule/location triggers.  

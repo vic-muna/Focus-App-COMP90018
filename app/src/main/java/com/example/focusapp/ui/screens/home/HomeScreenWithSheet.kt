@@ -44,6 +44,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.data.repository.FocusRepositoryProvider
+import com.example.focusapp.data.wifi.WifiTriggerStorage
+import com.example.focusapp.data.wifi.getCurrentWifiSsid
 import com.example.focusapp.domain.model.FocusZone
 import com.example.focusapp.domain.usecase.EvaluateFocusTriggerUseCase
 import com.example.focusapp.domain.usecase.FocusTriggerResult
@@ -120,17 +122,26 @@ fun HomeScreenWithSheet(
     // [David Shiau, 2026-09-20] Blocking only works while
     // FocusAccessibilityService is enabled - the user has to grant that
     // themselves in system Settings (Android never lets an app enable its
-    // own AccessibilityService). Quick Focus checks this first rather than
-    // silently starting a session that blocks nothing.
+    // own AccessibilityService). Every session-start path checks this first
+    // rather than silently starting a session that blocks nothing.
     val isAccessibilityEnabled by AccessibilityBridge.isServiceConnected.collectAsState()
     var showAccessibilityPermissionDialog by remember { mutableStateOf(false) }
 
-    fun onQuickFocusClick() {
+    // [David Shiau, 2026-09-23] Shared by Quick Focus AND the auto-suggestion
+    // banner's "start a focus session?" accept action - previously only
+    // Quick Focus ran this check, so accepting the banner on a first-time
+    // (permission not yet granted) tap silently started a session with no
+    // blocking instead of prompting for Accessibility access.
+    fun startFocusSessionIfPermitted(source: FocusSessionSource) {
         if (isAccessibilityEnabled) {
-            startFocusSessionAfterDelay(FocusSessionSource.Manual)
+            startFocusSessionAfterDelay(source)
         } else {
             showAccessibilityPermissionDialog = true
         }
+    }
+
+    fun onQuickFocusClick() {
+        startFocusSessionIfPermitted(FocusSessionSource.Manual)
     }
 
     // 重開 Sheet 的 Signal 處理
@@ -160,6 +171,16 @@ fun HomeScreenWithSheet(
         }
     }
 
+    // --- Wi-Fi-source trigger: same "UI-simulated only" polling approach as
+    // the location trigger above - see WifiTriggerStorage's doc comment. ---
+    val wifiTriggerStorage = remember { WifiTriggerStorage(context) }
+    var wifiTriggerEnabled by remember { mutableStateOf(false) }
+    var taggedWifiSsids by remember { mutableStateOf<List<String>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        wifiTriggerEnabled = withContext(Dispatchers.IO) { wifiTriggerStorage.isEnabled() }
+        taggedWifiSsids = withContext(Dispatchers.IO) { wifiTriggerStorage.getTaggedSsids() }
+    }
+
     var tick by remember { mutableStateOf(0L) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -168,11 +189,22 @@ fun HomeScreenWithSheet(
         }
     }
 
-    val trigger = remember(groups, savedZone, currentLatLng, tick) {
+    var currentWifiSsid by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(wifiTriggerEnabled, tick) {
+        currentWifiSsid = if (wifiTriggerEnabled) {
+            withContext(Dispatchers.IO) { getCurrentWifiSsid(context) }
+        } else {
+            null
+        }
+    }
+
+    val trigger = remember(groups, savedZone, currentLatLng, taggedWifiSsids, currentWifiSsid, tick) {
         EvaluateFocusTriggerUseCase().execute(
             groups = groups,
             currentZones = listOfNotNull(savedZone),
-            currentLatLng = currentLatLng
+            currentLatLng = currentLatLng,
+            taggedWifiSsids = taggedWifiSsids,
+            currentWifiSsid = currentWifiSsid
         )
     }
 
@@ -180,6 +212,7 @@ fun HomeScreenWithSheet(
     val suggestionKey = when (trigger) {
         is FocusTriggerResult.ScheduleMatch -> "schedule:${trigger.groupId}"
         is FocusTriggerResult.LocationMatch -> "zone:${trigger.zoneId}"
+        is FocusTriggerResult.WifiMatch -> "wifi:${trigger.ssid}"
         FocusTriggerResult.NoTrigger -> null
     }
     val suggestion = trigger.takeIf { suggestionKey != null && suggestionKey != dismissedKey }
@@ -213,9 +246,11 @@ fun HomeScreenWithSheet(
                                 FocusSessionSource.Schedule(suggestion.groupId, suggestion.groupName)
                             is FocusTriggerResult.LocationMatch ->
                                 FocusSessionSource.Location(suggestion.zoneName)
+                            is FocusTriggerResult.WifiMatch ->
+                                FocusSessionSource.Wifi(suggestion.ssid)
                             FocusTriggerResult.NoTrigger -> return@AutoFocusSuggestionBanner
                         }
-                        startFocusSessionAfterDelay(source)
+                        startFocusSessionIfPermitted(source)
                     },
                     onDismiss = { dismissedKey = suggestionKey }
                 )
@@ -303,6 +338,7 @@ private fun AutoFocusSuggestionBanner(
     val message = when (result) {
         is FocusTriggerResult.ScheduleMatch -> "You're in your ${result.groupName} schedule - start a focus session?"
         is FocusTriggerResult.LocationMatch -> "You've arrived at ${result.zoneName} - start a focus session?"
+        is FocusTriggerResult.WifiMatch -> "You're connecting to ${result.ssid} Wi-Fi - start a focus session?"
         FocusTriggerResult.NoTrigger -> return
     }
 
