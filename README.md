@@ -285,9 +285,9 @@ changed, so the project still compiles as-is.
 - **Auto-suggestion banner permission fix**: accepting the "start a focus
   session?" banner now prompts for the Accessibility permission on first
   use, same as Quick Focus already did.
-- **Wi-Fi source trigger, phase 1**: added a "Check Wi-Fi Network" Settings
+- **Wi-Fi source trigger**: added a "Check Wi-Fi Network" Settings
   button that displays the currently-connected SSID.
-- **Wi-Fi source trigger, phase 2**: added an on/off switch, tap-to-tag on
+  added an on/off switch, tap-to-tag on
   the checked SSID, and a "Stored Wi-Fi Source List" button to view/untag
   saved networks. Connecting to a tagged network now shows the same
   auto-suggestion banner as schedule/location triggers.  
