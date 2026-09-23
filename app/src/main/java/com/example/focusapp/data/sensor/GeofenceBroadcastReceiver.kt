@@ -21,10 +21,7 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         // 1. Intercept the reboot event
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED ||
-            intent.action == "android.intent.action.QUICKBOOT_POWERON" ||
-            intent.action == "com.example.focusapp.TEST_BOOT") { // NEW
-
+        if (intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == "android.intent.action.QUICKBOOT_POWERON") {
             Log.d("GeofenceReceiver", "Device booted! Restoring Focus Zones...")
             restoreGeofences(context)
             return
