@@ -1,6 +1,11 @@
 package com.example.focusapp.data.sensor
 import android.content.Context
 import kotlinx.coroutines.flow.StateFlow
+import android.util.Log
+import com.example.focusapp.data.local.LocalDataSource
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * SensorDataSource
@@ -66,8 +71,6 @@ class SensorDataSource {
      */
     val locationFlow: StateFlow<Pair<Double, Double>?> = currentLocationFlow
 
-    // --- 2. FACADE CONTROLS ---
-
     fun startTracking(context: Context) {
         startGPSUpdates(context)
     }
@@ -79,6 +82,33 @@ class SensorDataSource {
     fun setTrackingPriority(context: Context, isHigh: Boolean) {
         setGpsPriority(context, isHigh)
     }
+
+    fun addFocusZone(context: Context, lat: Double, lng: Double, rad: Float) {
+        addFocusZoneGeofence(context, lat, lng, rad)
+    }
+
+    fun removeFocusZone(context: Context, id: String) {
+        removeFocusZoneGeofence(context, id)
+    }
+
+    fun logLocalFocusZones(context: Context) {
+        val localDataSource = LocalDataSource(context)
+
+        CoroutineScope(Dispatchers.IO).launch {
+            val savedZones = localDataSource.getFocusZones()
+
+            if (savedZones.isEmpty()) {
+                Log.d("GeofenceTracker", "Local Storage: No Focus Zones saved.")
+            } else {
+                Log.d("GeofenceTracker", "--- Local Storage: ${savedZones.size} Focus Zone(s) ---")
+                savedZones.forEach { zone ->
+                    Log.d("GeofenceTracker", "ID: ${zone.id} | Lat: ${zone.latitude}, Lng: ${zone.longitude} | Radius: ${zone.radiusMeters}m")
+                }
+                Log.d("GeofenceTracker", "---------------------------------------------")
+            }
+        }
+    }
+
 
     /** TODO: to be implemented later - true if a shake gesture was just detected. */
     fun isShakeDetected(): Boolean {

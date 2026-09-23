@@ -1,6 +1,7 @@
 package com.example.focusapp.data.local
 
 import android.content.Context
+import android.util.Log
 import com.example.focusapp.domain.model.AppGroup
 import com.example.focusapp.domain.model.FocusSession
 import com.example.focusapp.domain.model.FocusZone
@@ -30,10 +31,14 @@ import org.json.JSONObject
  *        take `.applicationContext` so this class can't accidentally
  *        leak an Activity.
  */
+
 // [HANDOFF -> Yu-Hao Lu | README task: "Local data layer (Room/SQLite)"]
 // Migrate this class's SharedPreferences+JSON storage to Room when ready
 // (see the class doc comment above for why SharedPreferences was used as
 // a stopgap), and implement getSessionHistory()/saveFocusSession() for real.
+
+private const val TAG = "LocalDataSource"
+
 class LocalDataSource(context: Context) {
 
     private val appContext = context.applicationContext
@@ -43,43 +48,73 @@ class LocalDataSource(context: Context) {
     // Temporary in-memory placeholder, unchanged from before - see class
     // doc comment. Not part of this round of work.
     private val cachedSessions = mutableListOf<FocusSession>()
-
+    
     // -----------------------------------------------------------------
-    // FocusZone - REAL persistence (SharedPreferences + JSON). Only ever
-    // one zone at a time - saving always overwrites whatever was there.
+    // FocusZone - REAL persistence (SharedPreferences + JSON)
     // -----------------------------------------------------------------
 
-    suspend fun getFocusZone(): FocusZone? = readFocusZoneFromPrefs()
+    /** Reads every saved FocusZone out of SharedPreferences. */
+    suspend fun getFocusZones(): List<FocusZone> = readFocusZonesFromPrefs()
 
-    suspend fun saveFocusZone(zone: FocusZone) {
-        writeFocusZoneToPrefs(zone)
-    }
-
-    private fun readFocusZoneFromPrefs(): FocusZone? {
-        val json = prefs.getString(KEY_FOCUS_ZONE, null) ?: return null
-        return runCatching {
-            val obj = JSONObject(json)
-            FocusZone(
-                id = obj.getString("id"),
-                name = obj.getString("name"),
-                latitude = obj.getDouble("latitude"),
-                longitude = obj.getDouble("longitude"),
-                radiusMeters = obj.getDouble("radiusMeters").toFloat()
-            )
-        }.getOrNull()
-        // If the stored JSON is ever malformed for any reason, fail safe
-        // to null rather than crashing the Location Zone sheet.
-    }
-
-    private fun writeFocusZoneToPrefs(zone: FocusZone) {
-        val obj = JSONObject().apply {
-            put("id", zone.id)
-            put("name", zone.name)
-            put("latitude", zone.latitude)
-            put("longitude", zone.longitude)
-            put("radiusMeters", zone.radiusMeters.toDouble())
+    /** Adds a new FocusZone, or overwrites an existing one with the same ID. */
+    suspend fun saveFocusZone(zone: FocusZone): Boolean {
+        return try {
+            val updated = readFocusZonesFromPrefs().toMutableList()
+            updated.removeAll { it.id == zone.id }
+            updated.add(zone)
+            writeFocusZonesToPrefs(updated)
+            Log.d(TAG, "Geofence Saved Locally!")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save Geofence locally: ${e.message}")
+            false
         }
-        prefs.edit().putString(KEY_FOCUS_ZONE, obj.toString()).apply()
+    }
+
+    /** Deletes a specific FocusZone by its ID. */
+    suspend fun deleteFocusZone(zoneId: String): Boolean {
+        return try {
+            val updated = readFocusZonesFromPrefs().toMutableList()
+            updated.removeAll { it.id == zoneId }
+            writeFocusZonesToPrefs(updated)
+            Log.d(TAG, "Geofence Deleted Locally!")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to delete Geofence locally: ${e.message}")
+            false
+        }
+    }
+
+    private fun readFocusZonesFromPrefs(): List<FocusZone> {
+        val json = prefs.getString(KEY_FOCUS_ZONES, null) ?: return emptyList()
+        return runCatching {
+            val array = JSONArray(json)
+            (0 until array.length()).map { index ->
+                val obj = array.getJSONObject(index)
+                FocusZone(
+                    id = obj.getString("id"),
+                    name = obj.getString("name"),
+                    latitude = obj.getDouble("latitude"),
+                    longitude = obj.getDouble("longitude"),
+                    radiusMeters = obj.getDouble("radiusMeters").toFloat()
+                )
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    private fun writeFocusZonesToPrefs(zones: List<FocusZone>) {
+        val array = JSONArray()
+        zones.forEach { zone ->
+            val obj = JSONObject().apply {
+                put("id", zone.id)
+                put("name", zone.name)
+                put("latitude", zone.latitude)
+                put("longitude", zone.longitude)
+                put("radiusMeters", zone.radiusMeters.toDouble())
+            }
+            array.put(obj)
+        }
+        prefs.edit().putString(KEY_FOCUS_ZONES, array.toString()).apply()
     }
 
     // -----------------------------------------------------------------
@@ -87,19 +122,13 @@ class LocalDataSource(context: Context) {
     // -----------------------------------------------------------------
 
     /**
-     * Reads every saved [AppGroup] out of SharedPreferences. Genuinely
-     * reflects whatever was last written by [saveAppGroup] - including
-     * across app restarts, unlike the FocusZone/FocusSession methods
-     * above/below.
+     * Reads every saved [AppGroup] out of SharedPreferences.
      */
     suspend fun getAppGroups(): List<AppGroup> = readAppGroupsFromPrefs()
 
     /**
      * Adds a new [AppGroup], or overwrites the existing one with the same
-     * [AppGroup.id] if it already exists (an "upsert" - this is how
-     * editing an existing group would also work, once EditAppGroupScreen
-     * saves real changes instead of just its still-placeholder schedule
-     * fields).
+     * [AppGroup.id] if it already exists.
      */
     suspend fun saveAppGroup(group: AppGroup) {
         val updated = readAppGroupsFromPrefs().toMutableList()
@@ -108,10 +137,14 @@ class LocalDataSource(context: Context) {
         writeAppGroupsToPrefs(updated)
     }
 
-    /** TODO: to be implemented later - replace with a real Room query. */
+    // -----------------------------------------------------------------
+    // FocusSession - IN-MEMORY PLACEHOLDER
+    // -----------------------------------------------------------------
+
+    /** TODO: to be implemented later - replace with real persistence. */
     suspend fun getSessionHistory(): List<FocusSession> = cachedSessions
 
-    /** TODO: to be implemented later - replace with a real Room insert. */
+    /** TODO: to be implemented later - replace with real persistence. */
     suspend fun saveFocusSession(session: FocusSession) {
         cachedSessions.add(session)
     }
@@ -127,6 +160,39 @@ class LocalDataSource(context: Context) {
      * value just to list them all - a single combined key is no less
      * capable here and is simpler to reason about.
      */
+    private fun readFocusZonesFromPrefs(): List<FocusZone> {
+        val json = prefs.getString(KEY_FOCUS_ZONES, null) ?: return emptyList()
+        return runCatching {
+            val array = JSONArray(json)
+            (0 until array.length()).map { index ->
+                val obj = array.getJSONObject(index)
+                FocusZone(
+                    id = obj.getString("id"),
+                    name = obj.getString("name"),
+                    latitude = obj.getDouble("latitude"),
+                    longitude = obj.getDouble("longitude"),
+                    radiusMeters = obj.getDouble("radius").toFloat()
+                )
+            }
+        }.getOrDefault(emptyList())
+        // If the stored JSON is ever malformed for any reason, fail safe
+        // to an empty list rather than crashing the Apps screen.
+    }
+
+    private fun writeFocusZonesToPrefs(zones: List<FocusZone>) {
+        val array = JSONArray()
+        zones.forEach { zone ->
+            val obj = JSONObject()
+            obj.put("id", zone.id)
+            obj.put("name", zone.name)
+            obj.put("latitude", zone.latitude)
+            obj.put("longitude", zone.longitude)
+            obj.put("radius", zone.radiusMeters.toDouble())
+            array.put(obj)
+        }
+        prefs.edit().putString(KEY_FOCUS_ZONES, array.toString()).apply()
+    }
+
     private fun readAppGroupsFromPrefs(): List<AppGroup> {
         val json = prefs.getString(KEY_APP_GROUPS, null) ?: return emptyList()
         return runCatching {
@@ -142,8 +208,6 @@ class LocalDataSource(context: Context) {
                 )
             }
         }.getOrDefault(emptyList())
-        // If the stored JSON is ever malformed for any reason, fail safe
-        // to an empty list rather than crashing the Apps screen.
     }
 
     /** Serializes the given list back to JSON and writes it to SharedPreferences. */
@@ -162,6 +226,6 @@ class LocalDataSource(context: Context) {
     private companion object {
         const val PREFS_NAME = "focus_local_data"
         const val KEY_APP_GROUPS = "app_groups_json"
-        const val KEY_FOCUS_ZONE = "focus_zone_json"
+        const val KEY_FOCUS_ZONES = "focus_zones_json"
     }
 }
