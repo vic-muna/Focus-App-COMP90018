@@ -12,6 +12,13 @@ import androidx.core.content.ContextCompat
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingRequest
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.location.GeofenceStatusCodes
+import com.example.focusapp.data.local.LocalDataSource
+import com.example.focusapp.domain.model.FocusZone
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 private const val TAG = "GeofenceTracker"
 
@@ -20,7 +27,21 @@ fun addFocusZoneGeofence(context: Context, lat: Double, lng: Double, radius: Flo
     val geofencingClient = LocationServices.getGeofencingClient(context)
 
     // 2. Build the Geofence object
-    val newLocationId = UUID.randomUUID().toString() // TODO: Once the Focus Locations get saved in the database of the phone, the id should be adjusted to the databases primary keys
+    val newLocationId = UUID.randomUUID().toString() // TODO: Once the Focus Locations get saved in the database of the phone, the id should maybe be adjusted
+
+    val localDataSource = LocalDataSource(context)
+    val newZone = FocusZone(
+        id = newLocationId,
+        name = "New Focus Zone", // You can update your function to accept a name parameter later
+        latitude = lat,
+        longitude = lng,
+        radiusMeters = radius
+    )
+
+    CoroutineScope(Dispatchers.IO).launch {
+        localDataSource.saveFocusZone(newZone)
+    }
+
     val geofence = Geofence.Builder()
         .setRequestId(newLocationId)
         .setCircularRegion(lat, lng, radius)
@@ -71,12 +92,29 @@ private fun getGeofencePendingIntent(context: Context): PendingIntent {
 fun removeFocusZoneGeofence(context: Context, id: String) {
     val geofencingClient = LocationServices.getGeofencingClient(context)
 
+    val localDataSource = LocalDataSource(context)
+
+
     // Remove the specific geofence by passing its ID in a list
     geofencingClient.removeGeofences(listOf(id))
         .addOnSuccessListener {
             Log.d(TAG, "Successfully removed Focus Zone: $id")
+            CoroutineScope(Dispatchers.IO).launch {
+                localDataSource.deleteFocusZone(id)
+            }
         }
         .addOnFailureListener { exception ->
-            Log.e(TAG, "Failed to remove Focus Zone $id: ${exception.message}")
+            if (exception is ApiException) {
+                when (exception.statusCode) {
+                    GeofenceStatusCodes.GEOFENCE_NOT_AVAILABLE -> {
+                        Log.e(TAG, "Geofence $id not found. It may have already been removed.")
+                    }
+                    else -> {
+                        Log.e(TAG, "API Error removing $id: ${GeofenceStatusCodes.getStatusCodeString(exception.statusCode)}")
+                    }
+                }
+            } else {
+                Log.e(TAG, "Failed to remove Focus Zone $id: ${exception.message}")
+            }
         }
 }

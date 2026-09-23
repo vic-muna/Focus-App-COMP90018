@@ -61,9 +61,6 @@ class SensorDataSource {
      *    }
      */
     val locationFlow: StateFlow<Pair<Double, Double>?> = currentLocationFlow
-    // val geofenceEventFlow: SharedFlow<GeofenceEvent>
-
-    // --- 2. FACADE CONTROLS ---
 
     fun startTracking(context: Context) {
         startGPSUpdates(context)
