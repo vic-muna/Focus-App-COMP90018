@@ -79,7 +79,7 @@ fun addFocusZoneGeofence(context: Context, lat: Double, lng: Double, radius: Flo
     }
 }
 
-private fun getGeofencePendingIntent(context: Context): PendingIntent {
+public fun getGeofencePendingIntent(context: Context): PendingIntent {
     val intent = Intent(context, GeofenceBroadcastReceiver::class.java)
     val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
