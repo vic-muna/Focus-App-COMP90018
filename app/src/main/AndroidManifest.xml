@@ -24,6 +24,15 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <!--
+        [David Shiau, 2026-09-23] Needed for Settings' "Check Wi-Fi Network"
+        button (see data/wifi/WifiProvider.kt) - the first phase of the
+        planned Wi-Fi-source trigger, just reading the currently-connected
+        SSID. Both are normal (install-time) permissions, no runtime prompt.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!--
         Required since Android 11 (API 30): apps can no longer see every
         other installed package by default ("package visibility"
         restrictions). This <queries> block tells the OS "let me see any

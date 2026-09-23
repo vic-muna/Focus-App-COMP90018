@@ -14,8 +14,9 @@ import org.json.JSONObject
  * Offline storage for the app. AppGroup and FocusZone persistence are both
  * REAL (backed by SharedPreferences + hand-rolled JSON, both built into
  * the Android SDK - no new dependency needed) - they genuinely survive an
- * app restart. FocusSession is still the original in-memory placeholder
- * from before; it wasn't part of this round of work.
+ * app restart. FocusSession is now also REAL persistence (same approach),
+ * added for the Settings screen's "today's total focus time" feature -
+ * it needs sessions to survive an app restart within the day.
  *
  * WHY SharedPreferences + JSON, NOT ROOM, "AT THIS STAGE": Room needs an
  * extra Gradle dependency, an annotation-processor setup, and Entity/DAO
@@ -35,7 +36,8 @@ import org.json.JSONObject
 // [HANDOFF -> Yu-Hao Lu | README task: "Local data layer (Room/SQLite)"]
 // Migrate this class's SharedPreferences+JSON storage to Room when ready
 // (see the class doc comment above for why SharedPreferences was used as
-// a stopgap), and implement getSessionHistory()/saveFocusSession() for real.
+// a stopgap). FocusSession now has real SharedPreferences+JSON persistence
+// too (David Shiau, 2026-09-23), same caveat applies.
 
 private const val TAG = "LocalDataSource"
 
@@ -45,10 +47,7 @@ class LocalDataSource(context: Context) {
 
     private val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    // Temporary in-memory placeholder, unchanged from before - see class
-    // doc comment. Not part of this round of work.
-    private val cachedSessions = mutableListOf<FocusSession>()
-    
+
     // -----------------------------------------------------------------
     // FocusZone - REAL persistence (SharedPreferences + JSON)
     // -----------------------------------------------------------------
@@ -138,15 +137,52 @@ class LocalDataSource(context: Context) {
     }
 
     // -----------------------------------------------------------------
-    // FocusSession - IN-MEMORY PLACEHOLDER
+    // FocusSession - REAL persistence (SharedPreferences + JSON)
     // -----------------------------------------------------------------
 
-    /** TODO: to be implemented later - replace with real persistence. */
-    suspend fun getSessionHistory(): List<FocusSession> = cachedSessions
+    /** Reads every saved FocusSession out of SharedPreferences. */
+    suspend fun getSessionHistory(): List<FocusSession> = readFocusSessionsFromPrefs()
 
-    /** TODO: to be implemented later - replace with real persistence. */
+    /** Adds a new FocusSession, or overwrites an existing one with the same ID. */
     suspend fun saveFocusSession(session: FocusSession) {
-        cachedSessions.add(session)
+        val updated = readFocusSessionsFromPrefs().toMutableList()
+        updated.removeAll { it.id == session.id }
+        updated.add(session)
+        writeFocusSessionsToPrefs(updated)
+    }
+
+    private fun readFocusSessionsFromPrefs(): List<FocusSession> {
+        val json = prefs.getString(KEY_FOCUS_SESSIONS, null) ?: return emptyList()
+        return runCatching {
+            val array = JSONArray(json)
+            (0 until array.length()).map { index ->
+                val obj = array.getJSONObject(index)
+                FocusSession(
+                    id = obj.getString("id"),
+                    startTimeMillis = obj.getLong("startTimeMillis"),
+                    endTimeMillis = if (obj.isNull("endTimeMillis")) null else obj.getLong("endTimeMillis"),
+                    distractingAppOpenCount = obj.optInt("distractingAppOpenCount", 0),
+                    wasCompletedSuccessfully = obj.optBoolean("wasCompletedSuccessfully", false),
+                    groupId = if (obj.isNull("groupId")) null else obj.optString("groupId")
+                )
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    private fun writeFocusSessionsToPrefs(sessions: List<FocusSession>) {
+        val array = JSONArray()
+        sessions.forEach { session ->
+            val obj = JSONObject().apply {
+                put("id", session.id)
+                put("startTimeMillis", session.startTimeMillis)
+                put("endTimeMillis", session.endTimeMillis ?: JSONObject.NULL)
+                put("distractingAppOpenCount", session.distractingAppOpenCount)
+                put("wasCompletedSuccessfully", session.wasCompletedSuccessfully)
+                put("groupId", session.groupId ?: JSONObject.NULL)
+            }
+            array.put(obj)
+        }
+        prefs.edit().putString(KEY_FOCUS_SESSIONS, array.toString()).apply()
     }
 
     private fun readAppGroupsFromPrefs(): List<AppGroup> {
@@ -183,5 +219,6 @@ class LocalDataSource(context: Context) {
         const val PREFS_NAME = "focus_local_data"
         const val KEY_APP_GROUPS = "app_groups_json"
         const val KEY_FOCUS_ZONES = "focus_zones_json"
+        const val KEY_FOCUS_SESSIONS = "focus_sessions_json"
     }
 }

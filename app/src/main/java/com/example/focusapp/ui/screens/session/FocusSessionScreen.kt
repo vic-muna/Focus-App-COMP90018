@@ -62,6 +62,7 @@ sealed class FocusSessionSource {
     data object Party : FocusSessionSource()
     data class Schedule(val groupId: String, val groupName: String) : FocusSessionSource()
     data class Location(val zoneName: String) : FocusSessionSource()
+    data class Wifi(val ssid: String) : FocusSessionSource()
 }
 
 /** The one hoisted piece of state (in NavGraph.kt) for "is a focus session running right now". */

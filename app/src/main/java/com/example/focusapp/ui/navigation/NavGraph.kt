@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,6 +33,7 @@ import com.example.focusapp.ui.screens.apps.AddAppGroupScreen
 import com.example.focusapp.ui.screens.apps.AppsScreen
 import com.example.focusapp.ui.screens.apps.EditAppGroupScreen
 import com.example.focusapp.ui.screens.home.BlockedAppGroup
+import com.example.focusapp.ui.screens.home.BlockedAppGroupStorage
 import com.example.focusapp.ui.screens.home.EditLocationZoneScreen
 import com.example.focusapp.ui.screens.home.GroupListScreen
 import com.example.focusapp.ui.screens.home.HomeScreenWithSheet
@@ -44,6 +46,8 @@ import com.example.focusapp.ui.screens.session.FocusSessionScreen
 import com.example.focusapp.ui.screens.session.FocusSessionSource
 import com.example.focusapp.ui.screens.settings.SettingsScreen
 import com.example.focusapp.ui.theme.WireframeColors
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 // Every screen in the app uses this same vertical motion for consistency
 private val enterFromBottom: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
@@ -79,18 +83,51 @@ fun FocusAppNavGraph() {
     var selectedGroupId by remember { mutableStateOf(groups.first().id) }
     var activeFocusSession by remember { mutableStateOf<ActiveFocusSession?>(null) }
 
+    // [David Shiau, 2026-09-23] Persists `groups`/`selectedGroupId` (see
+    // BlockedAppGroupStorage's doc comment for why they weren't persisted
+    // before) - loads saved data once on first composition, then re-saves
+    // automatically whenever either value changes.
+    val groupStorage = remember { BlockedAppGroupStorage(context) }
+    var hasLoadedGroups by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        val savedGroups = withContext(Dispatchers.IO) { groupStorage.getGroups() }
+        if (savedGroups != null) {
+            groups = savedGroups
+            val savedSelectedId = withContext(Dispatchers.IO) { groupStorage.getSelectedGroupId() }
+            selectedGroupId = savedSelectedId
+                ?.takeIf { id -> savedGroups.any { it.id == id } }
+                ?: savedGroups.first().id
+        }
+        hasLoadedGroups = true
+    }
+
+    LaunchedEffect(groups, hasLoadedGroups) {
+        if (hasLoadedGroups) {
+            withContext(Dispatchers.IO) { groupStorage.saveGroups(groups) }
+        }
+    }
+
+    LaunchedEffect(selectedGroupId, hasLoadedGroups) {
+        if (hasLoadedGroups) {
+            withContext(Dispatchers.IO) { groupStorage.saveSelectedGroupId(selectedGroupId) }
+        }
+    }
+
     // [David Shiau, 2026-09-20] Which packages a session should restrict,
     // resolved per source: a schedule-triggered session blocks the group
     // that matched it; a manual Quick Focus blocks whichever group is
-    // currently selected on Home; and Party/Location sessions (no single
-    // specific group) fall back to the union of every saved group's packages.
+    // currently selected on Home; and Party/Location/Wifi sessions (no
+    // single specific group) fall back to the union of every saved group's
+    // packages. [David Shiau, 2026-09-23] Wifi follows Location's behavior
+    // here, per the same "no per-trigger group assignment yet" reasoning.
     fun restrictedPackagesFor(source: FocusSessionSource): List<String> {
         return when (source) {
             is FocusSessionSource.Schedule ->
                 groups.find { it.id == source.groupId }?.apps?.map { it.packageName } ?: emptyList()
             FocusSessionSource.Manual ->
                 groups.find { it.id == selectedGroupId }?.apps?.map { it.packageName } ?: emptyList()
-            FocusSessionSource.Party, is FocusSessionSource.Location ->
+            FocusSessionSource.Party, is FocusSessionSource.Location, is FocusSessionSource.Wifi ->
                 groups.flatMap { group -> group.apps.map { it.packageName } }.distinct()
         }
     }
