@@ -28,6 +28,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
  * final reward-visual decision are in place, replace the static Text below
  * with the real streak/points display and its chosen visual metaphor.
  */
+// [HANDOFF -> Kai-Jiun Chan | README task: "Reward/Progress UI (animations, progress rings)"]
+// Replace the static Text below with the real streak/points display and
+// whichever visual metaphor (tree/mountain/ring) the team settles on.
 @Composable
 fun RewardsScreen(viewModel: RewardsViewModel = viewModel()) {
     Column(

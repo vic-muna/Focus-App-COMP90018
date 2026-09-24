@@ -17,4 +17,5 @@ import androidx.lifecycle.ViewModel
  *
  * TODO: to be implemented later - intentionally empty for now.
  */
+// [HANDOFF -> Kai-Jiun Chan | README task: "Reward/Progress UI (animations, progress rings); Reactive UI updates (ViewModel/LiveData binding)"]
 class RewardsViewModel : ViewModel()
