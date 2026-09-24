@@ -6,6 +6,19 @@ import android.content.Intent
 import android.util.Log
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingEvent
+<<<<<<< Updated upstream
+=======
+import com.google.android.gms.location.LocationServices
+import android.os.Build
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import com.google.android.gms.location.GeofencingRequest
+import com.example.focusapp.data.local.RoomLocalDataSource
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+>>>>>>> Stashed changes
 
 class GeofenceBroadcastReceiver : BroadcastReceiver() {
 
@@ -28,4 +41,55 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
             Log.d("GeofenceReceiver", "User EXITED the focus zone!")
         }
     }
+<<<<<<< Updated upstream
+=======
+
+    fun restoreGeofences(context: Context) {
+        val geofencingClient = LocationServices.getGeofencingClient(context)
+        val localDataSource = RoomLocalDataSource(context)
+
+        CoroutineScope(Dispatchers.IO).launch {
+            val savedZones = localDataSource.getFocusZones()
+
+            if (savedZones.isEmpty()) {
+                Log.d("GeofenceTracker", "Boot restore: No saved zones to restore.")
+                return@launch
+            }
+
+            val hasFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            val hasBackground = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED
+            } else true
+
+            if (!hasFine || !hasBackground) {
+                Log.e("GeofenceTracker", "Boot restore: Missing required location permissions.")
+                return@launch
+            }
+
+            val geofenceList = savedZones.map { zone ->
+                Geofence.Builder()
+                    .setRequestId(zone.id)
+                    .setCircularRegion(zone.latitude, zone.longitude, zone.radiusMeters)
+                    .setExpirationDuration(Geofence.NEVER_EXPIRE)
+                    .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER or Geofence.GEOFENCE_TRANSITION_EXIT)
+                    .build()
+            }
+
+            val geofencingRequest = GeofencingRequest.Builder()
+                .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
+                .addGeofences(geofenceList)
+                .build()
+
+            val pendingIntent = getGeofencePendingIntent(context)
+
+            geofencingClient.addGeofences(geofencingRequest, pendingIntent)
+                .addOnSuccessListener {
+                    Log.d("GeofenceTracker", "Successfully restored ${savedZones.size} Focus Zones on boot.")
+                }
+                .addOnFailureListener { exception ->
+                    Log.e("GeofenceTracker", "Failed to restore Focus Zones on boot: ${exception.message}")
+                }
+        }
+    }
+>>>>>>> Stashed changes
 }

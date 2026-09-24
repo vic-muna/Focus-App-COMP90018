@@ -15,7 +15,11 @@
       "oauth_client": [],
       "api_key": [
         {
+<<<<<<<< Updated upstream:app/google-services.json.template
           "current_key": "REPLACE_WITH_YOUR_KEY"
+========
+          "current_key": ""
+>>>>>>>> Stashed changes:app/google-services.json
         }
       ],
       "services": {

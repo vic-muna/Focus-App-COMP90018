@@ -33,6 +33,10 @@ class FakeLocalDataSource : LocalDataSource {
     private val sessions = mutableListOf<FocusSession>()
     private val syncedSessionIds = mutableSetOf<String>()
     private val friends = mutableListOf<Friend>()
+<<<<<<< Updated upstream
+=======
+    private val extraZones = mutableListOf<FocusZone>()
+>>>>>>> Stashed changes
 
     override suspend fun getFocusZone(): FocusZone? = zone
 
@@ -41,6 +45,23 @@ class FakeLocalDataSource : LocalDataSource {
         zoneSynced = false
     }
 
+<<<<<<< Updated upstream
+=======
+    override suspend fun getFocusZones(): List<FocusZone> = listOfNotNull(zone) + extraZones
+
+    override suspend fun addFocusZone(zone: FocusZone): Boolean {
+        extraZones.removeAll { it.id == zone.id }
+        extraZones.add(zone)
+        return true
+    }
+
+    override suspend fun deleteFocusZone(zoneId: String): Boolean {
+        extraZones.removeAll { it.id == zoneId }
+        if (this.zone?.id == zoneId) this.zone = null
+        return true
+    }
+
+>>>>>>> Stashed changes
     override suspend fun getAppGroups(): List<AppGroup> = appGroups.toList()
 
     override suspend fun saveAppGroup(group: AppGroup) {

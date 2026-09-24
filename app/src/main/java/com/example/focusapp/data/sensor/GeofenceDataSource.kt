@@ -12,6 +12,16 @@ import androidx.core.content.ContextCompat
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingRequest
+<<<<<<< Updated upstream
+=======
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.location.GeofenceStatusCodes
+import com.example.focusapp.data.local.RoomLocalDataSource
+import com.example.focusapp.domain.model.FocusZone
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+>>>>>>> Stashed changes
 
 private const val TAG = "GeofenceTracker"
 
@@ -20,7 +30,31 @@ fun addFocusZoneGeofence(context: Context, lat: Double, lng: Double, radius: Flo
     val geofencingClient = LocationServices.getGeofencingClient(context)
 
     // 2. Build the Geofence object
+<<<<<<< Updated upstream
     val newLocationId = UUID.randomUUID().toString() // TODO: Once the Focus Locations get saved in the database of the phone, the id should be adjusted to the databases primary keys
+=======
+    val newLocationId = UUID.randomUUID().toString() // TODO: Once the Focus Locations get saved in the database of the phone, the id should maybe be adjusted
+
+    val localDataSource = RoomLocalDataSource(context)
+    val newZone = FocusZone(
+        id = newLocationId,
+        name = "New Focus Zone", // You can update your function to accept a name parameter later
+        latitude = lat,
+        longitude = lng,
+        radiusMeters = radius
+    )
+
+    CoroutineScope(Dispatchers.IO).launch {
+        val saveSuccessful = localDataSource.addFocusZone(newZone)
+
+        if (!saveSuccessful) {
+            Log.e(TAG, "Aborting OS registration because local save failed.")
+            // You can optionally surface this error back to the UI here
+            return@launch
+        }
+    }
+
+>>>>>>> Stashed changes
     val geofence = Geofence.Builder()
         .setRequestId(newLocationId)
         .setCircularRegion(lat, lng, radius)
@@ -71,6 +105,12 @@ private fun getGeofencePendingIntent(context: Context): PendingIntent {
 fun removeFocusZoneGeofence(context: Context, id: String) {
     val geofencingClient = LocationServices.getGeofencingClient(context)
 
+<<<<<<< Updated upstream
+=======
+    val localDataSource = RoomLocalDataSource(context)
+
+
+>>>>>>> Stashed changes
     // Remove the specific geofence by passing its ID in a list
     geofencingClient.removeGeofences(listOf(id))
         .addOnSuccessListener {

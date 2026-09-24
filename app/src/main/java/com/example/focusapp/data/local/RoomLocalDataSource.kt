@@ -42,6 +42,18 @@ class RoomLocalDataSource(context: Context) : LocalDataSource {
         db.focusZoneDao().upsert(zone.toEntity())
     }
 
+<<<<<<< Updated upstream
+=======
+    override suspend fun getFocusZones(): List<FocusZone> =
+        db.focusZoneDao().getAll().map { it.toDomain() }
+
+    override suspend fun addFocusZone(zone: FocusZone): Boolean =
+        runCatching { db.focusZoneDao().upsert(zone.toEntity()) }.isSuccess
+
+    override suspend fun deleteFocusZone(zoneId: String): Boolean =
+        runCatching { db.focusZoneDao().deleteById(zoneId) }.isSuccess
+
+>>>>>>> Stashed changes
     override suspend fun getAppGroups(): List<AppGroup> =
         db.appGroupDao().getAll().map { it.toDomain() }
 
