@@ -54,7 +54,7 @@ private const val CANCEL_HOLD_STEP_MILLIS = 50L
 // Same fixed duration Party Mode's own wipe uses (see PartyModeScreen.kt),
 // applied symmetrically to both the entrance reveal and the cancel/reverse-cover -
 // no separate "calculated"/synced enter-vs-exit timing.
-private const val WIPE_DURATION_MILLIS = 800
+private const val WIPE_DURATION_MILLIS = 600
 
 /** How long this screen waits, unchanged, after cancellation is triggered before
  *  actually starting the reverse wipe/leaving - time for a background animation to

@@ -34,11 +34,7 @@ import com.example.focusapp.data.local.entity.PackageListConverter
  */
 @Database(
     entities = [FocusZoneEntity::class, AppGroupEntity::class, FocusSessionEntity::class, FriendEntity::class],
-<<<<<<< Updated upstream
-    version = 3,
-=======
     version = 4,
->>>>>>> Stashed changes
     exportSchema = false
 )
 @TypeConverters(PackageListConverter::class)

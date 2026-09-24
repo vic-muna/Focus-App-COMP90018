@@ -12,8 +12,6 @@ import androidx.core.content.ContextCompat
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingRequest
-<<<<<<< Updated upstream
-=======
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.location.GeofenceStatusCodes
 import com.example.focusapp.data.local.RoomLocalDataSource
@@ -21,7 +19,6 @@ import com.example.focusapp.domain.model.FocusZone
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
->>>>>>> Stashed changes
 
 private const val TAG = "GeofenceTracker"
 
@@ -30,9 +27,6 @@ fun addFocusZoneGeofence(context: Context, lat: Double, lng: Double, radius: Flo
     val geofencingClient = LocationServices.getGeofencingClient(context)
 
     // 2. Build the Geofence object
-<<<<<<< Updated upstream
-    val newLocationId = UUID.randomUUID().toString() // TODO: Once the Focus Locations get saved in the database of the phone, the id should be adjusted to the databases primary keys
-=======
     val newLocationId = UUID.randomUUID().toString() // TODO: Once the Focus Locations get saved in the database of the phone, the id should maybe be adjusted
 
     val localDataSource = RoomLocalDataSource(context)
@@ -54,7 +48,6 @@ fun addFocusZoneGeofence(context: Context, lat: Double, lng: Double, radius: Flo
         }
     }
 
->>>>>>> Stashed changes
     val geofence = Geofence.Builder()
         .setRequestId(newLocationId)
         .setCircularRegion(lat, lng, radius)
@@ -86,7 +79,7 @@ fun addFocusZoneGeofence(context: Context, lat: Double, lng: Double, radius: Flo
     }
 }
 
-private fun getGeofencePendingIntent(context: Context): PendingIntent {
+public fun getGeofencePendingIntent(context: Context): PendingIntent {
     val intent = Intent(context, GeofenceBroadcastReceiver::class.java)
     val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
@@ -105,18 +98,33 @@ private fun getGeofencePendingIntent(context: Context): PendingIntent {
 fun removeFocusZoneGeofence(context: Context, id: String) {
     val geofencingClient = LocationServices.getGeofencingClient(context)
 
-<<<<<<< Updated upstream
-=======
     val localDataSource = RoomLocalDataSource(context)
 
 
->>>>>>> Stashed changes
     // Remove the specific geofence by passing its ID in a list
     geofencingClient.removeGeofences(listOf(id))
         .addOnSuccessListener {
             Log.d(TAG, "Successfully removed Focus Zone: $id")
+            CoroutineScope(Dispatchers.IO).launch {
+                val deleteSuccessful = localDataSource.deleteFocusZone(id)
+
+                if (!deleteSuccessful) {
+                    Log.e(TAG, "Warning: OS removal succeeded, but local deletion failed.")
+                }
+            }
         }
         .addOnFailureListener { exception ->
-            Log.e(TAG, "Failed to remove Focus Zone $id: ${exception.message}")
+            if (exception is ApiException) {
+                when (exception.statusCode) {
+                    GeofenceStatusCodes.GEOFENCE_NOT_AVAILABLE -> {
+                        Log.e(TAG, "Geofence $id not found. It may have already been removed.")
+                    }
+                    else -> {
+                        Log.e(TAG, "API Error removing $id: ${GeofenceStatusCodes.getStatusCodeString(exception.statusCode)}")
+                    }
+                }
+            } else {
+                Log.e(TAG, "Failed to remove Focus Zone $id: ${exception.message}")
+            }
         }
 }

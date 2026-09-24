@@ -6,8 +6,6 @@ import android.content.Intent
 import android.util.Log
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingEvent
-<<<<<<< Updated upstream
-=======
 import com.google.android.gms.location.LocationServices
 import android.os.Build
 import android.Manifest
@@ -18,12 +16,18 @@ import com.example.focusapp.data.local.RoomLocalDataSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
->>>>>>> Stashed changes
 
 class GeofenceBroadcastReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        // This is the function that wakes up in the background!
+        // 1. Intercept the reboot event
+        if (intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == "android.intent.action.QUICKBOOT_POWERON") {
+            Log.d("GeofenceReceiver", "Device booted! Restoring Focus Zones...")
+            restoreGeofences(context)
+            return
+        }
+
+        // 2. Handle the standard geofence transitions
         val geofencingEvent = GeofencingEvent.fromIntent(intent)
 
         if (geofencingEvent == null || geofencingEvent.hasError()) {
@@ -31,7 +35,6 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
             return
         }
 
-        // Check if the user entered or exited the zone
         val geofenceTransition = geofencingEvent.geofenceTransition
 
         if (geofenceTransition == Geofence.GEOFENCE_TRANSITION_ENTER) {
@@ -41,8 +44,6 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
             Log.d("GeofenceReceiver", "User EXITED the focus zone!")
         }
     }
-<<<<<<< Updated upstream
-=======
 
     fun restoreGeofences(context: Context) {
         val geofencingClient = LocationServices.getGeofencingClient(context)
@@ -91,5 +92,4 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
                 }
         }
     }
->>>>>>> Stashed changes
 }

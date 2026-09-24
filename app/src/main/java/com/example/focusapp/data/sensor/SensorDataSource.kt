@@ -95,15 +95,16 @@ class SensorDataSource {
         val localDataSource = RoomLocalDataSource(context)
 
         CoroutineScope(Dispatchers.IO).launch {
-            val zone = localDataSource.getFocusZone()
+            val savedZones = localDataSource.getFocusZones()
 
-            if (zone == null) {
-                Log.d("GeofenceTracker", "Local Storage: No Focus Zone saved.")
+            if (savedZones.isEmpty()) {
+                Log.d("GeofenceTracker", "Local Storage: No Focus Zones saved.")
             } else {
-                Log.d(
-                    "GeofenceTracker",
-                    "ID: ${zone.id} | Lat: ${zone.latitude}, Lng: ${zone.longitude} | Radius: ${zone.radiusMeters}m"
-                )
+                Log.d("GeofenceTracker", "--- Local Storage: ${savedZones.size} Focus Zone(s) ---")
+                savedZones.forEach { zone ->
+                    Log.d("GeofenceTracker", "ID: ${zone.id} | Lat: ${zone.latitude}, Lng: ${zone.longitude} | Radius: ${zone.radiusMeters}m")
+                }
+                Log.d("GeofenceTracker", "---------------------------------------------")
             }
         }
     }

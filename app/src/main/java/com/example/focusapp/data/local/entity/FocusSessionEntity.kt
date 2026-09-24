@@ -18,12 +18,8 @@ data class FocusSessionEntity(
     val endTimeMillis: Long?,
     val distractingAppOpenCount: Int,
     val wasCompletedSuccessfully: Boolean,
-<<<<<<< Updated upstream
-    val synced: Boolean = false
-=======
     val synced: Boolean = false,
     val groupId: String? = null
->>>>>>> Stashed changes
 )
 
 fun FocusSessionEntity.toDomain() = FocusSession(
@@ -31,12 +27,8 @@ fun FocusSessionEntity.toDomain() = FocusSession(
     startTimeMillis = startTimeMillis,
     endTimeMillis = endTimeMillis,
     distractingAppOpenCount = distractingAppOpenCount,
-<<<<<<< Updated upstream
-    wasCompletedSuccessfully = wasCompletedSuccessfully
-=======
     wasCompletedSuccessfully = wasCompletedSuccessfully,
     groupId = groupId
->>>>>>> Stashed changes
 )
 
 fun FocusSession.toEntity(synced: Boolean = false) = FocusSessionEntity(
@@ -45,10 +37,6 @@ fun FocusSession.toEntity(synced: Boolean = false) = FocusSessionEntity(
     endTimeMillis = endTimeMillis,
     distractingAppOpenCount = distractingAppOpenCount,
     wasCompletedSuccessfully = wasCompletedSuccessfully,
-<<<<<<< Updated upstream
-    synced = synced
-=======
     synced = synced,
     groupId = groupId
->>>>>>> Stashed changes
 )

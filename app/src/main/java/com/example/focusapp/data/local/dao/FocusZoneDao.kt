@@ -32,10 +32,7 @@ interface FocusZoneDao {
 
     @Query("UPDATE focus_zones SET synced = 1 WHERE id = :zoneId")
     suspend fun markSynced(zoneId: String)
-<<<<<<< Updated upstream
-=======
 
     @Query("DELETE FROM focus_zones WHERE id = :zoneId")
     suspend fun deleteById(zoneId: String)
->>>>>>> Stashed changes
 }
