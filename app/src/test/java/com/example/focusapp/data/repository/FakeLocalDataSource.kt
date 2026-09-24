@@ -19,14 +19,17 @@ import com.example.focusapp.domain.model.Friend
  *  - saveFocusSession is append-only, matching FocusSessionDao.insert.
  *  - getSessionHistory is ordered newest-first, matching the DAO's
  *    `ORDER BY startTimeMillis DESC`.
- *  - synced state is tracked the same way the `synced` column does, just
- *    as a separate Set here since the domain FocusSession model itself
- *    doesn't carry that field (see FocusSessionEntity's doc comment).
+ *  - synced state (for sessions, zone, and app groups alike) is tracked
+ *    the same way the real `synced` columns do, just as separate
+ *    Sets/flags here since the domain models themselves don't carry that
+ *    field (see FocusSessionEntity's doc comment for why).
  */
 class FakeLocalDataSource : LocalDataSource {
 
     private var zone: FocusZone? = null
+    private var zoneSynced: Boolean = false
     private val appGroups = mutableListOf<AppGroup>()
+    private val syncedAppGroupIds = mutableSetOf<String>()
     private val sessions = mutableListOf<FocusSession>()
     private val syncedSessionIds = mutableSetOf<String>()
     private val friends = mutableListOf<Friend>()
@@ -35,6 +38,7 @@ class FakeLocalDataSource : LocalDataSource {
 
     override suspend fun saveFocusZone(zone: FocusZone) {
         this.zone = zone
+        zoneSynced = false
     }
 
     override suspend fun getAppGroups(): List<AppGroup> = appGroups.toList()
@@ -42,6 +46,20 @@ class FakeLocalDataSource : LocalDataSource {
     override suspend fun saveAppGroup(group: AppGroup) {
         appGroups.removeAll { it.id == group.id }
         appGroups.add(group)
+        syncedAppGroupIds.remove(group.id)
+    }
+
+    override suspend fun getUnsyncedZone(): FocusZone? = zone?.takeIf { !zoneSynced }
+
+    override suspend fun markZoneSynced(zoneId: String) {
+        if (zone?.id == zoneId) zoneSynced = true
+    }
+
+    override suspend fun getUnsyncedAppGroups(): List<AppGroup> =
+        appGroups.filter { it.id !in syncedAppGroupIds }
+
+    override suspend fun markAppGroupSynced(groupId: String) {
+        syncedAppGroupIds.add(groupId)
     }
 
     override suspend fun getSessionHistory(): List<FocusSession> =

@@ -16,9 +16,9 @@ import com.example.focusapp.domain.model.Friend
  * Table/column definitions live in data/local/entity/, DAOs in
  * data/local/dao/; this class just maps domain models <-> entities and
  * keeps the exact same public API FocusRepositoryImpl already depends on,
- * plus two additions needed for cloud sync (#43 offline caching / #48
- * local-to-cloud sync):
- *   getUnsyncedSessions() / markSessionSynced(id)
+ * plus the additions needed for cloud sync (#43 offline caching / #48
+ * local-to-cloud sync): getUnsyncedSessions()/markSessionSynced(id), and
+ * their zone/app-group equivalents further down.
  *
  * (This class used to be named `LocalDataSource` directly. That name is
  * now the interface - see LocalDataSource.kt for why.)
@@ -47,6 +47,21 @@ class RoomLocalDataSource(context: Context) : LocalDataSource {
 
     override suspend fun saveAppGroup(group: AppGroup) =
         db.appGroupDao().upsert(group.toEntity())
+
+    // --- Cloud sync for zone/app groups (mirrors the session sync methods below -
+    // see LocalDataSource's doc comment and FocusRepositoryImpl for how these are used). ---
+
+    override suspend fun getUnsyncedZone(): FocusZone? =
+        db.focusZoneDao().getUnsynced().firstOrNull()?.toDomain()
+
+    override suspend fun markZoneSynced(zoneId: String) =
+        db.focusZoneDao().markSynced(zoneId)
+
+    override suspend fun getUnsyncedAppGroups(): List<AppGroup> =
+        db.appGroupDao().getUnsynced().map { it.toDomain() }
+
+    override suspend fun markAppGroupSynced(groupId: String) =
+        db.appGroupDao().markSynced(groupId)
 
     override suspend fun getSessionHistory(): List<FocusSession> =
         db.focusSessionDao().getAll().map { it.toDomain() }

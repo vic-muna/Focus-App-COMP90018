@@ -6,10 +6,18 @@ import com.example.focusapp.domain.model.AppGroup
 import com.example.focusapp.domain.model.FocusSession
 import com.example.focusapp.domain.model.FocusZone
 import com.example.focusapp.domain.model.Friend
+import com.example.focusapp.domain.model.PartyInvite
 import com.example.focusapp.domain.model.PartyMemberStatus
 import com.example.focusapp.domain.repository.FocusRepository
 import com.example.focusapp.domain.validation.FocusValidation
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -24,15 +32,21 @@ private const val PARTY_STATUS_MIN_INTERVAL_MILLIS = 30_000L
 private const val PARTY_STATUS_MIN_DISTANCE_METERS = 20.0
 private const val EARTH_RADIUS_METERS = 6_371_000.0
 
+// How long a single Firebase push gets before syncPendingSessions()/syncPendingZoneAndAppGroups()
+// give up on it and treat it as "still offline, retry later" - see syncPendingSessions()'s doc
+// comment for why this exists at all (a hung network call, not just a *failed* one, is the
+// actual bug it fixes).
+private const val FIREBASE_PUSH_TIMEOUT_MILLIS = 15_000L
+
 /**
  * FocusRepositoryImpl
  * ----------------------
- * Concrete implementation of [FocusRepository]. Zones/App Groups are
- * local-only for now (no remote sync needed for those yet). Sessions are
- * offline-first: always written to Room immediately, then pushed to
- * Firebase opportunistically - saveFocusSession() never fails just
- * because the phone is offline. Study Party calls pass straight through
- * to RemoteDataSource since that feature is inherently live/online-only.
+ * Concrete implementation of [FocusRepository]. Zones/App Groups and
+ * Sessions are all offline-first the same way: always written to Room
+ * immediately, then pushed to Firebase opportunistically - none of the
+ * save*() methods below fail just because the phone is offline. Study
+ * Party calls pass straight through to RemoteDataSource since that
+ * feature is inherently live/online-only.
  *
  * saveFocusZone/saveAppGroup run their input through [FocusValidation]
  * first and throw [IllegalArgumentException] on bad data (blank name,
@@ -45,7 +59,19 @@ class FocusRepositoryImpl(
     // Injectable purely so tests can control "how much time has passed" without a real
     // Thread.sleep() - defaults to the real wall clock everywhere else. See
     // FocusRepositoryImplTest's throttle tests for how this is used.
-    private val clock: () -> Long = System::currentTimeMillis
+    private val clock: () -> Long = System::currentTimeMillis,
+    // Where saveFocusSession()/saveFocusZone()/saveAppGroup()'s best-effort cloud sync actually
+    // runs. Defaults to a real, app-lifetime background scope (SupervisorJob so one bad push can
+    // never cancel the others) so a slow/hung network call NEVER blocks whoever called those
+    // methods - this used to be awaited inline here, which is exactly what caused "Quick Focus
+    // ends -> screen stays blank forever, only a restart fixes it" (and would have caused the
+    // same for saving a Focus Zone or App Group) whenever the device's network was slow,
+    // unreachable, or Firebase Anonymous Auth just took a while to respond: the calling UI's own
+    // coroutine was suspended on this call, so its navigate-away callback never ran. Tests
+    // override this with an Unconfined scope - see FocusRepositoryImplTest - so the fakes'
+    // (non-suspending) work still finishes before each test's next line runs, keeping them
+    // exactly as deterministic as before this change.
+    private val syncScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 ) : FocusRepository {
 
     // Last status actually pushed to Firebase, keyed by "partyId/uid", so repeat calls for the
@@ -60,6 +86,9 @@ class FocusRepositoryImpl(
     override suspend fun saveFocusZone(zone: FocusZone) {
         FocusValidation.validateFocusZone(zone)
         localDataSource.saveFocusZone(zone)
+        // Fire-and-forget - see syncScope's doc comment (same "must never block the caller on a
+        // hung network call" reasoning as saveFocusSession(), just applied here too).
+        syncScope.launch { syncPendingZoneAndAppGroups() }
     }
 
     override suspend fun getAppGroups(): List<AppGroup> =
@@ -68,6 +97,43 @@ class FocusRepositoryImpl(
     override suspend fun saveAppGroup(group: AppGroup) {
         FocusValidation.validateAppGroup(group)
         localDataSource.saveAppGroup(group)
+        syncScope.launch { syncPendingZoneAndAppGroups() }
+    }
+
+    /** Same "retry whatever hasn't reached Firebase yet" shape as [syncPendingSessions] -
+     *  called opportunistically from saveFocusZone/saveAppGroup above, and safe to call again
+     *  from a network-available callback (not wired up anywhere yet, same as sessions'). Each
+     *  push gets the same [FIREBASE_PUSH_TIMEOUT_MILLIS] treatment as sessions - see
+     *  [syncPendingSessions]'s doc comment for why a hang (not just a failure) needs one. */
+    override suspend fun syncPendingZoneAndAppGroups() {
+        localDataSource.getUnsyncedZone()?.let { zone ->
+            try {
+                withTimeout(FIREBASE_PUSH_TIMEOUT_MILLIS) {
+                    remoteDataSource.pushFocusZone(zone)
+                }
+                localDataSource.markZoneSynced(zone.id)
+            } catch (e: TimeoutCancellationException) {
+                // Treated exactly like any other failed push - stays unsynced, retried next time.
+            } catch (e: CancellationException) {
+                throw e // real cancellation (app/scope shutting down) - must not be swallowed
+            } catch (e: Exception) {
+                // Left unsynced on purpose - call this again once back online.
+            }
+        }
+        localDataSource.getUnsyncedAppGroups().forEach { group ->
+            try {
+                withTimeout(FIREBASE_PUSH_TIMEOUT_MILLIS) {
+                    remoteDataSource.pushAppGroup(group)
+                }
+                localDataSource.markAppGroupSynced(group.id)
+            } catch (e: TimeoutCancellationException) {
+                // Treated exactly like any other failed push - stays unsynced, retried next time.
+            } catch (e: CancellationException) {
+                throw e // real cancellation (app/scope shutting down) - must not be swallowed
+            } catch (e: Exception) {
+                // Left unsynced on purpose - call this again once back online.
+            }
+        }
     }
 
     override suspend fun getSessionHistory(): List<FocusSession> =
@@ -78,14 +144,30 @@ class FocusRepositoryImpl(
 
     override suspend fun saveFocusSession(session: FocusSession) {
         localDataSource.saveFocusSession(session)
-        syncPendingSessions() // best-effort; fine if this fails while offline
+        // Fire-and-forget on purpose - see syncScope's doc comment above for why this must
+        // NOT be `syncPendingSessions()` awaited directly here.
+        syncScope.launch { syncPendingSessions() }
     }
 
+    /**
+     * Retries pushing any locally-saved sessions that haven't reached the cloud yet. Each push
+     * gets [FIREBASE_PUSH_TIMEOUT_MILLIS] before being treated as failed - a network call that
+     * hangs (no signal, a captive/blocked wifi portal, Firebase Auth waiting on a response that
+     * never comes) is just as much "still offline" as one that fails outright, and without a
+     * timeout it would sit here forever holding a coroutine open instead of ever getting marked
+     * unsynced-and-retry-later.
+     */
     override suspend fun syncPendingSessions() {
         localDataSource.getUnsyncedSessions().forEach { session ->
             try {
-                remoteDataSource.pushSession(session)
+                withTimeout(FIREBASE_PUSH_TIMEOUT_MILLIS) {
+                    remoteDataSource.pushSession(session)
+                }
                 localDataSource.markSessionSynced(session.id)
+            } catch (e: TimeoutCancellationException) {
+                // Treated exactly like any other failed push - stays unsynced, retried next time.
+            } catch (e: CancellationException) {
+                throw e // real cancellation (app/scope shutting down) - must not be swallowed
             } catch (e: Exception) {
                 // Left unsynced on purpose - call this again once back online.
             }
@@ -96,6 +178,9 @@ class FocusRepositoryImpl(
 
     override fun sendPartyInvite(partyId: String, toUid: String) =
         remoteDataSource.sendPartyInvite(partyId, toUid)
+
+    override fun observeMyIncomingInvites(): Flow<List<PartyInvite>> =
+        remoteDataSource.observeMyIncomingInvites()
 
     override suspend fun respondToPartyInvite(partyId: String, accept: Boolean) =
         remoteDataSource.respondToPartyInvite(partyId, accept)

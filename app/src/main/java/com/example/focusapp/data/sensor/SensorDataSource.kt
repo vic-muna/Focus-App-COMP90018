@@ -1,6 +1,11 @@
 package com.example.focusapp.data.sensor
 import android.content.Context
 import kotlinx.coroutines.flow.StateFlow
+import android.util.Log
+import com.example.focusapp.data.local.RoomLocalDataSource
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * SensorDataSource
@@ -23,6 +28,10 @@ import kotlinx.coroutines.flow.StateFlow
  *    from this class since it behaves more like a system service than a
  *    plain sensor reading)
  */
+// [HANDOFF -> Victor Munacoha | README task: "GPS + Geofencing + Accelerometer sensor integration"]
+// This whole class is your entry point. Implement getCurrentLocation() via
+// FusedLocationProviderClient + the Geofencing API, and the shake/face-down
+// methods via SensorManager (accelerometer + gyroscope) listeners.
 class SensorDataSource {
 
     // --- 1. EXPOSE THE DATA STREAM ---
@@ -61,9 +70,6 @@ class SensorDataSource {
      *    }
      */
     val locationFlow: StateFlow<Pair<Double, Double>?> = currentLocationFlow
-    // val geofenceEventFlow: SharedFlow<GeofenceEvent>
-
-    // --- 2. FACADE CONTROLS ---
 
     fun startTracking(context: Context) {
         startGPSUpdates(context)
@@ -84,6 +90,24 @@ class SensorDataSource {
     fun removeFocusZone(context: Context, id: String) {
         removeFocusZoneGeofence(context, id)
     }
+
+    fun logLocalFocusZones(context: Context) {
+        val localDataSource = RoomLocalDataSource(context)
+
+        CoroutineScope(Dispatchers.IO).launch {
+            val zone = localDataSource.getFocusZone()
+
+            if (zone == null) {
+                Log.d("GeofenceTracker", "Local Storage: No Focus Zone saved.")
+            } else {
+                Log.d(
+                    "GeofenceTracker",
+                    "ID: ${zone.id} | Lat: ${zone.latitude}, Lng: ${zone.longitude} | Radius: ${zone.radiusMeters}m"
+                )
+            }
+        }
+    }
+
 
     /** TODO: to be implemented later - true if a shake gesture was just detected. */
     fun isShakeDetected(): Boolean {

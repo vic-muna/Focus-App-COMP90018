@@ -32,7 +32,10 @@ import java.util.concurrent.TimeUnit
  * A [WeekBucket]'s sessions can be further split into [DayBucket]s via
  * [groupedByDay] - that's what HistoryScreen shows when a week card is
  * tapped, so "this week" isn't just one aggregate number but drills down
- * to real per-day history.
+ * to real per-day history. [dailyChartPoints] does something similar but
+ * for the bar chart - a fixed 7-day series (0-minute days included) built
+ * straight from [sessions], independent of [weekBuckets]'s own rolling
+ * window boundaries.
  *
  * Extends AndroidViewModel rather than plain ViewModel purely to get hold
  * of a Context for FocusRepositoryProvider.get(context) - this class has
@@ -141,4 +144,38 @@ fun List<FocusSession>.groupedByDay(): List<DayBucket> {
         .groupBy { startOfDay(it.startTimeMillis) }
         .toSortedMap(compareByDescending<Long> { it })
         .map { (dayStartMillis, daySessions) -> DayBucket(dayStartMillis, daySessions) }
+}
+
+/** One day's total for the bar chart - always present even when [totalMinutes] is 0, unlike
+ *  [DayBucket] (see [dailyChartPoints]). */
+data class DayChartPoint(val dayStartMillis: Long, val totalMinutes: Long)
+
+/**
+ * Turns any session list into exactly [days] [DayChartPoint]s (oldest to newest calendar day,
+ * device's default timezone), ending on the calendar day containing [anchorMillis] - unlike
+ * [groupedByDay] (which only returns days that actually have a session), this fills in 0-minute
+ * days too, so a bar chart gets a consistent x-axis even on a quiet week. Used by HistoryScreen's
+ * "this week" bar chart with the default 7-days-ending-today; kept general (any session list,
+ * any anchor day, any day count) rather than tied to [WeekBucket] specifically, in case a
+ * "last week" or 14-day chart is wanted later.
+ */
+fun List<FocusSession>.dailyChartPoints(
+    anchorMillis: Long = System.currentTimeMillis(),
+    days: Int = 7
+): List<DayChartPoint> {
+    val totalsByDay = groupedByDay().associate { it.dayStartMillis to it.totalMinutes }
+    val cursor = Calendar.getInstance().apply {
+        timeInMillis = anchorMillis
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+        add(Calendar.DAY_OF_YEAR, -(days - 1))
+    }
+    return (0 until days).map {
+        val dayStart = cursor.timeInMillis
+        val point = DayChartPoint(dayStart, totalsByDay[dayStart] ?: 0L)
+        cursor.add(Calendar.DAY_OF_YEAR, 1)
+        point
+    }
 }

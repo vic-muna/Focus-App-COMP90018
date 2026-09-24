@@ -1,6 +1,9 @@
 package com.example.focusapp.data.remote
 
+import com.example.focusapp.domain.model.AppGroup
 import com.example.focusapp.domain.model.FocusSession
+import com.example.focusapp.domain.model.FocusZone
+import com.example.focusapp.domain.model.PartyInvite
 import com.example.focusapp.domain.model.PartyMemberStatus
 import kotlinx.coroutines.flow.Flow
 
@@ -24,6 +27,9 @@ import kotlinx.coroutines.flow.Flow
  * confirm this with the team before anyone else implements
  * RemoteDataSource differently, or two conflicting implementations will
  * exist for the same type.
+ *
+ * See FirebaseRemoteDataSource's doc comment for the exact Realtime
+ * Database paths used by each method below.
  */
 interface RemoteDataSource {
 
@@ -34,7 +40,20 @@ interface RemoteDataSource {
     /** Push one completed session to the cloud (used by the offline-sync flow). */
     suspend fun pushSession(session: FocusSession)
 
+    /** Push the user's one focus zone to the cloud - "restrictions/plans" in the original
+     *  project plan's Remote Data Source description. Used by the same offline-first
+     *  sync flow as [pushSession] (see FocusRepositoryImpl.syncPendingZoneAndAppGroups()). */
+    suspend fun pushFocusZone(zone: FocusZone)
+
+    /** Push one app group ("restrictions/plans") to the cloud - see [pushFocusZone]. */
+    suspend fun pushAppGroup(group: AppGroup)
+
     fun sendPartyInvite(partyId: String, toUid: String)
+
+    /** Live stream of every invite currently addressed to this device's own uid, across every
+     *  party - what an "Invites" list/badge in the UI observes. An invite disappears from this
+     *  stream once [respondToPartyInvite] has been called for it (accepted or declined). */
+    fun observeMyIncomingInvites(): Flow<List<PartyInvite>>
 
     suspend fun respondToPartyInvite(partyId: String, accept: Boolean)
 

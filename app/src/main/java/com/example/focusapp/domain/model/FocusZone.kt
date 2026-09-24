@@ -7,10 +7,10 @@ import android.location.Location
  * -----------
  * A user-defined location where Focus Mode should automatically activate
  * (e.g. "Library"). Corresponds to the "Add Location" / "Set Radius" /
- * "Location Match" nodes in the process-flow diagram.
- *
- * TODO: to be implemented later - persistence via LocalDataSource, and
- * validation (radius bounds, duplicate-name checks, etc.).
+ * "Location Match" nodes in the process-flow diagram. Persisted via
+ * RoomLocalDataSource (data/local/RoomLocalDataSource.kt), validated by
+ * domain/validation/FocusValidation.kt before it ever reaches storage,
+ * and synced to Firebase - see FocusRepositoryImpl.saveFocusZone().
  */
 data class FocusZone(
     val id: String,

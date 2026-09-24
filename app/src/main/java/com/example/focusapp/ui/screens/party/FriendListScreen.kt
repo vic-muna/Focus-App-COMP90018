@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.focusapp.domain.model.Friend
+import com.example.focusapp.ui.common.ErrorBanner
 
 /**
  * FriendListScreen
@@ -71,6 +72,7 @@ fun FriendListScreen(
 ) {
     val friends by viewModel.friends.collectAsState()
     val myUid by viewModel.myUid.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
     val clipboard = LocalClipboardManager.current
 
     var uidInput by remember { mutableStateOf("") }
@@ -83,6 +85,10 @@ fun FriendListScreen(
             .background(Color.Black)
             .padding(24.dp)
     ) {
+        if (errorMessage != null) {
+            ErrorBanner(errorMessage!!, modifier = Modifier.padding(bottom = 16.dp))
+        }
+
         Text("Your uid", color = Color.White, fontSize = 13.sp)
         Spacer(Modifier.height(4.dp))
         Row(

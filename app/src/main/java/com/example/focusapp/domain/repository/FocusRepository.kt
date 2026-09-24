@@ -4,6 +4,7 @@ import com.example.focusapp.domain.model.AppGroup
 import com.example.focusapp.domain.model.FocusSession
 import com.example.focusapp.domain.model.FocusZone
 import com.example.focusapp.domain.model.Friend
+import com.example.focusapp.domain.model.PartyInvite
 import com.example.focusapp.domain.model.PartyMemberStatus
 import kotlinx.coroutines.flow.Flow
 
@@ -19,12 +20,19 @@ interface FocusRepository {
     /** Reads the user's single saved focus zone, or null if none has been set yet. */
     suspend fun getFocusZone(): FocusZone?
 
-    /** Persists the user's one focus zone, overwriting any previously saved value. */
+    /** Persists the user's one focus zone, overwriting any previously saved value, then
+     *  best-effort pushes it to the cloud ("restrictions/plans" - see [syncPendingZoneAndAppGroups]). */
     suspend fun saveFocusZone(zone: FocusZone)
 
     suspend fun getAppGroups(): List<AppGroup>
 
+    /** Persists an app group, then best-effort pushes it to the cloud - see [saveFocusZone]. */
     suspend fun saveAppGroup(group: AppGroup)
+
+    /** Retry pushing the saved zone/app groups that haven't reached the cloud yet - the
+     *  zone/app-group equivalent of [syncPendingSessions]. Call this from a network-available
+     *  callback in addition to the automatic attempt inside saveFocusZone()/saveAppGroup(). */
+    suspend fun syncPendingZoneAndAppGroups()
 
     /** Read past focus sessions for the History screen (local cache, always available offline). */
     suspend fun getSessionHistory(): List<FocusSession>
@@ -48,6 +56,10 @@ interface FocusRepository {
     suspend fun getMyUid(): String
 
     fun sendPartyInvite(partyId: String, toUid: String)
+
+    /** Live stream of every invite currently addressed to this device across every party -
+     *  see [com.example.focusapp.data.remote.RemoteDataSource.observeMyIncomingInvites]. */
+    fun observeMyIncomingInvites(): Flow<List<PartyInvite>>
 
     suspend fun respondToPartyInvite(partyId: String, accept: Boolean)
 

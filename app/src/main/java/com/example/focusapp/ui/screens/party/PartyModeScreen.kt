@@ -6,8 +6,10 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,6 +27,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -47,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.focusapp.domain.model.PartyInvite
 import com.example.focusapp.ui.common.rememberLocationPermissionState
 import com.example.focusapp.ui.theme.WireframeColors
 import kotlinx.coroutines.launch
@@ -98,6 +102,13 @@ private fun generatePartyCode(): String {
  * partyModeEnter/partyModeExit fade used for this route in NavGraph.kt),
  * so it also intercepts the system back gesture via BackHandler to play
  * the same reverse animation.
+ *
+ * Incoming invites: a small round badge showing [PartyModeViewModel.incomingInvites]'s
+ * count appears top-right whenever there's at least one - tapping it opens
+ * [InvitesDialogContent], a third dialog (alongside Invite/Join) listing each invite with
+ * Accept/Decline. Accepting calls [PartyModeViewModel.respondToInvite] and immediately swaps
+ * to the same live participant view the Join dialog shows, since accepting an invite should
+ * behave like joining that party, not just silently record an "accepted" status somewhere.
  */
 @Composable
 fun PartyModeScreen(
@@ -136,6 +147,12 @@ fun PartyModeScreen(
     val participantNames = members.map { it.displayName.ifBlank { "Member (${it.uid.take(6)})" } }
     val partyErrorMessage by viewModel.errorMessage.collectAsState()
 
+    // Invites addressed to this device, across every party - see PartyModeViewModel's doc
+    // comment. Independent of `selection` above: this can be non-empty (and the button below
+    // shown) even when no Invite/Join dialog is open.
+    val incomingInvites by viewModel.incomingInvites.collectAsState()
+    var showInvites by remember { mutableStateOf(false) }
+
     LaunchedEffect(Unit) {
         revealProgress.animateTo(1f, tween(WIPE_DURATION_MILLIS, easing = FastOutSlowInEasing))
     }
@@ -172,6 +189,26 @@ fun PartyModeScreen(
                 contentDescription = "Back",
                 tint = Color.Black
             )
+        }
+
+        // Only shown once there's at least one invite to act on - see PartyModeViewModel's
+        // incomingInvites doc comment for why this can already be populated before the user
+        // has tapped Invite or Join.
+        if (incomingInvites.isNotEmpty()) {
+            IconButton(
+                onClick = { showInvites = true },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFF5C8C8))
+            ) {
+                Text(
+                    text = incomingInvites.size.toString(),
+                    color = Color.Black,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
 
         Text(
@@ -302,6 +339,89 @@ fun PartyModeScreen(
                     }
                 }
             )
+        }
+    }
+
+    if (showInvites) {
+        Dialog(onDismissRequest = { showInvites = false }) {
+            InvitesDialogContent(
+                invites = incomingInvites,
+                errorMessage = partyErrorMessage,
+                onAccept = { invite ->
+                    viewModel.respondToInvite(invite, accept = true)
+                    if (!permissionState.hasPermission) permissionState.request()
+                    // Jump straight to the live participant list for the party just joined,
+                    // same as if the user had entered its code manually via Join.
+                    selection = PartySelection.JOIN
+                    joinSucceeded = true
+                    showInvites = false
+                },
+                onDecline = { invite -> viewModel.respondToInvite(invite, accept = false) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun InvitesDialogContent(
+    invites: List<PartyInvite>,
+    errorMessage: String?,
+    onAccept: (PartyInvite) -> Unit,
+    onDecline: (PartyInvite) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color.Black)
+            .padding(24.dp)
+    ) {
+        if (errorMessage != null) {
+            PartyErrorBanner(errorMessage)
+            Spacer(Modifier.height(16.dp))
+        }
+
+        Text("Invites", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(12.dp))
+
+        if (invites.isEmpty()) {
+            Text(text = "No pending invites.", color = Color.LightGray, fontSize = 13.sp)
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                invites.forEach { invite -> InviteRow(invite, onAccept, onDecline) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InviteRow(invite: PartyInvite, onAccept: (PartyInvite) -> Unit, onDecline: (PartyInvite) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // No nickname lookup here on purpose - keeping this in sync with the local Friends
+        // list (see ui/screens/party/FriendListViewModel.kt) would mean either this screen or
+        // PartyModeViewModel taking on a second, unrelated responsibility. Same fallback shape
+        // already used for un-named party members further up this file.
+        Text(
+            text = "From ${invite.fromUid.take(8)}",
+            color = Color.White,
+            fontSize = 14.sp,
+            modifier = Modifier.weight(1f, fill = false)
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = { onDecline(invite) }) {
+                Text("Decline", color = Color.LightGray)
+            }
+            Button(
+                onClick = { onAccept(invite) },
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text("Accept", color = Color.Black, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }

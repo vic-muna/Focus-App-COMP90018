@@ -5,8 +5,11 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,11 +34,14 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.focusapp.data.repository.FocusRepositoryProvider
 import com.example.focusapp.domain.model.FocusSession
+import com.example.focusapp.ui.common.ErrorBanner
+import com.example.focusapp.ui.common.friendlyErrorMessage
 import com.example.focusapp.ui.theme.WireframeColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -50,6 +56,11 @@ private const val CANCEL_HOLD_STEP_MILLIS = 50L
 // no separate "calculated"/synced enter-vs-exit timing.
 private const val WIPE_DURATION_MILLIS = 800
 
+/** How long this screen waits, unchanged, after cancellation is triggered before
+ *  actually starting the reverse wipe/leaving - time for a background animation to
+ *  play first (not built yet). Mirrors Home's own delay before entering. */
+private const val FOCUS_SESSION_END_DELAY_MILLIS = 2_000L
+
 /** Where a focus session was started from - lets a saved [FocusSession] carry which
  *  group triggered it, for a schedule match. */
 sealed class FocusSessionSource {
@@ -57,6 +68,7 @@ sealed class FocusSessionSource {
     data object Party : FocusSessionSource()
     data class Schedule(val groupId: String, val groupName: String) : FocusSessionSource()
     data class Location(val zoneName: String) : FocusSessionSource()
+    data class Wifi(val ssid: String) : FocusSessionSource()
 }
 
 /** The one hoisted piece of state (in NavGraph.kt) for "is a focus session running right now". */
@@ -119,6 +131,12 @@ fun FocusSessionScreen(
     // Mode has no such ongoing ticker, which is why it never showed this).
     var isEnding by remember { mutableStateOf(false) }
 
+    // Set when saveFocusSession() throws (a Room-level failure - Firebase push failures are
+    // already swallowed inside FocusRepositoryImpl, so this only fires for a genuinely rare
+    // local-storage error). Shown via ErrorBanner with a manual "Continue" tap, rather than
+    // either crashing or silently losing the session and leaving the user with no idea.
+    var saveError by remember { mutableStateOf<String?>(null) }
+
     var tick by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (!isEnding) {
@@ -142,10 +160,18 @@ fun FocusSessionScreen(
                 wasCompletedSuccessfully = true,
                 groupId = session.groupId
             )
-            withContext(Dispatchers.IO) {
-                FocusRepositoryProvider.get(context).saveFocusSession(completed)
+            try {
+                withContext(Dispatchers.IO) {
+                    FocusRepositoryProvider.get(context).saveFocusSession(completed)
+                }
+                onEndSessionClick()
+            } catch (e: Exception) {
+                // Previously uncaught - crashed the app right as the session ended.
+                // Surface it and let the user explicitly continue instead (see
+                // saveError's doc comment above) - don't call onEndSessionClick()
+                // here so the message doesn't flash by unseen.
+                saveError = friendlyErrorMessage(e, "Saving the session")
             }
-            onEndSessionClick()
         }
     }
 
@@ -153,6 +179,7 @@ fun FocusSessionScreen(
         if (isEnding) return
         isEnding = true
         scope.launch {
+            delay(FOCUS_SESSION_END_DELAY_MILLIS)
             revealProgress.animateTo(0f, tween(WIPE_DURATION_MILLIS, easing = FastOutSlowInEasing))
             saveAndFinish()
         }
@@ -211,6 +238,31 @@ fun FocusSessionScreen(
                 .align(Alignment.TopCenter)
                 .padding(top = 32.dp)
         )
+
+        if (saveError != null) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .fillMaxWidth(0.85f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                ErrorBanner(saveError!!)
+                Text(
+                    text = "Continue",
+                    color = Color.Black,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            saveError = null
+                            onEndSessionClick()
+                        }
+                        .padding(vertical = 8.dp)
+                )
+            }
+        }
 
         if (isHolding) {
             Box(

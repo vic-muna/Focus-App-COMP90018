@@ -35,7 +35,9 @@ fun HomeScreen(
                 .offset(0.dp,50.dp)
                 .background(Color.LightGray)
                 .clickable { onAvatarClick() }
-        )
+        ) {
+            Text("History", modifier = Modifier.align(Alignment.Center))
+        }
 
         // 中間:Quick Focus(不變)
         Box(

@@ -1,6 +1,9 @@
 package com.example.focusapp.data.remote
 
+import com.example.focusapp.domain.model.AppGroup
 import com.example.focusapp.domain.model.FocusSession
+import com.example.focusapp.domain.model.FocusZone
+import com.example.focusapp.domain.model.PartyInvite
 import com.example.focusapp.domain.model.PartyMemberStatus
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
@@ -32,9 +35,15 @@ import kotlinx.coroutines.tasks.await
  * Realtime Database layout used below - confirm these path names with
  * whoever builds the invite / friend-list UI before relying on them
  * elsewhere:
- *   users/{uid}/sessions/{sessionId}     <- FocusSession, mirrors the Room row
- *   parties/{partyId}/invites/{uid}      <- { "from": uid, "status": "pending" | "accepted" | "declined" }
- *   parties/{partyId}/members/{uid}      <- PartyMemberStatus
+ *   users/{uid}/sessions/{sessionId}       <- FocusSession, mirrors the Room row
+ *   users/{uid}/zone                       <- FocusZone, the user's one saved zone
+ *   users/{uid}/appGroups/{groupId}        <- AppGroup, mirrors the Room row
+ *   users/{uid}/incomingInvites/{partyId}  <- { "from": fromUid } - fan-out mirror of the row
+ *                                              below, written/removed alongside it, purely so a
+ *                                              recipient can observe "invites addressed to me"
+ *                                              without needing to already know every partyId.
+ *   parties/{partyId}/invites/{uid}        <- { "from": uid, "status": "pending" | "accepted" | "declined" }
+ *   parties/{partyId}/members/{uid}        <- PartyMemberStatus
  */
 class FirebaseRemoteDataSource(
     private val db: FirebaseDatabase = FirebaseDatabase.getInstance(),
@@ -51,11 +60,47 @@ class FirebaseRemoteDataSource(
         db.getReference("users/$uid/sessions/${session.id}").setValue(session).await()
     }
 
+    override suspend fun pushFocusZone(zone: FocusZone) {
+        val uid = getUid()
+        db.getReference("users/$uid/zone").setValue(zone).await()
+    }
+
+    override suspend fun pushAppGroup(group: AppGroup) {
+        val uid = getUid()
+        db.getReference("users/$uid/appGroups/${group.id}").setValue(group).await()
+    }
+
     override fun sendPartyInvite(partyId: String, toUid: String) {
         // Fire-and-forget: a failed write just means the invite doesn't
         // show up, and no local/offline state depends on the result.
+        val fromUid = auth.currentUser?.uid ?: ""
         db.getReference("parties/$partyId/invites/$toUid")
-            .setValue(mapOf("from" to (auth.currentUser?.uid ?: ""), "status" to "pending"))
+            .setValue(mapOf("from" to fromUid, "status" to "pending"))
+        // Fan-out mirror so $toUid's own client can observe "invites addressed to me" without
+        // needing to already know partyId - see this class's doc comment for why this exists.
+        db.getReference("users/$toUid/incomingInvites/$partyId")
+            .setValue(mapOf("from" to fromUid))
+    }
+
+    override fun observeMyIncomingInvites(): Flow<List<PartyInvite>> = callbackFlow {
+        val uid = getUid()
+        val ref = db.getReference("users/$uid/incomingInvites")
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                trySend(
+                    snapshot.children.mapNotNull { child ->
+                        val partyId = child.key ?: return@mapNotNull null
+                        val fromUid = child.child("from").getValue(String::class.java) ?: return@mapNotNull null
+                        PartyInvite(partyId = partyId, fromUid = fromUid)
+                    }
+                )
+            }
+            override fun onCancelled(error: DatabaseError) {
+                close(error.toException())
+            }
+        }
+        ref.addValueEventListener(listener)
+        awaitClose { ref.removeEventListener(listener) }
     }
 
     override suspend fun respondToPartyInvite(partyId: String, accept: Boolean) {
@@ -63,6 +108,10 @@ class FirebaseRemoteDataSource(
         db.getReference("parties/$partyId/invites/$uid/status")
             .setValue(if (accept) "accepted" else "declined")
             .await()
+        // Responded to - stop showing it in the incoming-invites list (see
+        // observeMyIncomingInvites()). The full record still lives under
+        // parties/$partyId/invites/$uid above, this just clears the mirror.
+        db.getReference("users/$uid/incomingInvites/$partyId").removeValue().await()
     }
 
     override fun observePartyMembers(partyId: String): Flow<List<PartyMemberStatus>> = callbackFlow {

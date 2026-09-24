@@ -47,6 +47,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.focusapp.data.repository.FocusRepositoryProvider
 import com.example.focusapp.domain.model.FocusZone
+import com.example.focusapp.ui.common.ErrorBanner
+import com.example.focusapp.ui.common.friendlyErrorMessage
 import com.example.focusapp.ui.common.rememberLocationPermissionState
 import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.Dispatchers
@@ -80,6 +82,9 @@ fun EditLocationZoneScreen(
     var latitude by remember { mutableStateOf<Double?>(null) }
     var longitude by remember { mutableStateOf<Double?>(null) }
     var isFetchingLocation by remember { mutableStateOf(false) }
+    // Set when saveFocusZone() throws (validation failure, or a Room error) - shown via
+    // ErrorBanner instead of letting the exception crash the app.
+    var saveError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         val existing = withContext(Dispatchers.IO) {
@@ -116,6 +121,7 @@ fun EditLocationZoneScreen(
                     val lat = latitude
                     val lng = longitude
                     if (lat != null && lng != null) {
+                        saveError = null
                         scope.launch {
                             val zone = FocusZone(
                                 id = existingZoneId ?: "zone_${System.currentTimeMillis()}",
@@ -124,10 +130,17 @@ fun EditLocationZoneScreen(
                                 longitude = lng,
                                 radiusMeters = radiusMeters
                             )
-                            withContext(Dispatchers.IO) {
-                                FocusRepositoryProvider.get(context).saveFocusZone(zone)
+                            try {
+                                withContext(Dispatchers.IO) {
+                                    FocusRepositoryProvider.get(context).saveFocusZone(zone)
+                                }
+                                onSaveComplete()
+                            } catch (e: Exception) {
+                                // Previously uncaught - a validation failure or a Room
+                                // error crashed the app instead of just failing this
+                                // save. Stay on screen so the user can see why and retry.
+                                saveError = friendlyErrorMessage(e, "Saving the zone")
                             }
-                            onSaveComplete()
                         }
                     } else {
                         onSaveComplete()
@@ -154,6 +167,10 @@ fun EditLocationZoneScreen(
         }
 
         Spacer(Modifier.height(24.dp))
+
+        if (saveError != null) {
+            ErrorBanner(saveError!!, modifier = Modifier.padding(bottom = 16.dp))
+        }
 
         // 2. 輸入區塊 (可彈性佔據剩餘空間)
         Column(modifier = Modifier.weight(1f)) {

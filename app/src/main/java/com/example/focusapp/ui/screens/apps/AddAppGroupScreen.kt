@@ -34,6 +34,8 @@ import com.example.focusapp.data.apps.InstalledAppInfo
 import com.example.focusapp.data.apps.getLaunchableApps
 import com.example.focusapp.data.repository.FocusRepositoryProvider
 import com.example.focusapp.domain.model.AppGroup
+import com.example.focusapp.ui.common.ErrorBanner
+import com.example.focusapp.ui.common.friendlyErrorMessage
 import com.example.focusapp.ui.theme.WireframeColors
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
@@ -59,7 +61,10 @@ import kotlinx.coroutines.withContext
  *    genuinely builds a new [AppGroup] and calls
  *    `FocusRepository.saveAppGroup(...)`, persisted for real via
  *    [com.example.focusapp.data.local.LocalDataSource]'s SharedPreferences
- *    storage - this survives an app restart.
+ *    storage - this survives an app restart. If that call throws (bad
+ *    input caught by validation, or a Room error), the exception is
+ *    caught and shown via [com.example.focusapp.ui.common.ErrorBanner]
+ *    instead of crashing the app.
  *  - The circular icon next to the search bar is still unexplained/inert
  *    (see the earlier TODO - no wireframe ever clarified its purpose).
  *
@@ -81,6 +86,10 @@ fun AddAppGroupScreen(onSaveClick: () -> Unit) {
     // Which package names are currently checked - a plain Set, since all
     // we need is fast "is this one selected?" membership checks per row.
     var selectedPackageNames by remember { mutableStateOf<Set<String>>(emptySet()) }
+    // Set when saveAppGroup() throws (validation failure, or a Room error) - shown via
+    // ErrorBanner instead of letting the exception crash the app. Cleared on the next
+    // save attempt so a fixed retry doesn't leave a stale message on screen.
+    var saveError by remember { mutableStateOf<String?>(null) }
 
     // Loads the real installed-app list once, off the main thread - the
     // same pattern used by AppsScreen's AppPickerDialog.
@@ -104,6 +113,10 @@ fun AddAppGroupScreen(onSaveClick: () -> Unit) {
             .padding(20.dp)
     ) {
         GroupNameField(value = groupNameText, onValueChange = { groupNameText = it })
+
+        if (saveError != null) {
+            ErrorBanner(saveError!!, modifier = Modifier.padding(bottom = 12.dp))
+        }
 
         SearchBarWithToggle(
             query = searchQuery,
@@ -156,11 +169,19 @@ fun AddAppGroupScreen(onSaveClick: () -> Unit) {
             // so saving (a suspend call) has to happen inside a coroutine
             // we explicitly launch - `coroutineScope`, from
             // rememberCoroutineScope() above, is exactly that.
+            saveError = null
             coroutineScope.launch {
-                withContext(Dispatchers.IO) {
-                    FocusRepositoryProvider.get(context).saveAppGroup(newGroup)
+                try {
+                    withContext(Dispatchers.IO) {
+                        FocusRepositoryProvider.get(context).saveAppGroup(newGroup)
+                    }
+                    onSaveClick()
+                } catch (e: Exception) {
+                    // Previously uncaught - a validation failure (e.g. this exact save
+                    // racing with something else clearing the name) or a Room error
+                    // crashed the whole app instead of just failing this one save.
+                    saveError = friendlyErrorMessage(e, "Saving the group")
                 }
-                onSaveClick()
             }
         })
     }

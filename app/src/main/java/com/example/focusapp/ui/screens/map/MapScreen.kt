@@ -44,7 +44,7 @@ import com.example.focusapp.data.sensor.SensorDataSource
  * -----------------
  * Purely a UI-layer stand-in for [com.example.focusapp.domain.model.FocusZone]
  * while there is no real data source wired up yet. Once
- * FocusRepository.getFocusZone() does something real, replace this with
+ * FocusRepository.getFocusZones() does something real, replace this with
  * the actual domain model (or a small mapper between the two).
  */
 private data class UiFocusLocation(val id: String, val name: String)
@@ -66,6 +66,10 @@ private data class UiFocusLocation(val id: String, val name: String)
  *    than guessed at.
  */
 @Composable
+// [HANDOFF -> Victor Munacoha | README task: "GPS + Geofencing + Accelerometer sensor integration"]
+// Replace the hard-coded `locations` list below with FocusRepository data
+// (see domain/repository/FocusRepository.kt) via a ViewModel, and wire the
+// pencil / "+" buttons to a real map-based picker once one is designed.
 fun MapScreen() {
     val context = LocalContext.current
     val sensorDataSource = remember { SensorDataSource() }
@@ -239,6 +243,18 @@ fun MapScreen() {
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Remove Focus Zone")
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Button(
+            onClick = {
+                sensorDataSource.logLocalFocusZones(context)
+                Toast.makeText(context, "Checking local storage in Logcat...", Toast.LENGTH_SHORT).show()
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Print Locally Saved Zones")
         }
     }
 }

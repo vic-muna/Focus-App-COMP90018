@@ -31,10 +31,8 @@ object Destinations {
     // UI scaffolding only for now; no networking/P2P logic behind it yet.
     const val PARTY_MODE = "party_mode"
 
-    // Focus History - see ui.screens.history.HistoryScreen. Same "not in the wireframes yet"
-    // situation as PARTY_MODE originally was: only reachable right now via a temporary debug
-    // row on SettingsScreen (see SettingsScreen.kt), so there's something to demo. Move/remove
-    // this once the team decides where History really belongs in the nav.
+    // Focus History - see ui.screens.history.HistoryScreen. Reachable from the History
+    // tile on the Home screen (the block above Quick Focus - see HomeScreen.kt).
     const val HISTORY = "history"
 
     // Blocked Apps group flow (reachable from Home's bottom sheet). Editing

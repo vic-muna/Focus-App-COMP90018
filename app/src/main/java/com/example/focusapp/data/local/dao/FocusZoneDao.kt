@@ -23,4 +23,13 @@ interface FocusZoneDao {
     // saved zone" before inserting the new one.
     @Query("DELETE FROM focus_zones")
     suspend fun deleteAll()
+
+    // Cloud sync (mirrors FocusSessionDao's getUnsynced/markSynced) - at most one
+    // row will ever come back given the single-zone contract above, but this stays
+    // a List for the same reason getAll() is: the DAO/table itself is general-purpose.
+    @Query("SELECT * FROM focus_zones WHERE synced = 0")
+    suspend fun getUnsynced(): List<FocusZoneEntity>
+
+    @Query("UPDATE focus_zones SET synced = 1 WHERE id = :zoneId")
+    suspend fun markSynced(zoneId: String)
 }

@@ -1,19 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!--
         NOTE (Permissions - intentionally left commented out):
         The mechanisms described in the project plan (shake/face-down
-        gestures, ambient volume detection, screen-usage-time detection)
-        will each need a runtime permission below. They stay commented out
-        because this branch's UI doesn't implement any of them yet -
-        uncomment the ones you need as you implement each feature, and
-        remember Android also requires you to *request* dangerous
-        permissions at runtime, not just declare them here.
+        gestures, ambient volume detection) will each need a runtime
+        permission below. They stay commented out because no branch
+        implements them yet - uncomment the ones you need as you
+        implement each feature, and remember Android also requires you
+        to *request* dangerous permissions at runtime, not just declare
+        them here.
 
         <uses-permission android:name="android.permission.RECORD_AUDIO" />
-        <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
-        <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     -->
 
     <!--
@@ -40,15 +39,61 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
+    <!--
+        [David Shiau, 2026-09-23] Needed for Settings' "Check Wi-Fi Network"
+        button (see data/wifi/WifiProvider.kt) - the first phase of the
+        planned Wi-Fi-source trigger, just reading the currently-connected
+        SSID. Both are normal (install-time) permissions, no runtime prompt.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <!-- The Room + Firebase data layer in this branch (FirebaseRemoteDataSource,
          session cloud-sync, Study Party) is actually implemented and needs
-         these to reach Firebase at runtime. Normal permissions, no runtime
+         this to reach Firebase at runtime. Normal permission, no runtime
          request needed. -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Lets GeofenceBroadcastReceiver re-register its geofences after a
+         device reboot (Android clears all registered geofences on boot). -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!--
+        [David Shiau, 2026-09-20] Needed for UsageStatsManager (Settings'
+        "Check App Usage Duration" button). This is a "special" permission -
+        declaring it here does NOT grant it; the user must still flip it on
+        manually via Settings.ACTION_USAGE_ACCESS_SETTINGS (see
+        data/usagestats/UsageStatsProvider.kt), the same two-step pattern as
+        BIND_ACCESSIBILITY_SERVICE. tools:ignore="ProtectedPermissions"
+        silences Lint's warning that this permission is normally
+        system-only - it isn't, for this specific one.
+    -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+
+    <!--
+        [Claude, 2026-09-21] Needed for FocusTimerService, the persistent
+        "focus session active" notification-shade entry. FOREGROUND_SERVICE
+        is required on all API levels to run any foreground service;
+        FOREGROUND_SERVICE_SPECIAL_USE is additionally required on API 34+
+        since this service doesn't fit any of the OS's predefined
+        foreground-service types (mediaPlayback, location, etc). SPECIAL_USE
+        is itself a "special" permission like PACKAGE_USAGE_STATS above -
+        it doesn't need user grant, but Play Store review does require the
+        matching <property> tag on the <service> below explaining why.
+        POST_NOTIFICATIONS is the separate, API 33+ *runtime* permission
+        needed to actually display any notification at all (requested in
+        MainActivity.onCreate).
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:theme="@style/Theme.FocusApp"
         android:supportsRtl="true">
@@ -56,7 +101,8 @@
         <!--
             Single-Activity app: every screen is a Composable, navigated
             between with Jetpack Navigation Compose (see
-            ui/navigation/NavGraph.kt). No other Activities are needed.
+            ui/navigation/NavGraph.kt). BlockedActivity below is the one
+            deliberate exception - see its own doc comment for why.
         -->
         <activity
             android:name=".MainActivity"
@@ -68,8 +114,23 @@
         </activity>
 
         <!--
-            FocusAccessibilityService - prototype for detecting/restricting
-            other apps. A few things here are NOT optional boilerplate:
+            [David Shiau, 2026-09-20] BlockedActivity - the "this app is
+            blocked" screen FocusAccessibilityService launches over whatever
+            restricted app just came to the foreground. launchMode="singleTask"
+            + taskAffinity="" put it in its own isolated task, separate from
+            the blocked app's task, so dismissing it (or the system Back
+            gesture) can go straight Home without revealing the blocked app
+            underneath - see BlockedActivity.kt's doc comment.
+        -->
+        <activity
+            android:name=".BlockedActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:taskAffinity="" />
+
+        <!--
+            FocusAccessibilityService - detects/restricts other apps. A few
+            things here are NOT optional boilerplate:
 
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
                 Required by the OS on every AccessibilityService, so that
@@ -97,14 +158,37 @@
         </service>
 
         <!--
+            [Claude, 2026-09-21] FocusTimerService - shows a persistent,
+            non-dismissable notification-shade entry with a live timer for
+            as long as a focus session is active (see NavGraph.kt's
+            startFocusSession/onEndSessionClick). Entirely separate from
+            FocusAccessibilityService above: this only owns the
+            notification, it does not do any app-blocking itself.
+        -->
+        <service
+            android:name=".data.notification.FocusTimerService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Shows a persistent timer notification while a focus session is blocking distracting apps" />
+        </service>
+
+        <!--
             GeofenceBroadcastReceiver - wakes up when the OS detects the
             device entering/exiting a registered Focus Zone geofence (see
             data/sensor/GeofenceDataSource.kt), even if the app isn't
-            running in the foreground.
+            running in the foreground. Also re-registered on boot, since
+            Android clears all geofences when a device restarts.
         -->
         <receiver
             android:name=".data.sensor.GeofenceBroadcastReceiver"
+            android:enabled="true"
             android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
         </receiver>
 
     </application>

@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.focusapp.data.repository.FocusRepositoryProvider
 import com.example.focusapp.data.sensor.SensorDataSource
+import com.example.focusapp.domain.model.PartyInvite
 import com.example.focusapp.domain.model.PartyMemberStatus
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,19 +35,28 @@ import kotlinx.coroutines.launch
  * Friend-targeted invites: [inviteFriend] wraps FocusRepository.sendPartyInvite()
  * so a caller just needs a uid (see ui/screens/party/FriendListScreen.kt for where
  * that uid comes from) - it's a no-op if called before [joinParty] has set up a
- * current party. respondToPartyInvite() (accepting an incoming invite) still isn't
- * wired to any UI - there's no "incoming invites" list/notification anywhere yet.
+ * current party. Incoming invites: [incomingInvites] observes every invite
+ * currently addressed to this device (across all parties, not just the one
+ * [joinParty] was last called with - see FocusRepository.observeMyIncomingInvites's
+ * doc comment for the Firebase layout behind this), started as soon as this
+ * ViewModel is created rather than waiting for [joinParty], since a person should
+ * be able to see/accept an invite before creating or joining a party themselves.
+ * [respondToInvite] wraps FocusRepository.respondToPartyInvite() and, on accept,
+ * also calls [joinParty] so accepting actually puts the device in that party -
+ * before this, respondToPartyInvite() existed on the repository but nothing in
+ * the UI ever called it.
  *
  * Error handling: every call into FocusRepository below that ends up hitting Firebase
- * (getMyUid/observePartyMembers/updateMyPartyStatus/sendPartyInvite) is wrapped, and
- * failures go into [errorMessage] instead of propagating - previously NONE of these
- * were protected, so tapping Invite while e.g. Anonymous Auth wasn't enabled in the
- * Firebase Console (or Realtime Database Rules rejected the read/write) threw straight
+ * (getMyUid/observePartyMembers/updateMyPartyStatus/sendPartyInvite/respondToInvite) is
+ * wrapped, and failures go into [errorMessage] instead of propagating - previously NONE
+ * of these were protected, so tapping Invite while e.g. Anonymous Auth wasn't enabled in
+ * the Firebase Console (or Realtime Database Rules rejected the read/write) threw straight
  * out of a coroutine launched on viewModelScope and crashed the whole app. Party Mode
  * is inherently online-only (see FocusRepositoryImpl's doc comment), so a Firebase
  * failure here genuinely means the feature can't work right now - [errorMessage] is how
  * PartyModeScreen tells the user that, rather than the screen just sitting there with
- * an empty participant list and no explanation.
+ * an empty participant list and no explanation. [incomingInvites] itself is the one
+ * exception - see its own doc comment for why failures there are swallowed instead.
  */
 class PartyModeViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -65,6 +75,41 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun clearError() {
         _errorMessage.value = null
+    }
+
+    private val _incomingInvites = MutableStateFlow<List<PartyInvite>>(emptyList())
+    /** Every invite currently addressed to this device, across all parties - see this class's
+     *  doc comment. Started in [init] below (not [joinParty]) so it's already populated by the
+     *  time PartyModeScreen opens. Failures here are swallowed (left as an empty list) rather
+     *  than surfaced via [errorMessage] - this listener starts before the user has done
+     *  anything, so a misconfigured Firebase project shouldn't greet them with an error banner
+     *  before they've tapped Invite/Join/Invites; those explicit actions still report failures
+     *  normally. */
+    val incomingInvites: StateFlow<List<PartyInvite>> = _incomingInvites.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            repository.observeMyIncomingInvites()
+                .catch { /* see incomingInvites' doc comment - stay empty rather than surface this */ }
+                .collect { _incomingInvites.value = it }
+        }
+    }
+
+    /**
+     * Accepts or declines [invite]. On accept, also calls [joinParty] with the invite's
+     * partyId (using this device's own uid as a fallback display name) so accepting an
+     * invite actually puts the device in that party, not just marks it "accepted" in
+     * Firebase with nothing else happening locally.
+     */
+    fun respondToInvite(invite: PartyInvite, accept: Boolean) {
+        viewModelScope.launch {
+            try {
+                repository.respondToPartyInvite(invite.partyId, accept)
+                if (accept) joinParty(invite.partyId, displayName)
+            } catch (e: Exception) {
+                _errorMessage.value = friendlyPartyErrorMessage(e)
+            }
+        }
     }
 
     private var currentPartyId: String? = null

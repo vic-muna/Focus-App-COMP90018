@@ -2,6 +2,8 @@ package com.example.focusapp.ui.screens.home
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,13 +18,16 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,7 +42,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.data.repository.FocusRepositoryProvider
+import com.example.focusapp.data.wifi.WifiTriggerStorage
+import com.example.focusapp.data.wifi.getCurrentWifiSsid
 import com.example.focusapp.domain.model.FocusZone
 import com.example.focusapp.domain.usecase.EvaluateFocusTriggerUseCase
 import com.example.focusapp.domain.usecase.FocusTriggerResult
@@ -55,6 +63,11 @@ enum class SheetType { NONE, BLOCKED_APPS, LOCATION_ZONE }
 /** How often the auto-suggestion check re-evaluates while Home is on screen - schedule
  *  boundaries only need minute-granularity, so there's no need for anything tighter. */
 private const val AUTO_TRIGGER_CHECK_INTERVAL_MILLIS = 60_000L
+
+/** How long Home waits, unchanged, before actually navigating to Focus Session -
+ *  time for a background animation to play first (not built yet; this is just the
+ *  timing seam for it). Mirrored on the way out by FocusSessionScreen's own delay. */
+private const val FOCUS_SESSION_START_DELAY_MILLIS = 4_000L
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,9 +110,38 @@ fun HomeScreenWithSheet(
         }
     }
 
-    // 移除 3 秒延遲，按下觸發時立刻啟動轉場動畫
-    fun startFocusSessionImmediate(source: FocusSessionSource) {
-        onFocusSessionStart(source)
+    // Home stays fully visible/unchanged for a beat before actually navigating -
+    // gives a background animation time to play first (not built yet).
+    fun startFocusSessionAfterDelay(source: FocusSessionSource) {
+        scope.launch {
+            delay(FOCUS_SESSION_START_DELAY_MILLIS)
+            onFocusSessionStart(source)
+        }
+    }
+
+    // [David Shiau, 2026-09-20] Blocking only works while
+    // FocusAccessibilityService is enabled - the user has to grant that
+    // themselves in system Settings (Android never lets an app enable its
+    // own AccessibilityService). Every session-start path checks this first
+    // rather than silently starting a session that blocks nothing.
+    val isAccessibilityEnabled by AccessibilityBridge.isServiceConnected.collectAsState()
+    var showAccessibilityPermissionDialog by remember { mutableStateOf(false) }
+
+    // [David Shiau, 2026-09-23] Shared by Quick Focus AND the auto-suggestion
+    // banner's "start a focus session?" accept action - previously only
+    // Quick Focus ran this check, so accepting the banner on a first-time
+    // (permission not yet granted) tap silently started a session with no
+    // blocking instead of prompting for Accessibility access.
+    fun startFocusSessionIfPermitted(source: FocusSessionSource) {
+        if (isAccessibilityEnabled) {
+            startFocusSessionAfterDelay(source)
+        } else {
+            showAccessibilityPermissionDialog = true
+        }
+    }
+
+    fun onQuickFocusClick() {
+        startFocusSessionIfPermitted(FocusSessionSource.Manual)
     }
 
     // 重開 Sheet 的 Signal 處理
@@ -129,6 +171,16 @@ fun HomeScreenWithSheet(
         }
     }
 
+    // --- Wi-Fi-source trigger: same "UI-simulated only" polling approach as
+    // the location trigger above - see WifiTriggerStorage's doc comment. ---
+    val wifiTriggerStorage = remember { WifiTriggerStorage(context) }
+    var wifiTriggerEnabled by remember { mutableStateOf(false) }
+    var taggedWifiSsids by remember { mutableStateOf<List<String>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        wifiTriggerEnabled = withContext(Dispatchers.IO) { wifiTriggerStorage.isEnabled() }
+        taggedWifiSsids = withContext(Dispatchers.IO) { wifiTriggerStorage.getTaggedSsids() }
+    }
+
     var tick by remember { mutableStateOf(0L) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -137,11 +189,22 @@ fun HomeScreenWithSheet(
         }
     }
 
-    val trigger = remember(groups, savedZone, currentLatLng, tick) {
+    var currentWifiSsid by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(wifiTriggerEnabled, tick) {
+        currentWifiSsid = if (wifiTriggerEnabled) {
+            withContext(Dispatchers.IO) { getCurrentWifiSsid(context) }
+        } else {
+            null
+        }
+    }
+
+    val trigger = remember(groups, savedZone, currentLatLng, taggedWifiSsids, currentWifiSsid, tick) {
         EvaluateFocusTriggerUseCase().execute(
             groups = groups,
             currentZones = listOfNotNull(savedZone),
-            currentLatLng = currentLatLng
+            currentLatLng = currentLatLng,
+            taggedWifiSsids = taggedWifiSsids,
+            currentWifiSsid = currentWifiSsid
         )
     }
 
@@ -149,6 +212,7 @@ fun HomeScreenWithSheet(
     val suggestionKey = when (trigger) {
         is FocusTriggerResult.ScheduleMatch -> "schedule:${trigger.groupId}"
         is FocusTriggerResult.LocationMatch -> "zone:${trigger.zoneId}"
+        is FocusTriggerResult.WifiMatch -> "wifi:${trigger.ssid}"
         FocusTriggerResult.NoTrigger -> null
     }
     val suggestion = trigger.takeIf { suggestionKey != null && suggestionKey != dismissedKey }
@@ -162,7 +226,7 @@ fun HomeScreenWithSheet(
         // 1. 主要畫面
         HomeScreen(
             onAvatarClick = onAvatarClick,
-            onQuickFocusClick = { startFocusSessionImmediate(FocusSessionSource.Manual) },
+            onQuickFocusClick = { onQuickFocusClick() },
             onPartyModeClick = onPartyModeClick,
             onBlockedAppCardClick = { openSheet(SheetType.BLOCKED_APPS) },
             onLocationCardClick = { openSheet(SheetType.LOCATION_ZONE) },
@@ -182,9 +246,11 @@ fun HomeScreenWithSheet(
                                 FocusSessionSource.Schedule(suggestion.groupId, suggestion.groupName)
                             is FocusTriggerResult.LocationMatch ->
                                 FocusSessionSource.Location(suggestion.zoneName)
+                            is FocusTriggerResult.WifiMatch ->
+                                FocusSessionSource.Wifi(suggestion.ssid)
                             FocusTriggerResult.NoTrigger -> return@AutoFocusSuggestionBanner
                         }
-                        startFocusSessionImmediate(source)
+                        startFocusSessionIfPermitted(source)
                     },
                     onDismiss = { dismissedKey = suggestionKey }
                 )
@@ -218,7 +284,48 @@ fun HomeScreenWithSheet(
                 }
             }
         }
+
+        if (showAccessibilityPermissionDialog) {
+            AccessibilityPermissionDialog(
+                onConfirm = {
+                    showAccessibilityPermissionDialog = false
+                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                },
+                onDismiss = { showAccessibilityPermissionDialog = false }
+            )
+        }
     }
+}
+
+/**
+ * Explains why Quick Focus needs the Accessibility permission before
+ * sending the user to system Settings to grant it - Android requires this
+ * to be an explicit, informed action there, it can't be requested as an
+ * ordinary runtime permission dialog (see FocusAccessibilityService's doc
+ * comment).
+ */
+@Composable
+private fun AccessibilityPermissionDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Accessibility permission needed") },
+        text = {
+            Text(
+                "To block apps during a focus session, Focus needs the " +
+                    "Accessibility permission. Turn it on for Focus in the " +
+                    "Settings screen that opens next."
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text("Open Settings") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
 
 /** Dismissible banner for an auto-detected trigger - accepting starts a session, but nothing here ever navigates on its own. */
@@ -231,6 +338,7 @@ private fun AutoFocusSuggestionBanner(
     val message = when (result) {
         is FocusTriggerResult.ScheduleMatch -> "You're in your ${result.groupName} schedule - start a focus session?"
         is FocusTriggerResult.LocationMatch -> "You've arrived at ${result.zoneName} - start a focus session?"
+        is FocusTriggerResult.WifiMatch -> "You're connecting to ${result.ssid} Wi-Fi - start a focus session?"
         FocusTriggerResult.NoTrigger -> return
     }
 

@@ -20,8 +20,10 @@ import com.example.focusapp.data.local.entity.PackageListConverter
  * -------------------
  * The Room database for issue #41 (schema design).
  *
- * version 2: added the `friends` table (see FriendEntity) - bumped from 1
- * and paired with fallbackToDestructiveMigration(dropAllTables = true)
+ * version 2: added the `friends` table (see FriendEntity).
+ * version 3: added `synced` columns to `focus_zones`/`app_groups` (cloud
+ * sync for Focus Zone / App Group - mirrors what `focus_sessions.synced`
+ * already did). Both bumps paired with fallbackToDestructiveMigration(dropAllTables = true)
  * below rather than a real Migration, since this hasn't shipped anywhere yet (every install
  * is a dev/emulator build) - the trade-off is that anyone pulling this
  * change keeps their existing FocusZone/AppGroup/FocusSession data only if
@@ -32,7 +34,7 @@ import com.example.focusapp.data.local.entity.PackageListConverter
  */
 @Database(
     entities = [FocusZoneEntity::class, AppGroupEntity::class, FocusSessionEntity::class, FriendEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(PackageListConverter::class)

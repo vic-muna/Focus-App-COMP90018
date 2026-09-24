@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.focusapp.data.repository.FocusRepositoryProvider
 import com.example.focusapp.domain.model.Friend
+import com.example.focusapp.ui.common.friendlyErrorMessage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,6 +18,12 @@ import kotlinx.coroutines.launch
  * book (FocusRepository.getFriends/saveFriend/deleteFriend, Room-backed -
  * see data/local/dao/FriendDao.kt) and exposes this device's own uid so
  * the person can share it with whoever they want to add them back.
+ *
+ * getMyUid() is the one call here that touches Firebase (Anonymous Auth) -
+ * everything else is a local Room read/write. It's wrapped so a
+ * misconfigured Firebase project (see FirebaseRemoteDataSource's doc
+ * comment) surfaces as [errorMessage] the first time this screen opens,
+ * instead of crashing before the friend list even has a chance to load.
  */
 class FriendListViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -29,8 +36,18 @@ class FriendListViewModel(application: Application) : AndroidViewModel(applicati
     /** This device's own uid - share it with a friend so they can add you back (see FriendListScreen.kt). */
     val myUid: StateFlow<String> = _myUid.asStateFlow()
 
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    /** Non-null when the last getMyUid() call failed - see this class's doc comment. */
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
     init {
-        viewModelScope.launch { _myUid.value = repository.getMyUid() }
+        viewModelScope.launch {
+            try {
+                _myUid.value = repository.getMyUid()
+            } catch (e: Exception) {
+                _errorMessage.value = friendlyErrorMessage(e, "Loading your uid")
+            }
+        }
         loadFriends()
     }
 

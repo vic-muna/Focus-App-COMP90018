@@ -14,6 +14,7 @@ sealed class FocusTriggerResult {
     data object NoTrigger : FocusTriggerResult()
     data class ScheduleMatch(val groupId: String, val groupName: String) : FocusTriggerResult()
     data class LocationMatch(val zoneId: String, val zoneName: String) : FocusTriggerResult()
+    data class WifiMatch(val ssid: String) : FocusTriggerResult()
 }
 
 /**
@@ -31,19 +32,27 @@ sealed class FocusTriggerResult {
  * or a Geofencing API callback for location checks) can call this exact
  * same function without any change to this class.
  */
+// [HANDOFF -> Victor Munacoha | README task: "Geofencing API + Wi-Fi", "GPS ... sensor integration"]
+// Once SensorDataSource.getCurrentLocation() (and a real Geofencing
+// callback) exist, call this execute() from that real location update
+// instead of only from Home's simulated LaunchedEffect polling.
 class EvaluateFocusTriggerUseCase {
 
     /**
      * @param groups the user's Blocked-App-Groups, checked for an active schedule.
      * @param currentZones the user's saved focus zones, checked against [currentLatLng].
      * @param currentLatLng the last known device location, or null if unavailable/not permitted.
+     * @param taggedWifiSsids the user's saved Wi-Fi-trigger SSIDs, checked against [currentWifiSsid].
+     * @param currentWifiSsid the SSID currently connected to, or null if not on Wi-Fi/not permitted/feature off.
      * @param now the clock to evaluate schedules against (defaults to the real current time).
-     * @return the first matching trigger (schedule checked before location), or [FocusTriggerResult.NoTrigger].
+     * @return the first matching trigger (schedule, then location, then Wi-Fi), or [FocusTriggerResult.NoTrigger].
      */
     fun execute(
         groups: List<BlockedAppGroup> = emptyList(),
         currentZones: List<FocusZone> = emptyList(),
         currentLatLng: Pair<Double, Double>? = null,
+        taggedWifiSsids: List<String> = emptyList(),
+        currentWifiSsid: String? = null,
         now: Calendar = Calendar.getInstance()
     ): FocusTriggerResult {
         groups.firstOrNull { it.schedule.isActiveNow(now) }?.let {
@@ -53,6 +62,9 @@ class EvaluateFocusTriggerUseCase {
             currentZones.firstOrNull { it.containsLocation(lat, lng) }?.let {
                 return FocusTriggerResult.LocationMatch(it.id, it.name)
             }
+        }
+        currentWifiSsid?.takeIf { it in taggedWifiSsids }?.let {
+            return FocusTriggerResult.WifiMatch(it)
         }
         return FocusTriggerResult.NoTrigger
     }

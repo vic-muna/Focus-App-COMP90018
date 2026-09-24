@@ -39,6 +39,22 @@ interface LocalDataSource {
 
     suspend fun saveAppGroup(group: AppGroup)
 
+    // --- Cloud sync for Focus Zone / App Group (mirrors the session sync methods
+    // further below - see RoomLocalDataSource/FocusRepositoryImpl for how these
+    // are actually used). "Restrictions/plans" in the original project plan's
+    // Remote Data Source description. ---
+
+    /** The saved zone, if any, that hasn't reached Firebase yet - null if there's no
+     *  zone or it's already synced. */
+    suspend fun getUnsyncedZone(): FocusZone?
+
+    suspend fun markZoneSynced(zoneId: String)
+
+    /** App groups that haven't reached Firebase yet. */
+    suspend fun getUnsyncedAppGroups(): List<AppGroup>
+
+    suspend fun markAppGroupSynced(groupId: String)
+
     suspend fun getSessionHistory(): List<FocusSession>
 
     /** Sessions whose startTimeMillis falls within [fromMillis, toMillis] (inclusive), newest first.

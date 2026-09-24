@@ -6,10 +6,10 @@ package com.example.focusapp.domain.model
  * A named collection of app package names that get restricted together
  * (e.g. "Social Media" -> Instagram, TikTok, Twitter). Corresponds to the
  * "Add Group" / "Select App" / "Edit Group" nodes in the process-flow
- * diagram.
- *
- * TODO: to be implemented later - populate packageNames by letting the
- * user pick from installed apps (PackageManager).
+ * diagram. packageNames is populated from the device's real installed-app
+ * list (see data/apps/InstalledAppsProvider.kt, used by AddAppGroupScreen),
+ * persisted via RoomLocalDataSource, and synced to Firebase - see
+ * FocusRepositoryImpl.saveAppGroup().
  */
 data class AppGroup(
     val id: String,

@@ -5,7 +5,10 @@ import com.example.focusapp.domain.model.FocusSession
 import com.example.focusapp.domain.model.FocusZone
 import com.example.focusapp.domain.model.Friend
 import com.example.focusapp.domain.model.PartyMemberStatus
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -19,8 +22,9 @@ import org.junit.Test
  * dependencies are fakes (FakeLocalDataSource / FakeRemoteDataSource), so
  * this exercises FocusRepositoryImpl's own orchestration logic:
  * validation-before-persist, single-zone overwrite-on-save, and
- * offline-first session sync. DAO-level behaviour against a real
- * (in-memory) Room database is
+ * offline-first sync (sessions, zone, and app groups all follow the same
+ * save-locally-then-best-effort-push shape). DAO-level behaviour against
+ * a real (in-memory) Room database is
  * covered separately by FocusZoneDaoTest (app/src/androidTest - needs a
  * device/emulator, since Room needs the real Android SQLite implementation).
  */
@@ -37,7 +41,17 @@ class FocusRepositoryImplTest {
     fun setUp() {
         localDataSource = FakeLocalDataSource()
         remoteDataSource = FakeRemoteDataSource()
-        repository = FocusRepositoryImpl(localDataSource, remoteDataSource, clock = { fakeNowMillis })
+        repository = FocusRepositoryImpl(
+            localDataSource,
+            remoteDataSource,
+            clock = { fakeNowMillis },
+            // saveFocusSession() now fires syncPendingSessions() on syncScope without awaiting
+            // it (see FocusRepositoryImpl's doc comment on syncScope for why). Unconfined means
+            // that launch{} still runs to completion immediately, synchronously, on the calling
+            // thread - because neither fake below ever actually suspends - so every test here
+            // can keep asserting on the very next line exactly as before this change.
+            syncScope = CoroutineScope(Dispatchers.Unconfined)
+        )
     }
 
     // ---------------- validation ----------------
@@ -100,6 +114,71 @@ class FocusRepositoryImplTest {
         assertEquals(80f, zone?.radiusMeters)
     }
 
+    // ---------------- offline-first zone/app-group sync ----------------
+    // Same contract as sessions below: saveFocusZone/saveAppGroup must succeed locally even
+    // when the cloud push fails, and syncPendingZoneAndAppGroups() must be able to retry later.
+
+    @Test
+    fun saveFocusZone_succeedsLocallyEvenWhenRemotePushFails() = runBlocking {
+        remoteDataSource.shouldFailPush = true
+        val zone = FocusZone("z1", "Library", -37.8, 144.9, 50f)
+
+        repository.saveFocusZone(zone) // must NOT throw just because "offline"
+
+        assertEquals(zone, repository.getFocusZone())
+        assertEquals(zone, localDataSource.getUnsyncedZone())
+        assertTrue(remoteDataSource.pushedZones.isEmpty())
+    }
+
+    @Test
+    fun saveFocusZone_marksZoneSyncedWhenRemotePushSucceeds() = runBlocking {
+        val zone = FocusZone("z1", "Library", -37.8, 144.9, 50f)
+
+        repository.saveFocusZone(zone)
+
+        assertEquals(listOf(zone), remoteDataSource.pushedZones)
+        assertEquals(null, localDataSource.getUnsyncedZone())
+    }
+
+    @Test
+    fun saveAppGroup_succeedsLocallyEvenWhenRemotePushFails() = runBlocking {
+        remoteDataSource.shouldFailPush = true
+        val group = AppGroup(id = "g1", groupName = "Social", packageNames = listOf("com.example.a"))
+
+        repository.saveAppGroup(group) // must NOT throw just because "offline"
+
+        assertEquals(listOf(group), repository.getAppGroups())
+        assertEquals(listOf(group), localDataSource.getUnsyncedAppGroups())
+        assertTrue(remoteDataSource.pushedAppGroups.isEmpty())
+    }
+
+    @Test
+    fun saveAppGroup_marksGroupSyncedWhenRemotePushSucceeds() = runBlocking {
+        val group = AppGroup(id = "g1", groupName = "Social", packageNames = listOf("com.example.a"))
+
+        repository.saveAppGroup(group)
+
+        assertEquals(listOf(group), remoteDataSource.pushedAppGroups)
+        assertTrue(localDataSource.getUnsyncedAppGroups().isEmpty())
+    }
+
+    @Test
+    fun syncPendingZoneAndAppGroups_marksBothSyncedOnceRemoteSucceeds() = runBlocking {
+        remoteDataSource.shouldFailPush = true
+        val zone = FocusZone("z1", "Library", -37.8, 144.9, 50f)
+        val group = AppGroup(id = "g1", groupName = "Social", packageNames = listOf("com.example.a"))
+        repository.saveFocusZone(zone) // fails to push, stays pending
+        repository.saveAppGroup(group) // fails to push, stays pending
+
+        remoteDataSource.shouldFailPush = false
+        repository.syncPendingZoneAndAppGroups() // retry, e.g. once back online
+
+        assertEquals(null, localDataSource.getUnsyncedZone())
+        assertTrue(localDataSource.getUnsyncedAppGroups().isEmpty())
+        assertEquals(listOf(zone), remoteDataSource.pushedZones)
+        assertEquals(listOf(group), remoteDataSource.pushedAppGroups)
+    }
+
     // ---------------- offline-first session sync ----------------
 
     @Test
@@ -135,6 +214,54 @@ class FocusRepositoryImplTest {
 
         assertTrue(localDataSource.getUnsyncedSessions().isEmpty())
         assertEquals(listOf(session), remoteDataSource.pushedSessions)
+    }
+
+    // Regression test for the "Quick Focus ends -> screen stays blank forever, only an app
+    // restart fixes it" bug: saveFocusSession() used to await syncPendingSessions() (and
+    // therefore the Firebase push) inline, so a push that never resolves either way - not
+    // failing, just hanging, e.g. no signal / a captive wifi portal / Firebase Auth stuck -
+    // meant saveFocusSession() itself never returned. Whatever was awaiting it (in production,
+    // FocusSessionScreen's own coroutine, right before its navigate-back-to-Home call) got stuck
+    // right along with it. This must now return promptly regardless of what the remote push does.
+    @Test
+    fun saveFocusSession_returnsPromptly_evenIfRemotePushHangsForever() = runBlocking {
+        remoteDataSource.shouldHangPush = true
+        val session = FocusSession(id = "s1", startTimeMillis = 1000L)
+
+        withTimeout(1_000L) {
+            repository.saveFocusSession(session)
+        }
+
+        // The local save must still have gone through immediately, same as always -
+        // only the (now backgrounded) cloud push is the one left hanging.
+        assertEquals(listOf(session), repository.getSessionHistory())
+        assertTrue(remoteDataSource.pushedSessions.isEmpty())
+    }
+
+    @Test
+    fun saveFocusZone_returnsPromptly_evenIfRemotePushHangsForever() = runBlocking {
+        remoteDataSource.shouldHangPush = true
+        val zone = FocusZone(id = "z1", name = "Library", latitude = -37.8, longitude = 144.9, radiusMeters = 50f)
+
+        withTimeout(1_000L) {
+            repository.saveFocusZone(zone)
+        }
+
+        assertEquals(zone, repository.getFocusZone())
+        assertTrue(remoteDataSource.pushedZones.isEmpty())
+    }
+
+    @Test
+    fun saveAppGroup_returnsPromptly_evenIfRemotePushHangsForever() = runBlocking {
+        remoteDataSource.shouldHangPush = true
+        val group = AppGroup(id = "g1", groupName = "Study")
+
+        withTimeout(1_000L) {
+            repository.saveAppGroup(group)
+        }
+
+        assertEquals(listOf(group), repository.getAppGroups())
+        assertTrue(remoteDataSource.pushedAppGroups.isEmpty())
     }
 
     // ---------------- time-interval query ----------------

@@ -42,6 +42,8 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
+private val BAR_CHART_MAX_BAR_HEIGHT = 100.dp
+
 /**
  * HistoryScreen
  * ---------------
@@ -85,6 +87,18 @@ fun HistoryScreen(viewModel: HistoryViewModel = viewModel()) {
         Spacer(modifier = Modifier.height(16.dp))
 
         if (!isLoading) {
+            Text(text = "This week", style = MaterialTheme.typography.titleSmall)
+            Spacer(modifier = Modifier.height(8.dp))
+            WeeklyBarChart(
+                points = sessions.dailyChartPoints(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(WireframeColors.Card)
+                    .padding(16.dp)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
             WeekCardsRow(weekBuckets = weekBuckets, onWeekClick = { selectedWeek = it })
             Spacer(modifier = Modifier.height(16.dp))
         }
@@ -116,6 +130,55 @@ fun HistoryScreen(viewModel: HistoryViewModel = viewModel()) {
     if (weekToShow != null) {
         Dialog(onDismissRequest = { selectedWeek = null }) {
             WeekDetailDialogContent(bucket = weekToShow, onDismiss = { selectedWeek = null })
+        }
+    }
+}
+
+/**
+ * Simple bar chart - one bar per [DayChartPoint] (normally exactly 7, oldest to newest -
+ * see [dailyChartPoints]), height scaled relative to whichever day in the set has the most
+ * minutes. Plain Column/Row/Box, no charting library and no Canvas drawing - matches how
+ * everything else on this screen (and this app) is built, and keeps this addition at zero
+ * new Gradle dependencies.
+ */
+@Composable
+private fun WeeklyBarChart(points: List<DayChartPoint>, modifier: Modifier = Modifier) {
+    val maxMinutes = (points.maxOfOrNull { it.totalMinutes } ?: 0L).coerceAtLeast(1L)
+    val dayFormat = remember { SimpleDateFormat("EEE", Locale.getDefault()) }
+
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.Bottom
+    ) {
+        points.forEach { point ->
+            val fraction = (point.totalMinutes.toFloat() / maxMinutes.toFloat()).coerceIn(0f, 1f)
+            val barHeight = (BAR_CHART_MAX_BAR_HEIGHT * fraction).coerceAtLeast(4.dp)
+
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = if (point.totalMinutes > 0) "${point.totalMinutes}m" else "",
+                    color = WireframeColors.OnDark,
+                    style = MaterialTheme.typography.labelSmall
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.5f)
+                        .height(barHeight)
+                        .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
+                        .background(WireframeColors.OnDark)
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = dayFormat.format(Date(point.dayStartMillis)),
+                    color = WireframeColors.OnDark,
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
         }
     }
 }
