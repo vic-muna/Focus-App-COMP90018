@@ -77,6 +77,8 @@ class BlockedAppGroupStorage(context: Context) {
                 put("endMinute", group.schedule.end.minute)
             }
         )
+        put("breakAllowance", group.breakAllowance)
+        put("breakMinutes", group.breakMinutes)
     }
 
     private fun groupFromJson(obj: JSONObject): BlockedAppGroup {
@@ -103,7 +105,10 @@ class BlockedAppGroupStorage(context: Context) {
             id = obj.getString("id"),
             name = obj.getString("name"),
             apps = apps,
-            schedule = schedule
+            schedule = schedule,
+            // optInt: groups saved before these fields existed fall back to the defaults.
+            breakAllowance = obj.optInt("breakAllowance", 0),
+            breakMinutes = obj.optInt("breakMinutes", DEFAULT_BREAK_MINUTES)
         )
     }
 

@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -43,10 +45,13 @@ const val PLACEHOLDER_DP_PER_METER = 116f / (2 * 100f)
 fun MapPlaceholder(
     onLongPress: (Offset) -> Unit,
     modifier: Modifier = Modifier,
+    onTap: (Offset) -> Unit = {},
     contentPadding: PaddingValues = PaddingValues(0.dp),
     overlays: @Composable BoxScope.() -> Unit = {},
 ) {
     val colors = FocusTheme.colors
+    val currentOnLongPress by rememberUpdatedState(onLongPress)
+    val currentOnTap by rememberUpdatedState(onTap)
     val gridColor = colors.onSurface.copy(alpha = 0.05f)
 
     Box(
@@ -66,7 +71,12 @@ fun MapPlaceholder(
                     y += step
                 }
             }
-            .pointerInput(Unit) { detectTapGestures(onLongPress = onLongPress) },
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { currentOnTap(it) },
+                    onLongPress = { currentOnLongPress(it) },
+                )
+            },
     ) {
         Text(
             text = "Map coming soon\nLong-press anywhere to add a focus location",

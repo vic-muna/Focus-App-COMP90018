@@ -119,6 +119,56 @@ fun ConfirmButton(
     )
 }
 
+/** Figma "previous step" button: a light circle with a dark left arrow. */
+@Composable
+fun BackButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    contentDescription: String = "Back",
+    container: Brush = SolidColor(FocusTheme.colors.primaryAction.copy(alpha = 0.75f)),
+    glyphColor: Color = FocusTheme.colors.surface,
+    border: BorderStroke? = null,
+    size: Dp = 34.dp,
+) {
+    GlyphCircleButton(
+        glyph = FocusGlyphs.ArrowLeft,
+        contentDescription = contentDescription,
+        container = container,
+        glyphColor = glyphColor,
+        onClick = onClick,
+        modifier = modifier,
+        size = size,
+        border = border,
+    )
+}
+
+/** Figma "next step" button: an accent circle with a right arrow - same look as [ConfirmButton]. */
+@Composable
+fun NextButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    contentDescription: String = "Next",
+    enabled: Boolean = true,
+    container: Brush = SolidColor(
+        if (enabled) FocusTheme.colors.accent else FocusTheme.colors.onSurfaceMuted
+    ),
+    glyphColor: Color = FocusTheme.colors.surface,
+    border: BorderStroke? = null,
+    size: Dp = 34.dp,
+) {
+    GlyphCircleButton(
+        glyph = FocusGlyphs.ArrowRight,
+        contentDescription = contentDescription,
+        container = container,
+        glyphColor = glyphColor,
+        onClick = onClick,
+        modifier = modifier,
+        size = size,
+        border = border,
+        enabled = enabled,
+    )
+}
+
 /**
  * Figma Focus Mode "i" button (hints.xml). Unlike [GlyphCircleButton], the
  * "i" is cut out of the circle, so whatever is behind the button shows
@@ -162,6 +212,8 @@ private fun GlyphCircleButtonPreview() {
             RejectButton(onClick = {})
             ConfirmButton(onClick = {})
             ConfirmButton(onClick = {}, enabled = false)
+            NextButton(onClick = {})
+            BackButton(onClick = {})
             InfoButton(onClick = {})
             // Glass-style example: translucent gradient + light rim.
             RejectButton(

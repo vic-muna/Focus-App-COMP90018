@@ -80,7 +80,8 @@ fun HomeScreenWithSheet(
     onPartyModeClick: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
     onEditLocationZoneClick: () -> Unit = {},
-    onLocationTabClick: () -> Unit = {}
+    onLocationTabClick: () -> Unit = {},
+    onBlockedAppsTabClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -104,7 +105,7 @@ fun HomeScreenWithSheet(
         when (tab) {
             MainTab.HOME -> Unit
             MainTab.LOCATION -> onLocationTabClick()
-            MainTab.BLOCKED_APPS -> openSheet(SheetType.BLOCKED_APPS, tab)
+            MainTab.BLOCKED_APPS -> onBlockedAppsTabClick()
         }
     }
 

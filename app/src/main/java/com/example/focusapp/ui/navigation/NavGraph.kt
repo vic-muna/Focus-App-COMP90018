@@ -29,6 +29,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.data.notification.FocusTimerService
+import com.example.focusapp.ui.screens.appfocus.AppFocusScreen
 import com.example.focusapp.ui.screens.apps.AddAppGroupScreen
 import com.example.focusapp.ui.screens.apps.AppsScreen
 import com.example.focusapp.ui.screens.apps.EditAppGroupScreen
@@ -170,6 +171,23 @@ fun FocusAppNavGraph() {
         navController.navigate(Destinations.FOCUS_SESSION)
     }
 
+    // Bottom-nav tabs: Home is the root; every other tab sits directly on top
+    // of it, so switching tabs never stacks tab screens on each other.
+    fun navigateToTab(tab: MainTab) {
+        val route = when (tab) {
+            MainTab.HOME -> {
+                navController.popBackStack(Destinations.HOME, inclusive = false)
+                return
+            }
+            MainTab.LOCATION -> Destinations.LOCATION
+            MainTab.BLOCKED_APPS -> Destinations.APP_FOCUS
+        }
+        navController.navigate(route) {
+            popUpTo(Destinations.HOME)
+            launchSingleTop = true
+        }
+    }
+
     Scaffold(containerColor = WireframeColors.Background) { innerPadding ->
         NavHost(
             navController = navController,
@@ -225,9 +243,8 @@ fun FocusAppNavGraph() {
                     onEditLocationZoneClick = {
                         navController.navigate(Destinations.EDIT_LOCATION_ZONE)
                     },
-                    onLocationTabClick = {
-                        navController.navigate(Destinations.LOCATION) { launchSingleTop = true }
-                    }
+                    onLocationTabClick = { navigateToTab(MainTab.LOCATION) },
+                    onBlockedAppsTabClick = { navigateToTab(MainTab.BLOCKED_APPS) }
                 )
             }
 
@@ -238,21 +255,38 @@ fun FocusAppNavGraph() {
             ) {
                 LocationScreen(
                     onSettingsClick = { navController.navigate(Destinations.SETTINGS) },
-                    onTabClick = { tab ->
-                        when (tab) {
-                            MainTab.LOCATION -> Unit
-                            MainTab.HOME -> navController.popBackStack(Destinations.HOME, inclusive = false)
-                            // Blocked Apps still lives in Home's bottom sheet -
-                            // go back to Home and ask it to open that sheet.
-                            MainTab.BLOCKED_APPS -> {
-                                navController.getBackStackEntry(Destinations.HOME).savedStateHandle.apply {
-                                    set("reopenSheetType", "blocked_apps")
-                                    set("reopenSheet", true)
-                                }
-                                navController.popBackStack(Destinations.HOME, inclusive = false)
-                            }
+                    onTabClick = ::navigateToTab
+                )
+            }
+
+            composable(
+                route = Destinations.APP_FOCUS,
+                enterTransition = partyModeEnter,
+                exitTransition = partyModeExit
+            ) {
+                AppFocusScreen(
+                    groups = groups,
+                    // Until the "gorup detail" screen exists, a tile opens the
+                    // existing Blocked Apps sheet on Home for that group.
+                    onGroupClick = { group ->
+                        selectedGroupId = group.id
+                        navController.getBackStackEntry(Destinations.HOME).savedStateHandle.apply {
+                            set("reopenSheetType", "blocked_apps")
+                            set("reopenSheet", true)
                         }
-                    }
+                        navController.popBackStack(Destinations.HOME, inclusive = false)
+                    },
+                    onCreateGroup = { newGroup ->
+                        groups = groups + BlockedAppGroup(
+                            id = "group_${System.currentTimeMillis()}",
+                            name = newGroup.name,
+                            apps = newGroup.apps,
+                            schedule = newGroup.schedule,
+                            breakAllowance = newGroup.breakAllowance,
+                            breakMinutes = newGroup.breakMinutes
+                        )
+                    },
+                    onTabClick = ::navigateToTab
                 )
             }
 

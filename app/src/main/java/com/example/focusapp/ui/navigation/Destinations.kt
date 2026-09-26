@@ -29,6 +29,10 @@ object Destinations {
     // location groups. See ui.screens.location.LocationScreen.
     const val LOCATION = "location"
 
+    // Blocked Apps tab (bottom nav grid icon) - grid of app-group tiles.
+    // See ui.screens.appfocus.AppFocusScreen.
+    const val APP_FOCUS = "app_focus"
+
     // Replaces the old bottom-left "Map" shortcut on Home - Party Mode is the
     // planned "Study Party" feature (see the doc comments in
     // data/remote/RemoteDataSource.kt and data/repository/FocusRepositoryImpl.kt).

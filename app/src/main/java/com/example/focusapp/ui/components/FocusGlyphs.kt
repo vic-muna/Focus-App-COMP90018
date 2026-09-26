@@ -68,6 +68,54 @@ object FocusGlyphs {
         ).build()
     }
 
+    /** A right arrow (the "next step" button), drawn with the same 3.125-wide strokes as [Close]. */
+    val ArrowRight: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "FocusGlyphs.ArrowRight",
+            defaultWidth = GLYPH_VIEWPORT.dp,
+            defaultHeight = GLYPH_VIEWPORT.dp,
+            viewportWidth = GLYPH_VIEWPORT,
+            viewportHeight = GLYPH_VIEWPORT,
+        ).apply {
+            path(
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = 3.125f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round,
+            ) {
+                moveTo(9.5f, 17f)
+                lineTo(24.5f, 17f)
+                moveTo(18.25f, 10.75f)
+                lineTo(24.5f, 17f)
+                lineTo(18.25f, 23.25f)
+            }
+        }.build()
+    }
+
+    /** A left arrow (the "previous step" button) - [ArrowRight] mirrored. */
+    val ArrowLeft: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "FocusGlyphs.ArrowLeft",
+            defaultWidth = GLYPH_VIEWPORT.dp,
+            defaultHeight = GLYPH_VIEWPORT.dp,
+            viewportWidth = GLYPH_VIEWPORT,
+            viewportHeight = GLYPH_VIEWPORT,
+        ).apply {
+            path(
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = 3.125f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round,
+            ) {
+                moveTo(24.5f, 17f)
+                lineTo(9.5f, 17f)
+                moveTo(15.75f, 10.75f)
+                lineTo(9.5f, 17f)
+                lineTo(15.75f, 23.25f)
+            }
+        }.build()
+    }
+
     private const val CHECK_PATH =
         "M25.5752 9.80957C24.7797 9.14673 23.5975 9.25432 22.9346 10.0498L16.1885 18.1455" +
             "C15.5386 18.9254 15.1726 19.3567 14.8809 19.6221C14.8774 19.6252 14.8735 19.6278 14.8701 19.6309" +
@@ -92,6 +140,8 @@ private fun FocusGlyphsPreview() {
         ) {
             Icon(FocusGlyphs.Close, contentDescription = null, tint = FocusTheme.colors.onSurface, modifier = Modifier.size(34.dp))
             Icon(FocusGlyphs.Check, contentDescription = null, tint = FocusTheme.colors.accent, modifier = Modifier.size(34.dp))
+            Icon(FocusGlyphs.ArrowRight, contentDescription = null, tint = FocusTheme.colors.accent, modifier = Modifier.size(34.dp))
+            Icon(FocusGlyphs.ArrowLeft, contentDescription = null, tint = FocusTheme.colors.accent, modifier = Modifier.size(34.dp))
         }
     }
 }

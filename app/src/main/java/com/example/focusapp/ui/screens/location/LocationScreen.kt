@@ -102,6 +102,9 @@ fun LocationScreen(
     val placeNames = remember { mutableStateMapOf<String, String>() }
     var draftPlaceName by remember { mutableStateOf<String?>(null) }
 
+    // Tapping the map while the card is open asks before discarding the draft.
+    var confirmDiscard by remember { mutableStateOf(false) }
+
     // Set by holding a group card; deleting waits for the confirm dialog.
     var pendingDelete by remember { mutableStateOf<FocusZone?>(null) }
 
@@ -210,12 +213,30 @@ fun LocationScreen(
         saveError = saveError,
         panelState = panelState,
         onMapLongPress = ::startDraft,
+        onMapTap = { if (draft != null) confirmDiscard = true },
         onDraftChange = { draft = it },
         onDraftDiscard = { draft = null },
         onDraftConfirm = ::saveDraft,
         onSettingsClick = onSettingsClick,
         onTabClick = onTabClick,
     )
+
+    if (confirmDiscard) {
+        val isEditing = draft?.editingZoneId != null
+        FocusConfirmDialog(
+            title = if (isEditing) "Cancel editing?" else "Cancel new location?",
+            message = if (isEditing) "Your changes to this location will be discarded."
+            else "This location won't be saved.",
+            confirmLabel = "Discard",
+            dismissLabel = "Keep editing",
+            confirmColor = FocusTheme.colors.rejection,
+            onConfirm = {
+                confirmDiscard = false
+                draft = null
+            },
+            onDismiss = { confirmDiscard = false },
+        )
+    }
 
     pendingDelete?.let { zone ->
         FocusConfirmDialog(
@@ -247,6 +268,7 @@ private fun LocationContent(
     saveError: String?,
     panelState: PullUpPanelState,
     onMapLongPress: (Offset) -> Unit,
+    onMapTap: (Offset) -> Unit,
     onDraftChange: (LocationDraft) -> Unit,
     onDraftDiscard: () -> Unit,
     onDraftConfirm: () -> Unit,
@@ -264,6 +286,7 @@ private fun LocationContent(
     Box(modifier = Modifier.fillMaxSize()) {
         MapPlaceholder(
             onLongPress = onMapLongPress,
+            onTap = onMapTap,
             contentPadding = PaddingValues(bottom = hiddenBottom),
         ) {
             if (draft != null) {
@@ -384,6 +407,7 @@ private fun LocationContentListPreview() {
             saveError = null,
             panelState = rememberPullUpPanelState(initiallyExpanded = true),
             onMapLongPress = {},
+            onMapTap = {},
             onDraftChange = {},
             onDraftDiscard = {},
             onDraftConfirm = {},
@@ -410,6 +434,7 @@ private fun LocationContentAddPreview() {
             saveError = null,
             panelState = rememberPullUpPanelState(),
             onMapLongPress = {},
+            onMapTap = {},
             onDraftChange = {},
             onDraftDiscard = {},
             onDraftConfirm = {},
