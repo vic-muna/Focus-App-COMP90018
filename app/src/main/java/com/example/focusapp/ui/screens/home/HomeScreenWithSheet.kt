@@ -48,6 +48,7 @@ import com.example.focusapp.domain.model.FocusZone
 import com.example.focusapp.domain.usecase.EvaluateFocusTriggerUseCase
 import com.example.focusapp.domain.usecase.FocusTriggerResult
 import com.example.focusapp.ui.common.rememberLocationPermissionState
+import com.example.focusapp.ui.navigation.MainTab
 import com.example.focusapp.ui.screens.session.FocusSessionSource
 import com.example.focusapp.ui.theme.FocusTheme
 import com.google.android.gms.location.LocationServices
@@ -83,7 +84,8 @@ fun HomeScreenWithSheet(
     onAvatarClick: () -> Unit = {},
     onPartyModeClick: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
-    onEditLocationZoneClick: () -> Unit = {}
+    onEditLocationZoneClick: () -> Unit = {},
+    onLocationTabClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -95,20 +97,20 @@ fun HomeScreenWithSheet(
 
     // Which bottom-nav tab opened the current sheet (Schedule and Blocked Apps
     // share one sheet), so the nav indicator stays on the tab the user tapped.
-    var sheetTab by remember { mutableStateOf(HomeNavTab.HOME) }
-    val selectedTab = if (activeSheet == SheetType.NONE) HomeNavTab.HOME else sheetTab
+    var sheetTab by remember { mutableStateOf(MainTab.HOME) }
+    val selectedTab = if (activeSheet == SheetType.NONE) MainTab.HOME else sheetTab
 
-    fun openSheet(type: SheetType, tab: HomeNavTab) {
+    fun openSheet(type: SheetType, tab: MainTab) {
         sheetTab = tab
         activeSheet = type
     }
 
-    fun onTabClick(tab: HomeNavTab) {
+    fun onTabClick(tab: MainTab) {
         when (tab) {
-            HomeNavTab.HOME -> Unit
-            HomeNavTab.LOCATION -> openSheet(SheetType.LOCATION_ZONE, tab)
+            MainTab.HOME -> Unit
+            MainTab.LOCATION -> onLocationTabClick()
             // Schedules live inside the blocked-app group sheet for now.
-            HomeNavTab.SCHEDULE, HomeNavTab.BLOCKED_APPS -> openSheet(SheetType.BLOCKED_APPS, tab)
+            MainTab.SCHEDULE, MainTab.BLOCKED_APPS -> openSheet(SheetType.BLOCKED_APPS, tab)
         }
     }
 
@@ -161,10 +163,10 @@ fun HomeScreenWithSheet(
     LaunchedEffect(reopenSheetSignal) {
         if (reopenSheetSignal) {
             onReopenSheetHandled()
-            if (reopenSheetType == "location_zone") {
-                openSheet(SheetType.LOCATION_ZONE, HomeNavTab.LOCATION)
-            } else {
-                openSheet(SheetType.BLOCKED_APPS, HomeNavTab.BLOCKED_APPS)
+            when (reopenSheetType) {
+                "location_zone" -> openSheet(SheetType.LOCATION_ZONE, MainTab.LOCATION)
+                "schedule" -> openSheet(SheetType.BLOCKED_APPS, MainTab.SCHEDULE)
+                else -> openSheet(SheetType.BLOCKED_APPS, MainTab.BLOCKED_APPS)
             }
         }
     }

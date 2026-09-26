@@ -40,6 +40,7 @@ import com.example.focusapp.ui.screens.home.HomeScreenWithSheet
 import com.example.focusapp.ui.screens.home.generateFakeGroups
 import com.example.focusapp.ui.screens.home.generateFakeTimeSlot
 import com.example.focusapp.ui.screens.history.HistoryScreen
+import com.example.focusapp.ui.screens.location.LocationScreen
 import com.example.focusapp.ui.screens.map.MapScreen
 import com.example.focusapp.ui.screens.party.PartyModeScreen
 import com.example.focusapp.ui.screens.session.ActiveFocusSession
@@ -50,29 +51,35 @@ import com.example.focusapp.ui.theme.WireframeColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-// Every screen in the app uses this same vertical motion for consistency
+// Any navigation into or out of Home is a dissolve (cross-fade) - both the
+// leaving and the arriving screen fade, in place, over the same duration.
+private const val DISSOLVE_DURATION_MILLIS = 300
+private val dissolveIn = fadeIn(tween(DISSOLVE_DURATION_MILLIS))
+private val dissolveOut = fadeOut(tween(DISSOLVE_DURATION_MILLIS))
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.involvesHome(): Boolean =
+    initialState.destination.route == Destinations.HOME ||
+        targetState.destination.route == Destinations.HOME
+
+// Every other screen uses this same vertical motion for consistency - except
+// when the other side of the transition is Home, which dissolves instead.
 private val enterFromBottom: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-    slideInVertically(initialOffsetY = { fullHeight -> fullHeight }) + fadeIn()
+    if (involvesHome()) dissolveIn
+    else slideInVertically(initialOffsetY = { fullHeight -> fullHeight }) + fadeIn()
 }
 private val exitToBottom: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-    slideOutVertically(targetOffsetY = { fullHeight -> fullHeight }) + fadeOut()
+    if (involvesHome()) dissolveOut
+    else slideOutVertically(targetOffsetY = { fullHeight -> fullHeight }) + fadeOut()
 }
+
+private val homeEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = { dissolveIn }
+private val homeExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = { dissolveOut }
 
 private val partyModeEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-    fadeIn(tween(300))
+    dissolveIn
 }
 private val partyModeExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-    fadeOut(tween(300))
-}
-
-// Home fades out (matching Party Mode/Focus Session's own fade-in, no slide)
-// specifically when heading to one of those two destinations - every other
-// destination Home can go to keeps the normal slide-down.
-private val homeExitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-    when (targetState.destination.route) {
-        Destinations.PARTY_MODE, Destinations.FOCUS_SESSION -> partyModeExit()
-        else -> exitToBottom()
-    }
+    dissolveOut
 }
 
 @Composable
@@ -174,8 +181,8 @@ fun FocusAppNavGraph() {
         ) {
             composable(
                 route = Destinations.HOME,
-                enterTransition = enterFromBottom,
-                exitTransition = homeExitTransition
+                enterTransition = homeEnter,
+                exitTransition = homeExit
             ) { backStackEntry ->
                 val reopenSheet by backStackEntry.savedStateHandle
                     .getStateFlow("reopenSheet", false)
@@ -217,6 +224,34 @@ fun FocusAppNavGraph() {
                     onSettingsClick = { navController.navigate(Destinations.SETTINGS) },
                     onEditLocationZoneClick = {
                         navController.navigate(Destinations.EDIT_LOCATION_ZONE)
+                    },
+                    onLocationTabClick = {
+                        navController.navigate(Destinations.LOCATION) { launchSingleTop = true }
+                    }
+                )
+            }
+
+            composable(
+                route = Destinations.LOCATION,
+                enterTransition = partyModeEnter,
+                exitTransition = partyModeExit
+            ) {
+                LocationScreen(
+                    onSettingsClick = { navController.navigate(Destinations.SETTINGS) },
+                    onTabClick = { tab ->
+                        when (tab) {
+                            MainTab.LOCATION -> Unit
+                            MainTab.HOME -> navController.popBackStack(Destinations.HOME, inclusive = false)
+                            // Schedule / Blocked Apps still live in Home's bottom sheet -
+                            // go back to Home and ask it to open that sheet.
+                            MainTab.SCHEDULE, MainTab.BLOCKED_APPS -> {
+                                navController.getBackStackEntry(Destinations.HOME).savedStateHandle.apply {
+                                    set("reopenSheetType", if (tab == MainTab.SCHEDULE) "schedule" else "blocked_apps")
+                                    set("reopenSheet", true)
+                                }
+                                navController.popBackStack(Destinations.HOME, inclusive = false)
+                            }
+                        }
                     }
                 )
             }

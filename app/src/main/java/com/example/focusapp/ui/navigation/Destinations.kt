@@ -25,6 +25,10 @@ object Destinations {
     const val SETTINGS = "settings"
     const val HOME = "home"
 
+    // Location Focus tab (bottom nav pin icon) - map + pull-up list of
+    // location groups. See ui.screens.location.LocationScreen.
+    const val LOCATION = "location"
+
     // Replaces the old bottom-left "Map" shortcut on Home - Party Mode is the
     // planned "Study Party" feature (see the doc comments in
     // data/remote/RemoteDataSource.kt and data/repository/FocusRepositoryImpl.kt).

@@ -13,4 +13,9 @@ object Palette {
     val Rejection = Color(0xff815050)
     val Notification = Color(0xffe5b362)
     val Pure = Color(0xffffffff)
+
+    // Map zone markers ("Focuse Range" component).
+    val Vermilion = Color(0xffff383c)
+    // TODO: approximated from a screenshot - replace with the Figma value.
+    val Turquoise = Color(0xff0cc7b0)
 }
