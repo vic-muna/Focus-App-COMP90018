@@ -107,7 +107,6 @@ private fun FocusBottomNavBarPreview() {
             items = listOf(
                 FocusNavItem(R.drawable.ic_home_fill, "Home"),
                 FocusNavItem(R.drawable.ic_pin_alt_fill, "Location"),
-                FocusNavItem(R.drawable.ic_clock_fill, "Schedule"),
                 FocusNavItem(R.drawable.ic_apps_add, "Blocked apps"),
             ),
             selectedIndex = 0,

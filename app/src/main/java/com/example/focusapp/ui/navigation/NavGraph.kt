@@ -242,11 +242,11 @@ fun FocusAppNavGraph() {
                         when (tab) {
                             MainTab.LOCATION -> Unit
                             MainTab.HOME -> navController.popBackStack(Destinations.HOME, inclusive = false)
-                            // Schedule / Blocked Apps still live in Home's bottom sheet -
+                            // Blocked Apps still lives in Home's bottom sheet -
                             // go back to Home and ask it to open that sheet.
-                            MainTab.SCHEDULE, MainTab.BLOCKED_APPS -> {
+                            MainTab.BLOCKED_APPS -> {
                                 navController.getBackStackEntry(Destinations.HOME).savedStateHandle.apply {
-                                    set("reopenSheetType", if (tab == MainTab.SCHEDULE) "schedule" else "blocked_apps")
+                                    set("reopenSheetType", "blocked_apps")
                                     set("reopenSheet", true)
                                 }
                                 navController.popBackStack(Destinations.HOME, inclusive = false)

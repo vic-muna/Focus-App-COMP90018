@@ -90,8 +90,8 @@ fun HomeScreenWithSheet(
 
     var activeSheet by remember { mutableStateOf(SheetType.NONE) }
 
-    // Which bottom-nav tab opened the current sheet (Schedule and Blocked Apps
-    // share one sheet), so the nav indicator stays on the tab the user tapped.
+    // Which bottom-nav tab the open sheet belongs to, so the nav indicator
+    // highlights it while the sheet is up.
     var sheetTab by remember { mutableStateOf(MainTab.HOME) }
     val selectedTab = if (activeSheet == SheetType.NONE) MainTab.HOME else sheetTab
 
@@ -104,8 +104,7 @@ fun HomeScreenWithSheet(
         when (tab) {
             MainTab.HOME -> Unit
             MainTab.LOCATION -> onLocationTabClick()
-            // Schedules live inside the blocked-app group sheet for now.
-            MainTab.SCHEDULE, MainTab.BLOCKED_APPS -> openSheet(SheetType.BLOCKED_APPS, tab)
+            MainTab.BLOCKED_APPS -> openSheet(SheetType.BLOCKED_APPS, tab)
         }
     }
 
@@ -152,7 +151,6 @@ fun HomeScreenWithSheet(
             onReopenSheetHandled()
             when (reopenSheetType) {
                 "location_zone" -> openSheet(SheetType.LOCATION_ZONE, MainTab.LOCATION)
-                "schedule" -> openSheet(SheetType.BLOCKED_APPS, MainTab.SCHEDULE)
                 else -> openSheet(SheetType.BLOCKED_APPS, MainTab.BLOCKED_APPS)
             }
         }
