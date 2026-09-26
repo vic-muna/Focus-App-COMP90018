@@ -5,24 +5,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.focusapp.data.apps.getAppLabel
-import com.example.focusapp.ui.theme.WireframeColors
+import com.example.focusapp.ui.screens.blocked.BlockedScreen
+import com.example.focusapp.ui.theme.FocusAppTheme
 
 /**
  * BlockedActivity
@@ -43,7 +29,7 @@ import com.example.focusapp.ui.theme.WireframeColors
  * HOW THIS AVOIDS BOUNCING THE USER RIGHT BACK INTO THE BLOCKED APP: this
  * screen is launched into its OWN task (see AndroidManifest.xml's
  * `launchMode="singleTask"` + `taskAffinity=""` on this Activity), kept
- * separate from the blocked app's task. Both the "Got it" button and the
+ * separate from the blocked app's task. Both the Reject button and the
  * system Back gesture ([BackHandler] below) explicitly navigate Home
  * rather than just calling `finish()` - if they only called finish(),
  * Android's default back-stack behaviour could reveal the blocked app's
@@ -62,13 +48,23 @@ class BlockedActivity : ComponentActivity() {
         updateBlockedLabelFrom(intent)
 
         setContent {
-            MaterialTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    BlockedScreen(
-                        appLabel = blockedAppLabelState.value,
-                        onGotItClick = { goHomeAndFinish() }
-                    )
-                }
+            FocusAppTheme {
+                // The system Back gesture does the same as Reject - see the
+                // class doc comment for why it can't be left to the default.
+                BackHandler { goHomeAndFinish() }
+                // [HANDOFF -> David Shiau | README task: "AccessibilityService integration (App Restriction...)"]
+                // Rests aren't implemented yet, so the screen hides "Left" and disables
+                // Confirm. To enable them: pass the active session's rests left / total
+                // (BlockedAppGroup.breakAllowance, minus rests already used this session)
+                // and, in onTakeRest, lift this app's restriction for breakMinutes
+                // before re-applying it (e.g. via AccessibilityBridge).
+                BlockedScreen(
+                    appLabel = blockedAppLabelState.value,
+                    restsLeft = null,
+                    restsTotal = null,
+                    onTakeRest = {},
+                    onReject = { goHomeAndFinish() }
+                )
             }
         }
     }
@@ -109,53 +105,5 @@ class BlockedActivity : ComponentActivity() {
     companion object {
         /** Intent extra key FocusAccessibilityService uses to say which app got blocked. */
         const val EXTRA_BLOCKED_PACKAGE = "blocked_package_name"
-    }
-}
-
-/**
- * BlockedScreen
- * ---------------
- * The actual UI: an icon, the blocked app's real name, a short
- * explanation, and a "Got it" pill button - styled with the same
- * [WireframeColors] as the rest of the app for visual consistency.
- */
-@Composable
-private fun BlockedScreen(appLabel: String, onGotItClick: () -> Unit) {
-    // Handles the system Back button/gesture the same way as the "Got it"
-    // button - see BlockedActivity's class doc comment for why this can't
-    // just be left to the default Back behaviour.
-    BackHandler(onBack = onGotItClick)
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(WireframeColors.Background)
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(text = "🚫", fontSize = 64.sp)
-
-        Text(
-            text = "$appLabel is blocked",
-            color = WireframeColors.OnLight,
-            fontSize = 22.sp,
-            modifier = Modifier.padding(top = 20.dp, bottom = 8.dp)
-        )
-
-        Text(
-            text = "This app is in your Focus restricted list right now.",
-            color = WireframeColors.OnLight,
-            modifier = Modifier.padding(bottom = 32.dp)
-        )
-
-        Text(
-            text = "Got it",
-            color = WireframeColors.OnDark,
-            modifier = Modifier
-                .background(WireframeColors.Card, shape = RoundedCornerShape(50))
-                .clickable(onClick = onGotItClick)
-                .padding(horizontal = 32.dp, vertical = 14.dp)
-        )
     }
 }

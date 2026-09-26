@@ -35,18 +35,26 @@ data class FocusTypography(
     val statValue: TextStyle,
     /** Tooltip / hint bubble copy. */
     val hint: TextStyle,
+    /** A short question or call to action on a full-screen prompt (blocking screen). */
+    val prompt: TextStyle,
+    /** Label above a [counterValue], e.g. "Left". */
+    val counterLabel: TextStyle,
+    /** A large count on a full-screen prompt, e.g. rests left "4/5". */
+    val counterValue: TextStyle,
     /** Card heading, e.g. a location group's name. */
     val cardTitle: TextStyle,
     /** Heading on a grid tile, e.g. an app group's name. */
     val tileTitle: TextStyle,
     /** Label on a compact list row, e.g. an app name in the app picker. */
     val listLabel: TextStyle,
+    /** Text on a filled pill button. */
     /** Large text inside inputs and secondary buttons ("Enter Group Name", "Schedule"). */
     val inputLarge: TextStyle,
     /** Banner / body copy. */
     val body: TextStyle,
     /** Small supporting text (labels, coordinates). */
     val caption: TextStyle,
+    val confirmation : TextStyle,
 )
 
 val DefaultFocusTypography = FocusTypography(
@@ -80,6 +88,21 @@ val DefaultFocusTypography = FocusTypography(
         fontWeight = FontWeight.ExtraBold,
         fontSize = 12.sp,
     ),
+    prompt = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 15.sp,
+    ),
+    counterLabel = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 20.sp,
+    ),
+    counterValue = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 35.sp,
+    ),
     cardTitle = TextStyle(
         fontFamily = LineSeedFontFamily,
         fontWeight = FontWeight.Bold,
@@ -109,5 +132,10 @@ val DefaultFocusTypography = FocusTypography(
         fontFamily = LineSeedFontFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 12.sp,
+    ),
+    confirmation = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 18.sp,
     ),
 )

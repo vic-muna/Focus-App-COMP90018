@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -48,8 +46,6 @@ fun GlyphCircleButton(
     size: Dp = 34.dp,
     border: BorderStroke? = null,
     enabled: Boolean = true,
-    // FocusGlyphs fill the whole circle; smaller icons (e.g. Material ones) pass their own size.
-    glyphSize: Dp = size,
 ) {
     Box(
         modifier = modifier
@@ -64,33 +60,38 @@ fun GlyphCircleButton(
             imageVector = glyph,
             contentDescription = contentDescription,
             tint = glyphColor,
-            modifier = Modifier.size(glyphSize),
+            modifier = Modifier.size(size),
         )
     }
 }
 
-/** Figma edit button (group detail card): an accent circle with a pencil. */
+/**
+ * Figma edit button (edit.xml): an accent circle with a pencil cut out of
+ * it, so the surface behind the button shows through the pencil - only the
+ * circle's [color] is customizable.
+ */
 @Composable
 fun EditButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     contentDescription: String = "Edit",
-    container: Brush = SolidColor(FocusTheme.colors.accent),
-    glyphColor: Color = FocusTheme.colors.surface,
-    border: BorderStroke? = null,
+    color: Color = FocusTheme.colors.accent,
     size: Dp = 34.dp,
 ) {
-    GlyphCircleButton(
-        glyph = Icons.Filled.Edit,
-        contentDescription = contentDescription,
-        container = container,
-        glyphColor = glyphColor,
-        onClick = onClick,
-        modifier = modifier,
-        size = size,
-        border = border,
-        glyphSize = size * 0.55f,
-    )
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(CircleShape)
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.edit),
+            contentDescription = contentDescription,
+            tint = color,
+            modifier = Modifier.size(size),
+        )
+    }
 }
 
 /** Figma reject icon: a dark circle with a light X. */

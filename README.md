@@ -245,6 +245,7 @@ file, and search for `[HANDOFF -> <your name>` to find your spot.
 | `ui/screens/party/PartyModeScreen.kt` | Yu-Hao Lu | Firebase real-time sync for Study Party feature |
 | `ui/navigation/NavGraph.kt` (`onAvatarClick`) | Kai-Jiun Chan | Reward/Progress UI — route the avatar tap to the Report screen (History/Rewards tabs, see `MainActivity.md`) |
 | `data/repository/FocusRepositoryImpl.kt` (`deleteFocusZone`) | Victor Munacoha (REST) / Yu-Hao Lu (Firebase) | Cloud REST API integration / Firebase real-time sync — deleting a location only removes the local copy; add a remote delete |
+| `BlockedActivity.kt` (rests) | David Shiau | AccessibilityService integration (App Restriction) — the blocking screen's "take a rest?" Confirm is disabled until rests exist: pass rests left/total and lift the restriction for `breakMinutes` on Confirm |
 
 Note: these are comment-only edits — no logic or function signatures were
 changed, so the project still compiles as-is.
