@@ -4,6 +4,17 @@ import android.accessibilityservice.AccessibilityService
 import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
 import com.example.focusapp.BlockedActivity
+import com.example.focusapp.data.usagestats.hasUsageAccessPermission
+import com.example.focusapp.data.usagestats.queryAppUsageInWindow
+import com.example.focusapp.domain.usecase.EvaluateUsageLimitUseCase
+import com.example.focusapp.ui.screens.home.BlockedAppGroupStorage
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * FocusAccessibilityService
@@ -34,15 +45,25 @@ import com.example.focusapp.BlockedActivity
  */
 class FocusAccessibilityService : AccessibilityService() {
 
+    // [David Shiau, 2026-09-26] Scheduled Limits (daily open-times/duration)
+    // enforcement - see [scheduleLimitCheck]. Checks run off the main thread
+    // since they read the UsageStats event log.
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var limitCheckJob: Job? = null
+    private val groupStorage by lazy { BlockedAppGroupStorage(this) }
+    private val evaluateUsageLimit = EvaluateUsageLimitUseCase()
+
     /**
      * Called once, when the OS finishes connecting this service after the
      * user enables it in Settings - the AccessibilityService equivalent
      * of Activity.onCreate(). We only use it to flip a flag in
-     * [AccessibilityBridge] so the UI can show "Connected".
+     * [AccessibilityBridge] so the UI can show "Connected", and to run a
+     * first usage-limit check (an app may already be open and over its limit).
      */
     override fun onServiceConnected() {
         super.onServiceConnected()
         AccessibilityBridge.setServiceConnected(true)
+        scheduleLimitCheck(0L)
     }
 
     /**
@@ -66,8 +87,71 @@ class FocusAccessibilityService : AccessibilityService() {
         // THE restriction check: is this package one the UI told us to block?
         if (packageName in AccessibilityBridge.restrictedPackages.value) {
             AccessibilityBridge.recordBlockEvent(packageName)
-            launchBlockedScreen(packageName)
+            launchBlockedScreen(packageName, AccessibilityBridge.restrictionReason)
+            return
         }
+
+        // [David Shiau, 2026-09-26] Any app switch re-checks the Scheduled
+        // Limits. Skipped for Focus's own windows (incl. BlockedActivity
+        // itself), so blocking doesn't retrigger a check - any already
+        // pending check still runs.
+        if (packageName != this.packageName) {
+            scheduleLimitCheck(LIMIT_CHECK_DEBOUNCE_MILLIS)
+        }
+    }
+
+    /**
+     * [David Shiau, 2026-09-26] Runs a Scheduled Limits check after
+     * [delayMillis], replacing any pending one. Each check blocks every
+     * on-screen app that is over its limit (see EvaluateUsageLimitUseCase),
+     * then schedules the next one for when it's next needed - e.g. the
+     * moment an open app's time limit runs out, so it gets blocked mid-use,
+     * not only on its next open.
+     *
+     * The short debounce after an app switch gives Android a moment to
+     * write that switch into the UsageStats log this reads from.
+     */
+    @Synchronized
+    private fun scheduleLimitCheck(delayMillis: Long) {
+        limitCheckJob?.cancel()
+        limitCheckJob = serviceScope.launch {
+            delay(delayMillis)
+            val nextCheckInMillis = runLimitCheck() ?: return@launch
+            rescheduleIfStillCurrent(coroutineContext[Job], nextCheckInMillis)
+        }
+    }
+
+    // Called from a check's own (background) coroutine: if an app switch
+    // already replaced it with a newer check meanwhile, that newer one wins.
+    @Synchronized
+    private fun rescheduleIfStillCurrent(job: Job?, delayMillis: Long) {
+        if (limitCheckJob === job) scheduleLimitCheck(delayMillis)
+    }
+
+    /** @return when the next check is due, or null if none is needed. */
+    private fun runLimitCheck(): Long? {
+        // Neither the open counts nor the durations can be read without it.
+        if (!hasUsageAccessPermission(this)) return null
+        val groups = groupStorage.getGroupsWithoutIcons() ?: return null
+
+        val result = evaluateUsageLimit.execute(
+            groups = groups,
+            usageInWindow = { start, end -> queryAppUsageInWindow(this, start, end) }
+        )
+        val sessionRestricted = AccessibilityBridge.restrictedPackages.value
+        result.violations
+            // Never lock the user out of Focus itself, even if it's in a group.
+            .filter { it.packageName != packageName }
+            // [David Shiau, 2026-09-26] A focus session's block (e.g. the
+            // Location Zone's) takes priority over a Scheduled Limit: those
+            // apps are already blocked outright, whatever their usage, and
+            // keep showing the session's reason, not a limit one.
+            .filter { it.packageName !in sessionRestricted }
+            .forEach { violation ->
+                AccessibilityBridge.recordBlockEvent(violation.packageName)
+                launchBlockedScreen(violation.packageName, violation.reason)
+            }
+        return result.nextCheckInMillis
     }
 
     /**
@@ -81,10 +165,11 @@ class FocusAccessibilityService : AccessibilityService() {
      * Replaces the earlier `performGlobalAction(GLOBAL_ACTION_HOME)`
      * approach, which only bounced the user home with no explanation.
      */
-    private fun launchBlockedScreen(packageName: String) {
+    private fun launchBlockedScreen(packageName: String, reason: String? = null) {
         val intent = Intent(this, BlockedActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             putExtra(BlockedActivity.EXTRA_BLOCKED_PACKAGE, packageName)
+            reason?.let { putExtra(BlockedActivity.EXTRA_BLOCK_REASON, it) }
         }
         startActivity(intent)
     }
@@ -102,6 +187,11 @@ class FocusAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        serviceScope.cancel()
         AccessibilityBridge.setServiceConnected(false)
+    }
+
+    private companion object {
+        const val LIMIT_CHECK_DEBOUNCE_MILLIS = 300L
     }
 }

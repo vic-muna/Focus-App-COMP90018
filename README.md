@@ -291,3 +291,26 @@ changed, so the project still compiles as-is.
   the checked SSID, and a "Stored Wi-Fi Source List" button to view/untag
   saved networks. Connecting to a tagged network now shows the same
   auto-suggestion banner as schedule/location triggers.  
+
+## 26/09/2026 Update (David Shiau)
+- **Scheduled Limits** (renamed from "Blocked Apps"): during a group's
+  scheduled time, each app can have a daily **Max Open Times** and
+  **Max Duration** limit. Going over either one shows the blocked screen,
+  even mid-use. Only usage inside the schedule window counts.
+- **Schedule banner**: no longer starts a focus session; it opens a page
+  showing each app's opens/usage in today's window against its limits.
+- **Schedule editor**: the start time can no longer be later than the end
+  time.
+- **Location Zone groups**: Location now has its own app groups (picker,
+  rename, group list), separate from Scheduled Limits. Accepting the
+  location banner (or Quick Focus) blocks the selected location group.
+- **Wi-Fi Source Detection**: moved from Settings to a third card on Home,
+  with the same trigger switch, network check and tagged list, plus its own
+  app groups. Accepting the Wi-Fi banner blocks the selected Wi-Fi group.
+- **Banners**: the schedule, location and Wi-Fi banners can now all show at
+  once, each dismissed separately.
+- **Priority**: a started location/Wi-Fi focus session blocks its apps
+  outright, overriding any Scheduled Limit on the same apps.
+- **Wi-Fi name fix**: the network name now reads correctly on Android 12+,
+  and the check says why when it can't (e.g. precise location needed,
+  Location turned off).

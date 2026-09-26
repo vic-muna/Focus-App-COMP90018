@@ -22,6 +22,15 @@ class LocationPermissionState internal constructor(initialGranted: Boolean) {
     var hasPermission by mutableStateOf(initialGranted)
         internal set
 
+    /**
+     * [David Shiau, 2026-09-26] Bumped every time the permission dialog
+     * returns, even if [hasPermission] didn't change (e.g. upgrading
+     * "Approximate" to "Precise" leaves it true) - key a LaunchedEffect on
+     * this to react to "the user just answered the dialog".
+     */
+    var resultCount by mutableStateOf(0)
+        internal set
+
     internal lateinit var launcher: ActivityResultLauncher<Array<String>>
 
     fun request() {
@@ -51,6 +60,7 @@ fun rememberLocationPermissionState(): LocationPermissionState {
         state.hasPermission =
             results[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
             results[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        state.resultCount++
     }
 
     return state
