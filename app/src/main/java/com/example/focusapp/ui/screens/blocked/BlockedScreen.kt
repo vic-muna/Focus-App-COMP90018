@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -19,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.example.focusapp.ui.components.FocusPillButton
 import com.example.focusapp.ui.components.WarningSign
 import com.example.focusapp.ui.theme.FocusAppTheme
+import com.example.focusapp.ui.theme.FocusSpacing
 import com.example.focusapp.ui.theme.FocusTheme
 
 /**
@@ -48,6 +50,8 @@ fun BlockedScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.background)
+            // This screen is its own Activity (no Scaffold), so keep content clear of the system bars here.
+            .systemBarsPadding()
             .semantics { contentDescription = "$appLabel is blocked during Focus Mode" },
     ) {
         Column(
@@ -82,7 +86,7 @@ fun BlockedScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .padding(start = 45.dp, end = 45.dp, bottom = 72.dp),
+                .padding(start = 45.dp, end = 45.dp, bottom = FocusSpacing.ScreenBottom),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             FocusPillButton(

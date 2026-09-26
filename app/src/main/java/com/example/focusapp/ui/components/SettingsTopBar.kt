@@ -11,6 +11,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.focusapp.R
 import com.example.focusapp.ui.theme.FocusAppTheme
+import com.example.focusapp.ui.theme.FocusSpacing
 import com.example.focusapp.ui.theme.FocusTheme
 
 /** The settings gear pinned to the top-right corner, shared by every top-level screen. */
@@ -22,7 +23,8 @@ fun SettingsTopBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = 12.dp, end = 21.dp),
+            // FocusIconButton pads its icon by 4 dp, so this puts the gear itself at ScreenTop.
+            .padding(top = FocusSpacing.ScreenTop - 4.dp, end = 21.dp),
         contentAlignment = Alignment.TopEnd,
     ) {
         FocusIconButton(

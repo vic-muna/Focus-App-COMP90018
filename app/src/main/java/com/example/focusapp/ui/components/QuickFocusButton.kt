@@ -38,7 +38,7 @@ fun QuickFocusButton(
 
     Box(
         modifier = modifier
-            .size(164.dp)
+            .size(175.dp)
             .clip(FocusBlobShape)
             .background(colors.primaryAction.copy(alpha = OUTER_BLOB_ALPHA))
             .clickable(role = Role.Button, onClick = onClick),
@@ -46,7 +46,7 @@ fun QuickFocusButton(
     ) {
         Box(
             modifier = Modifier
-                .size(136.dp)
+                .size(145.dp)
                 .rotate(INNER_BLOB_ROTATION)
                 .background(colors.primaryAction, FocusBlobShape)
         )

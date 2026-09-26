@@ -43,6 +43,7 @@ import com.example.focusapp.ui.screens.home.DEFAULT_BREAK_MINUTES
 import com.example.focusapp.ui.screens.home.TimeSlot
 import com.example.focusapp.ui.screens.home.generateFakeGroups
 import com.example.focusapp.ui.theme.FocusAppTheme
+import com.example.focusapp.ui.theme.FocusSpacing
 import com.example.focusapp.ui.theme.FocusTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -309,7 +310,7 @@ private fun AppFocusContent(
             onTabClick = onTabClick,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 32.dp),
+                .padding(bottom = FocusSpacing.ScreenBottom),
         )
 
         if (editStep != null || viewingGroup != null) {
