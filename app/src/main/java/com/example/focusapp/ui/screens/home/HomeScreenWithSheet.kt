@@ -38,10 +38,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.data.repository.FocusRepositoryProvider
 import com.example.focusapp.data.wifi.WifiTriggerStorage
@@ -51,7 +49,7 @@ import com.example.focusapp.domain.usecase.EvaluateFocusTriggerUseCase
 import com.example.focusapp.domain.usecase.FocusTriggerResult
 import com.example.focusapp.ui.common.rememberLocationPermissionState
 import com.example.focusapp.ui.screens.session.FocusSessionSource
-import com.example.focusapp.ui.theme.WireframeColors
+import com.example.focusapp.ui.theme.FocusTheme
 import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -95,8 +93,23 @@ fun HomeScreenWithSheet(
 
     var activeSheet by remember { mutableStateOf(SheetType.NONE) }
 
-    fun openSheet(type: SheetType) {
+    // Which bottom-nav tab opened the current sheet (Schedule and Blocked Apps
+    // share one sheet), so the nav indicator stays on the tab the user tapped.
+    var sheetTab by remember { mutableStateOf(HomeNavTab.HOME) }
+    val selectedTab = if (activeSheet == SheetType.NONE) HomeNavTab.HOME else sheetTab
+
+    fun openSheet(type: SheetType, tab: HomeNavTab) {
+        sheetTab = tab
         activeSheet = type
+    }
+
+    fun onTabClick(tab: HomeNavTab) {
+        when (tab) {
+            HomeNavTab.HOME -> Unit
+            HomeNavTab.LOCATION -> openSheet(SheetType.LOCATION_ZONE, tab)
+            // Schedules live inside the blocked-app group sheet for now.
+            HomeNavTab.SCHEDULE, HomeNavTab.BLOCKED_APPS -> openSheet(SheetType.BLOCKED_APPS, tab)
+        }
     }
 
     fun closeSheet(onFinished: () -> Unit = {}) {
@@ -148,10 +161,11 @@ fun HomeScreenWithSheet(
     LaunchedEffect(reopenSheetSignal) {
         if (reopenSheetSignal) {
             onReopenSheetHandled()
-            openSheet(
-                if (reopenSheetType == "location_zone") SheetType.LOCATION_ZONE
-                else SheetType.BLOCKED_APPS
-            )
+            if (reopenSheetType == "location_zone") {
+                openSheet(SheetType.LOCATION_ZONE, HomeNavTab.LOCATION)
+            } else {
+                openSheet(SheetType.BLOCKED_APPS, HomeNavTab.BLOCKED_APPS)
+            }
         }
     }
 
@@ -221,16 +235,17 @@ fun HomeScreenWithSheet(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(WireframeColors.Background)
+            .background(FocusTheme.colors.background)
     ) {
         // 1. 主要畫面
+        // The new Figma Home has no Party Mode entry, so onPartyModeClick is
+        // currently unused here - kept so NavGraph's wiring doesn't change.
         HomeScreen(
-            onAvatarClick = onAvatarClick,
+            selectedTab = selectedTab,
+            onSettingsClick = onSettingsClick,
+            onDashboardClick = onAvatarClick,
             onQuickFocusClick = { onQuickFocusClick() },
-            onPartyModeClick = onPartyModeClick,
-            onBlockedAppCardClick = { openSheet(SheetType.BLOCKED_APPS) },
-            onLocationCardClick = { openSheet(SheetType.LOCATION_ZONE) },
-            onSettingsClick = onSettingsClick
+            onTabClick = { tab -> onTabClick(tab) }
         )
 
         if (suggestion != null && suggestionKey != null) {
@@ -335,6 +350,7 @@ private fun AutoFocusSuggestionBanner(
     onAccept: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val colors = FocusTheme.colors
     val message = when (result) {
         is FocusTriggerResult.ScheduleMatch -> "You're in your ${result.groupName} schedule - start a focus session?"
         is FocusTriggerResult.LocationMatch -> "You've arrived at ${result.zoneName} - start a focus session?"
@@ -347,16 +363,15 @@ private fun AutoFocusSuggestionBanner(
             .padding(16.dp)
             .widthIn(max = 280.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFF252853))
+            .background(colors.surface)
             .clickable(onClick = onAccept)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = message,
-            color = Color.White,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
+            style = FocusTheme.typography.body,
+            color = colors.onSurface,
             modifier = Modifier.weight(1f, fill = false)
         )
         Spacer(Modifier.width(8.dp))
@@ -366,7 +381,7 @@ private fun AutoFocusSuggestionBanner(
             Icon(
                 imageVector = Icons.Filled.Close,
                 contentDescription = "Dismiss",
-                tint = Color.White
+                tint = colors.onSurface
             )
         }
     }

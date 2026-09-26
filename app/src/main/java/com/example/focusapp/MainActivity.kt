@@ -8,11 +8,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import com.example.focusapp.ui.navigation.FocusAppNavGraph
+import com.example.focusapp.ui.theme.FocusAppTheme
 import com.google.android.gms.location.FusedLocationProviderClient
 /**
  * MainActivity
@@ -49,10 +49,10 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            // MaterialTheme with no custom arguments = default Material3
-            // colors/typography. No branding/visual design has been done
-            // yet - that is intentional at this stage of the project.
-            MaterialTheme {
+            // Provides FocusTheme.colors / FocusTheme.typography to every
+            // screen (see ui/theme/Theme.kt). Material3 keeps its default
+            // scheme until the remaining screens move to the new design.
+            FocusAppTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     // Root navigation graph - decides which screen is shown
                     // and owns the bottom navigation bar.
