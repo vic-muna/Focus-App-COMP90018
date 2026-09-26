@@ -49,13 +49,33 @@ private val OnSheet = Color.White
 private val OnSheetMuted = Color.White.copy(alpha = 0.8f)
 private val AccentPinColor = Color(0xFFFF5252)
 
+/**
+ * Content of the Location Zone bottom sheet.
+ *
+ * [David Shiau, 2026-09-26] Location now has its OWN app groups, separate
+ * from Scheduled Limits' (see BlockedAppGroupStorage.forLocationGroups):
+ * the Blocked Apps card opens the same shared app picker, the group name
+ * above it renames the selected group, and the bottom chevron bar opens
+ * the location group list (select/create) - the same mechanism as the
+ * Scheduled Limits sheet. A location-started focus session blocks only
+ * the selected location group (see NavGraph.kt's restrictedPackagesFor).
+ */
 @Composable
 fun LocationZoneSheetContent(
+    groups: List<BlockedAppGroup>,
+    selectedGroupId: String,
+    onAppsChange: (groupId: String, apps: List<AppItem>) -> Unit = { _, _ -> },
+    onRenameGroup: (groupId: String, newName: String) -> Unit = { _, _ -> },
     onEditClick: () -> Unit = {},
-    onChevronClick: () -> Unit = {}
+    onGroupListClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var zone by remember { mutableStateOf<FocusZone?>(null) }
+    val selectedGroup = groups.find { it.id == selectedGroupId } ?: groups.firstOrNull()
+
+    var showAppPicker by remember { mutableStateOf(false) }
+    var showRenameDialog by remember { mutableStateOf(false) }
+    val installedApps = rememberInstalledApps(shouldLoad = showAppPicker)
 
     LaunchedEffect(Unit) {
         zone = withContext(Dispatchers.IO) {
@@ -67,7 +87,7 @@ fun LocationZoneSheetContent(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp)
-            .padding(bottom = 95.dp),
+            .padding(bottom = 50.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // 1. 頂部標題 + 白線分隔符
@@ -87,9 +107,21 @@ fun LocationZoneSheetContent(
                 .background(OnSheet)
         )
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(16.dp))
 
-        // 2. 地圖預覽卡片
+        // Which location group is selected - tap to rename it.
+        if (selectedGroup != null) {
+            Text(
+                text = "Group: ${selectedGroup.name}  ✎",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = OnSheetMuted,
+                modifier = Modifier.clickable { showRenameDialog = true }
+            )
+            Spacer(Modifier.height(16.dp))
+        }
+
+        // 2. 地圖預覽卡片 + this zone's own blocked apps
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -102,7 +134,43 @@ fun LocationZoneSheetContent(
                     .fillMaxHeight(),
                 onClick = onEditClick
             )
+            if (selectedGroup != null) {
+                BlockAppsCard(
+                    group = selectedGroup,
+                    title = "Blocked Apps",
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    onClick = { showAppPicker = true }
+                )
+            }
         }
+
+        Spacer(Modifier.height(16.dp))
+
+        BottomChevronBar(onClick = onGroupListClick)
+    }
+
+    if (showAppPicker && selectedGroup != null) {
+        GroupAppPickerBottomSheet(
+            installedApps = installedApps,
+            selectedApps = selectedGroup.apps,
+            onAppsChange = { apps -> onAppsChange(selectedGroup.id, apps) },
+            onDismiss = { showAppPicker = false },
+            title = "Blocked Apps",
+            subtitle = "Select apps to block when you're in this location zone"
+        )
+    }
+
+    if (showRenameDialog && selectedGroup != null) {
+        RenameGroupDialog(
+            currentName = selectedGroup.name,
+            onConfirm = { newName ->
+                onRenameGroup(selectedGroup.id, newName)
+                showRenameDialog = false
+            },
+            onDismiss = { showRenameDialog = false }
+        )
     }
 }
 
@@ -183,5 +251,6 @@ private fun MapCard(
 @Preview(showBackground = true, backgroundColor = 0xFF3B3B96)
 @Composable
 private fun LocationZoneSheetContentPreview() {
-    LocationZoneSheetContent()
+    val fakeGroups = generateFakeGroups()
+    LocationZoneSheetContent(groups = fakeGroups, selectedGroupId = fakeGroups.first().id)
 }

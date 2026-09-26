@@ -25,6 +25,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -124,7 +126,7 @@ fun ScheduleEditorSheet(
                 hour = schedule.start.hour,
                 minute = schedule.start.minute,
                 onTimeChange = { h, m ->
-                    onScheduleChange(schedule.copy(start = ClockTime(h, m)))
+                    onScheduleChange(schedule.withStartClamped(ClockTime(h, m)))
                 },
                 modifier = Modifier.weight(1f)
             )
@@ -135,7 +137,7 @@ fun ScheduleEditorSheet(
                 hour = schedule.end.hour,
                 minute = schedule.end.minute,
                 onTimeChange = { h, m ->
-                    onScheduleChange(schedule.copy(end = ClockTime(h, m)))
+                    onScheduleChange(schedule.withEndClamped(ClockTime(h, m)))
                 },
                 modifier = Modifier.weight(1f)
             )
@@ -179,7 +181,7 @@ private fun TimePickerCard(
                 // 小時滾輪 (00 - 23)
                 WheelPicker(
                     items = (0..23).map { String.format("%02d", it) },
-                    initialIndex = hour,
+                    selectedIndex = hour,
                     onItemSelected = { selectedHour ->
                         onTimeChange(selectedHour, minute)
                     }
@@ -196,7 +198,7 @@ private fun TimePickerCard(
                 // 分鐘滾輪 (00 - 59)
                 WheelPicker(
                     items = (0..59).map { String.format("%02d", it) },
-                    initialIndex = minute,
+                    selectedIndex = minute,
                     onItemSelected = { selectedMinute ->
                         onTimeChange(hour, selectedMinute)
                     }
@@ -213,12 +215,18 @@ private fun TimePickerCard(
 @Composable
 private fun WheelPicker(
     items: List<String>,
-    initialIndex: Int = 0,
+    selectedIndex: Int = 0,
     onItemSelected: (Int) -> Unit
 ) {
     val itemHeight = 36.dp
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialIndex)
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = selectedIndex)
     val snapFlingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
+
+    // [David Shiau, 2026-09-26] The collector below is launched once, so it
+    // must read the LATEST callback - otherwise it keeps the first
+    // composition's lambda, which captured stale hour/minute/schedule values
+    // (e.g. changing the hour could silently undo a minute change).
+    val currentOnItemSelected by rememberUpdatedState(onItemSelected)
 
     // 當滾輪停下來時捕捉當前選中的 Index
     LaunchedEffect(listState) {
@@ -226,9 +234,18 @@ private fun WheelPicker(
             .distinctUntilChanged()
             .collect { index ->
                 if (index in items.indices) {
-                    onItemSelected(index)
+                    currentOnItemSelected(index)
                 }
             }
+    }
+
+    // [David Shiau, 2026-09-26] Follows the value back from the caller once
+    // the user lets go - lets the caller reject/clamp a pick (e.g. a start
+    // time past the end time) and have the wheel snap to the corrected value.
+    LaunchedEffect(selectedIndex, listState.isScrollInProgress) {
+        if (!listState.isScrollInProgress && listState.firstVisibleItemIndex != selectedIndex) {
+            listState.animateScrollToItem(selectedIndex)
+        }
     }
 
     Box(

@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.focusapp.data.apps.getAppLabel
@@ -57,6 +58,11 @@ class BlockedActivity : ComponentActivity() {
     // screen (see that override below for why that case can happen).
     private val blockedAppLabelState = mutableStateOf("This app")
 
+    // [David Shiau, 2026-09-26] Why it was blocked, for a Scheduled Limits
+    // block (e.g. "You've reached your limit of 3 times ..."); null for a
+    // focus-session block, which keeps the original message.
+    private val blockReasonState = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         updateBlockedLabelFrom(intent)
@@ -66,6 +72,7 @@ class BlockedActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     BlockedScreen(
                         appLabel = blockedAppLabelState.value,
+                        reason = blockReasonState.value,
                         onGotItClick = { goHomeAndFinish() }
                     )
                 }
@@ -90,6 +97,7 @@ class BlockedActivity : ComponentActivity() {
     private fun updateBlockedLabelFrom(intent: Intent) {
         val blockedPackageName = intent.getStringExtra(EXTRA_BLOCKED_PACKAGE)
         blockedAppLabelState.value = blockedPackageName?.let { getAppLabel(this, it) } ?: "This app"
+        blockReasonState.value = intent.getStringExtra(EXTRA_BLOCK_REASON)
     }
 
     /**
@@ -109,6 +117,9 @@ class BlockedActivity : ComponentActivity() {
     companion object {
         /** Intent extra key FocusAccessibilityService uses to say which app got blocked. */
         const val EXTRA_BLOCKED_PACKAGE = "blocked_package_name"
+
+        /** Optional Intent extra: a human-readable reason, shown instead of the default message. */
+        const val EXTRA_BLOCK_REASON = "block_reason"
     }
 }
 
@@ -120,7 +131,7 @@ class BlockedActivity : ComponentActivity() {
  * [WireframeColors] as the rest of the app for visual consistency.
  */
 @Composable
-private fun BlockedScreen(appLabel: String, onGotItClick: () -> Unit) {
+private fun BlockedScreen(appLabel: String, reason: String?, onGotItClick: () -> Unit) {
     // Handles the system Back button/gesture the same way as the "Got it"
     // button - see BlockedActivity's class doc comment for why this can't
     // just be left to the default Back behaviour.
@@ -144,7 +155,8 @@ private fun BlockedScreen(appLabel: String, onGotItClick: () -> Unit) {
         )
 
         Text(
-            text = "This app is in your Focus restricted list right now.",
+            text = reason ?: "This app is in your Focus restricted list right now.",
+            textAlign = TextAlign.Center,
             color = WireframeColors.OnLight,
             modifier = Modifier.padding(bottom = 32.dp)
         )

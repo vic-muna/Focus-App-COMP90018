@@ -26,7 +26,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,16 +35,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
-import com.example.focusapp.data.apps.InstalledAppInfo
-import com.example.focusapp.data.apps.getLaunchableApps
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 private const val MAX_VISIBLE_APPS_IN_CARD = 4
 
@@ -61,14 +55,17 @@ private val CardIconPlaceholderColors = listOf(
     Color(0xFFB79FE0)
 )
 
-private enum class ActivePicker { NONE, APP_PICKER, SCHEDULE_EDITOR }
+private enum class ActivePicker { NONE, APP_PICKER, SCHEDULE_EDITOR, MAX_OPENS_EDITOR, MAX_DURATION_EDITOR }
 
 /**
- * Content of the Blocked Apps summary bottom sheet ("Auto Blocking").
+ * Content of the Scheduled Limits summary bottom sheet (formerly "Blocked Apps").
  *
- * Just two tap zones: the Block Apps card opens the full app list, and the
+ * Four tap zones: the Limited Apps card opens the full app list, and the
  * Active Time card opens one combined editor for active days + start/end
- * time together (not three separate pickers). Both are ModalBottomSheets
+ * time together (not three separate pickers). [David Shiau, 2026-09-26]
+ * Below them, the Max Open Times / Max Duration cards each open a
+ * UsageLimitEditorSheet for that group's daily per-app limit (enforced
+ * by FocusAccessibilityService - see BlockedAppGroup's doc comment). All are ModalBottomSheets
  * layered on top of this sheet, and every edit applies immediately. The
  * only remaining full-screen destination is GroupListScreen, reached via
  * the bottom chevron bar.
@@ -86,6 +83,8 @@ fun AutoBlockingSheetContent(
     onAppsChange: (groupId: String, apps: List<AppItem>) -> Unit,
     onScheduleChange: (groupId: String, schedule: TimeSlot) -> Unit,
     onRenameGroup: (groupId: String, newName: String) -> Unit = { _, _ -> },
+    onMaxOpensChange: (groupId: String, maxOpens: Int?) -> Unit = { _, _ -> },
+    onMaxDurationChange: (groupId: String, maxMinutes: Int?) -> Unit = { _, _ -> },
     onBlockerClick: () -> Unit
 ) {
     val selectedGroup = groups.find { it.id == selectedGroupId } ?: groups.firstOrNull() ?: return
@@ -93,20 +92,7 @@ fun AutoBlockingSheetContent(
     var activePicker by remember { mutableStateOf(ActivePicker.NONE) }
     var showRenameDialog by remember { mutableStateOf(false) }
 
-    // [David Shiau, 2026-09-20] Real installed apps for the picker - loaded
-    // once (lazily, on first open) and reused afterwards rather than
-    // re-querying PackageManager every time the sheet is reopened.
-    val context = LocalContext.current
-    var installedApps by remember { mutableStateOf<List<InstalledAppInfo>>(emptyList()) }
-    var isLoadingInstalledApps by remember { mutableStateOf(false) }
-
-    LaunchedEffect(activePicker) {
-        if (activePicker == ActivePicker.APP_PICKER && installedApps.isEmpty() && !isLoadingInstalledApps) {
-            isLoadingInstalledApps = true
-            installedApps = withContext(Dispatchers.Default) { getLaunchableApps(context) }
-            isLoadingInstalledApps = false
-        }
-    }
+    val installedApps = rememberInstalledApps(shouldLoad = activePicker == ActivePicker.APP_PICKER)
 
     Column(
         modifier = Modifier
@@ -152,49 +138,40 @@ fun AutoBlockingSheetContent(
             )
         }
 
+        Spacer(Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(110.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            UsageLimitCard(
+                title = "Max Open Times",
+                valueLabel = selectedGroup.maxOpensPerApp?.let(::formatOpenTimes),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                onClick = { activePicker = ActivePicker.MAX_OPENS_EDITOR }
+            )
+            UsageLimitCard(
+                title = "Max Duration",
+                valueLabel = selectedGroup.maxMinutesPerApp?.let(::formatLimitMinutes),
+                modifier = Modifier.weight(1.1f).fillMaxHeight(),
+                onClick = { activePicker = ActivePicker.MAX_DURATION_EDITOR }
+            )
+        }
+
         Spacer(Modifier.height(16.dp))
 
         BottomChevronBar(onClick = onBlockerClick)
     }
 
     if (activePicker == ActivePicker.APP_PICKER) {
-        // [David Shiau, 2026-09-20] Merge every real installed app with
-        // this group's already-blocked packages, so the picker shows the
-        // whole phone's app list with the group's current selection
-        // pre-checked (multi-select - any number of rows can be checked
-        // at once).
-        val blockedPackageNames = remember(selectedGroup.apps) {
-            selectedGroup.apps.filter { it.isBlocked }.map { it.packageName }.toSet()
-        }
-        val pickerApps = remember(installedApps, blockedPackageNames) {
-            installedApps.map { info ->
-                AppItem(
-                    packageName = info.packageName,
-                    name = info.label,
-                    isBlocked = info.packageName in blockedPackageNames,
-                    icon = info.icon
-                )
-            }
-        }
-
-        ModalBottomSheet(
-            onDismissRequest = { activePicker = ActivePicker.NONE },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            // Avoids a doubled/near-black scrim when stacked over the
-            // already-open summary sheet.
-            scrimColor = Color.Transparent
-        ) {
-            AppPickerSheet(
-                apps = pickerApps,
-                isLoading = isLoadingInstalledApps,
-                // Only the checked apps are worth persisting on the group -
-                // storing the full installed-app list would balloon storage
-                // and break "N apps blocked" counts elsewhere.
-                onAppsChange = { updated ->
-                    onAppsChange(selectedGroup.id, updated.filter { it.isBlocked })
-                }
-            )
-        }
+        GroupAppPickerBottomSheet(
+            installedApps = installedApps,
+            selectedApps = selectedGroup.apps,
+            onAppsChange = { apps -> onAppsChange(selectedGroup.id, apps) },
+            onDismiss = { activePicker = ActivePicker.NONE }
+        )
     }
 
     if (activePicker == ActivePicker.SCHEDULE_EDITOR) {
@@ -206,6 +183,24 @@ fun AutoBlockingSheetContent(
             ScheduleEditorSheet(
                 schedule = selectedGroup.schedule,
                 onScheduleChange = { onScheduleChange(selectedGroup.id, it) }
+            )
+        }
+    }
+
+    if (activePicker == ActivePicker.MAX_OPENS_EDITOR || activePicker == ActivePicker.MAX_DURATION_EDITOR) {
+        val isOpens = activePicker == ActivePicker.MAX_OPENS_EDITOR
+        ModalBottomSheet(
+            onDismissRequest = { activePicker = ActivePicker.NONE },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            scrimColor = Color.Transparent
+        ) {
+            UsageLimitEditorSheet(
+                spec = if (isOpens) MaxOpensLimitSpec else MaxDurationLimitSpec,
+                value = if (isOpens) selectedGroup.maxOpensPerApp else selectedGroup.maxMinutesPerApp,
+                onValueChange = { newValue ->
+                    if (isOpens) onMaxOpensChange(selectedGroup.id, newValue)
+                    else onMaxDurationChange(selectedGroup.id, newValue)
+                }
             )
         }
     }
@@ -224,7 +219,7 @@ fun AutoBlockingSheetContent(
 
 /** Tapping the sheet's title opens this to rename the currently selected group. */
 @Composable
-private fun RenameGroupDialog(
+internal fun RenameGroupDialog(
     currentName: String,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit
@@ -264,7 +259,12 @@ private fun RenameGroupDialog(
  * (falls back to the old colored placeholder box only if it's unavailable).
  */
 @Composable
-private fun BlockAppsCard(group: BlockedAppGroup, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun BlockAppsCard(
+    group: BlockedAppGroup,
+    modifier: Modifier = Modifier,
+    title: String = "Limited Apps",
+    onClick: () -> Unit
+) {
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(24.dp))
@@ -273,7 +273,7 @@ private fun BlockAppsCard(group: BlockedAppGroup, modifier: Modifier = Modifier,
             .padding(16.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Text("Block Apps", color = OnSheet, fontSize = 18.sp, fontWeight = FontWeight.Medium)
+        Text(title, color = OnSheet, fontSize = 18.sp, fontWeight = FontWeight.Medium)
 
         val visibleApps = group.apps.take(MAX_VISIBLE_APPS_IN_CARD)
         val overflowCount = group.apps.size - visibleApps.size
@@ -371,6 +371,35 @@ private fun ActiveTimeCard(
     }
 }
 
+/** Tapping this card opens a UsageLimitEditorSheet; [valueLabel] null shows "No limit". */
+@Composable
+private fun UsageLimitCard(
+    title: String,
+    valueLabel: String?,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(24.dp))
+            .background(CardSurface)
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(title, color = OnSheet, fontSize = 18.sp, fontWeight = FontWeight.Medium)
+        Column {
+            Text(
+                text = valueLabel ?: "No limit",
+                color = if (valueLabel != null) OnSheet else OnSheetMuted,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text("per app / day", color = OnSheetMuted, fontSize = 11.sp)
+        }
+    }
+}
+
 @Composable
 private fun SplitTimeLabel(time: Pair<String, String>, modifier: Modifier = Modifier) {
     Row(modifier = modifier, verticalAlignment = Alignment.Bottom) {
@@ -407,7 +436,7 @@ private fun formatActiveDaysForDisplay(activeDays: Set<String>): List<String> {
 
 /** The only navigation trigger on this sheet: opens the group selection list. */
 @Composable
-private fun BottomChevronBar(onClick: () -> Unit) {
+internal fun BottomChevronBar(onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()

@@ -61,12 +61,12 @@ private const val WIPE_DURATION_MILLIS = 600
  *  play first (not built yet). Mirrors Home's own delay before entering. */
 private const val FOCUS_SESSION_END_DELAY_MILLIS = 2_000L
 
-/** Where a focus session was started from - lets a saved [FocusSession] carry which
- *  group triggered it, for a schedule match. */
+/** Where a focus session was started from. [David Shiau, 2026-09-26] No `Schedule`
+ *  source any more - a schedule match now opens GroupUsageScreen (the daily open-times/
+ *  duration limit) instead of starting a focus session. */
 sealed class FocusSessionSource {
     data object Manual : FocusSessionSource()
     data object Party : FocusSessionSource()
-    data class Schedule(val groupId: String, val groupName: String) : FocusSessionSource()
     data class Location(val zoneName: String) : FocusSessionSource()
     data class Wifi(val ssid: String) : FocusSessionSource()
 }
@@ -74,8 +74,7 @@ sealed class FocusSessionSource {
 /** The one hoisted piece of state (in NavGraph.kt) for "is a focus session running right now". */
 data class ActiveFocusSession(
     val startTimeMillis: Long,
-    val source: FocusSessionSource,
-    val groupId: String? = null
+    val source: FocusSessionSource
 )
 
 /**
@@ -158,7 +157,7 @@ fun FocusSessionScreen(
                 startTimeMillis = session.startTimeMillis,
                 endTimeMillis = System.currentTimeMillis(),
                 wasCompletedSuccessfully = true,
-                groupId = session.groupId
+                groupId = null
             )
             try {
                 withContext(Dispatchers.IO) {
@@ -317,8 +316,7 @@ private fun FocusSessionScreenPreview() {
     FocusSessionScreen(
         session = ActiveFocusSession(
             startTimeMillis = System.currentTimeMillis() - 65_000,
-            source = FocusSessionSource.Schedule(groupId = "group_study", groupName = "Study Group"),
-            groupId = "group_study"
+            source = FocusSessionSource.Manual
         ),
         onEndSessionClick = {}
     )

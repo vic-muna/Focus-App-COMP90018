@@ -57,7 +57,8 @@ fun GroupListScreen(
     selectedGroupId: String,
     onGroupSelect: (String) -> Unit,
     onAddGroupClick: (String) -> Unit,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    title: String = "Block Groups"
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
 
@@ -89,7 +90,7 @@ fun GroupListScreen(
             }
             Spacer(Modifier.width(16.dp))
             Text(
-                text = "Block Groups",
+                text = title,
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary

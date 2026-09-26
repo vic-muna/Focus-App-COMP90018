@@ -41,12 +41,29 @@ object Destinations {
     // which group is selected.
     const val GROUP_LIST = "group_list"
 
+    // [David Shiau, 2026-09-26] Location Zone's own group list (select/
+    // create) - the same GroupListScreen as GROUP_LIST, but over the
+    // separate location groups. Reachable from the Location Zone sheet.
+    const val LOCATION_GROUP_LIST = "location_group_list"
+
+    // [David Shiau, 2026-09-26] Same again for Wi-Fi Source Detection's own
+    // groups. Reachable from the Wi-Fi sheet on Home.
+    const val WIFI_GROUP_LIST = "wifi_group_list"
+
     // Location Zone edit flow (reachable from Home's bottom sheet). Single
     // zone only - no id/argument needed, unlike the blocked-apps group flow.
     const val EDIT_LOCATION_ZONE = "edit_location_zone"
 
+    // [David Shiau, 2026-09-26] Today's open counts/durations for one
+    // Blocked-App-Group - reached by tapping Home's schedule banner. See
+    // ui.screens.home.GroupUsageScreen.
+    const val GROUP_USAGE = "group_usage/{groupId}"
+
+    /** Builds a real, navigable route for [GROUP_USAGE] with a given group id filled in. */
+    fun groupUsageRoute(groupId: String) = "group_usage/$groupId"
+
     // Focus Session screen - reached from Home's Quick Focus button, Party
-    // Mode's "Go Focus Mode" button, or Home's auto-suggestion banner. See
+    // Mode's "Go Focus Mode" button, or Home's location/Wi-Fi banner. See
     // ui.screens.session.FocusSessionScreen and NavGraph.kt's hoisted
     // `activeFocusSession` state.
     const val FOCUS_SESSION = "focus_session"
