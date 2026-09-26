@@ -118,7 +118,9 @@ fun FocusAppNavGraph() {
             val savedSelectedId = withContext(Dispatchers.IO) { groupStorage.getSelectedGroupId() }
             selectedGroupId = savedSelectedId
                 ?.takeIf { id -> savedGroups.any { it.id == id } }
-                ?: savedGroups.first().id
+                ?: savedGroups.firstOrNull()?.id
+                // Every group may have been deleted - an empty id just means "none selected".
+                ?: ""
         }
         hasLoadedGroups = true
     }
@@ -254,6 +256,7 @@ fun FocusAppNavGraph() {
                 exitTransition = partyModeExit
             ) {
                 LocationScreen(
+                    groups = groups,
                     onSettingsClick = { navController.navigate(Destinations.SETTINGS) },
                     onTabClick = ::navigateToTab
                 )
@@ -266,25 +269,32 @@ fun FocusAppNavGraph() {
             ) {
                 AppFocusScreen(
                     groups = groups,
-                    // Until the "gorup detail" screen exists, a tile opens the
-                    // existing Blocked Apps sheet on Home for that group.
-                    onGroupClick = { group ->
-                        selectedGroupId = group.id
-                        navController.getBackStackEntry(Destinations.HOME).savedStateHandle.apply {
-                            set("reopenSheetType", "blocked_apps")
-                            set("reopenSheet", true)
-                        }
-                        navController.popBackStack(Destinations.HOME, inclusive = false)
-                    },
-                    onCreateGroup = { newGroup ->
+                    onCreateGroup = { input ->
                         groups = groups + BlockedAppGroup(
                             id = "group_${System.currentTimeMillis()}",
-                            name = newGroup.name,
-                            apps = newGroup.apps,
-                            schedule = newGroup.schedule,
-                            breakAllowance = newGroup.breakAllowance,
-                            breakMinutes = newGroup.breakMinutes
+                            name = input.name,
+                            apps = input.apps,
+                            schedule = input.schedule,
+                            breakAllowance = input.breakAllowance,
+                            breakMinutes = input.breakMinutes
                         )
+                    },
+                    onUpdateGroup = { groupId, input ->
+                        groups = groups.map { g ->
+                            if (g.id != groupId) g
+                            else g.copy(
+                                name = input.name,
+                                apps = input.apps,
+                                schedule = input.schedule,
+                                breakAllowance = input.breakAllowance,
+                                breakMinutes = input.breakMinutes
+                            )
+                        }
+                    },
+                    onDeleteGroup = { group ->
+                        groups = groups.filterNot { it.id == group.id }
+                        // Keep the selection pointing at a group that still exists.
+                        if (selectedGroupId == group.id) selectedGroupId = groups.firstOrNull()?.id ?: ""
                     },
                     onTabClick = ::navigateToTab
                 )

@@ -323,3 +323,17 @@ Also still pending on the Location screen: the map itself is a placeholder
 (`ui/screens/location/MapPlaceholder.kt`) until the team picks a map SDK
 (Google Maps vs OpenStreetMap), and a zone's on/off switch is UI-only
 (`FocusZone` has no "enabled" field).
+
+### Location "Schedule" link is UI-side only
+
+The add/edit-location card's **Schedule** button lets the user pick which
+app group (its apps + time slot) a location uses. That link is stored
+**UI-side** in `ui/screens/location/LocationScheduleStorage.kt`
+(SharedPreferences, keyed by zone id) - `FocusZone` has no group field, and
+this update deliberately doesn't add one.
+
+Nothing reads the link when a location triggers a focus session yet:
+`NavGraph.restrictedPackagesFor()` still blocks **every** group's apps for
+`FocusSessionSource.Location`. **Team decision needed:** whether the link
+belongs on `FocusZone` (data layer), and then who wires location sessions to
+block only the linked group.

@@ -2,9 +2,11 @@ package com.example.focusapp.ui.screens.appfocus
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,7 +43,9 @@ private val TileIconSize = 54.dp
  * Figma: one app-group tile - the group's first app icon, its name and how
  * many apps it blocks. [icon] is null when the group has no apps yet (or
  * the icon couldn't be resolved), which shows a blank placeholder instead.
+ * Tap = [onClick] (open the group), hold = [onLongClick] (delete).
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AppGroupTile(
     name: String,
@@ -49,6 +53,7 @@ fun AppGroupTile(
     icon: Bitmap?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onLongClick: () -> Unit = {},
 ) {
     val colors = FocusTheme.colors
     val typography = FocusTheme.typography
@@ -58,7 +63,7 @@ fun AppGroupTile(
             .size(AppGroupTileWidth, AppGroupTileHeight)
             .clip(TileShape)
             .background(colors.surface)
-            .clickable(role = Role.Button, onClick = onClick)
+            .combinedClickable(role = Role.Button, onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

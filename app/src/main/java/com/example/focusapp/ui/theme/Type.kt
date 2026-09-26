@@ -31,6 +31,8 @@ data class FocusTypography(
     val primaryActionLabel: TextStyle,
     /** Focus Mode's elapsed-time readout. */
     val timer: TextStyle,
+    /** A big standalone number in a summary, e.g. a group's break count. */
+    val statValue: TextStyle,
     /** Tooltip / hint bubble copy. */
     val hint: TextStyle,
     /** Card heading, e.g. a location group's name. */
@@ -67,6 +69,11 @@ val DefaultFocusTypography = FocusTypography(
         fontFamily = LineSeedFontFamily,
         fontWeight = FontWeight.ExtraBold,
         fontSize = 36.sp,
+    ),
+    statValue = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 28.sp,
     ),
     hint = TextStyle(
         fontFamily = LineSeedFontFamily,

@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.focusapp.ui.components.ConfirmButton
@@ -46,6 +47,8 @@ fun AddLocationCard(
     radiusMeters: Float,
     onRadiusChange: (Float) -> Unit,
     onScheduleClick: () -> Unit,
+    scheduleName: String?,
+    scheduleAppCount: Int,
     onClose: () -> Unit,
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier,
@@ -79,10 +82,16 @@ fun AddLocationCard(
                 .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
+            // A long place name gets cut short rather than running into the coordinates.
             Text(
                 text = locationLabel,
                 style = typography.caption,
                 color = colors.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 8.dp),
             )
             if (latitude != null && longitude != null) {
                 Text(
@@ -121,11 +130,37 @@ fun AddLocationCard(
                 .fillMaxWidth()
                 .height(56.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(colors.surfaceSunken)
+                // Once a group is linked, the button turns into an accent summary of it.
+                .background(if (scheduleName != null) colors.accent else colors.surfaceSunken)
                 .clickable(role = Role.Button, onClick = onScheduleClick),
             contentAlignment = Alignment.Center,
         ) {
-            Text(text = "Schedule", style = typography.inputLarge, color = colors.onSurfaceMuted)
+            if (scheduleName == null) {
+                Text(text = "Schedule", style = typography.inputLarge, color = colors.onSurfaceMuted)
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = scheduleName,
+                        style = typography.tileTitle,
+                        color = colors.onPrimaryAction,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = if (scheduleAppCount == 1) "1 app selected" else "$scheduleAppCount apps selected",
+                        style = typography.body,
+                        color = colors.onPrimaryAction,
+                        maxLines = 1,
+                        modifier = Modifier.padding(start = 12.dp),
+                    )
+                }
+            }
         }
     }
 }
@@ -150,6 +185,8 @@ private fun AddLocationCardPreview() {
             radiusMeters = 100f,
             onRadiusChange = {},
             onScheduleClick = {},
+            scheduleName = "Group 1",
+            scheduleAppCount = 12,
             onClose = {},
             onConfirm = {},
         )

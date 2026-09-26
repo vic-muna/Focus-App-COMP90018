@@ -83,6 +83,51 @@ fun DaySelector(
     }
 }
 
+/**
+ * Read-only version of [DaySelector] for summaries: active days get an
+ * accent outline and letter, the rest stay plain.
+ */
+@Composable
+fun DayIndicators(
+    activeDays: Set<String>,
+    modifier: Modifier = Modifier,
+    days: List<DayOption> = SundayFirstDays,
+    circleSize: Dp = 26.dp,
+) {
+    val colors = FocusTheme.colors
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        days.forEach { day ->
+            val color = if (day.key in activeDays) colors.accent else colors.onSurface
+            Box(
+                modifier = Modifier
+                    .size(circleSize)
+                    .border(1.5.dp, color, CircleShape)
+                    .semantics { contentDescription = day.name },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(text = day.letter, style = FocusTheme.typography.listLabel, color = color)
+            }
+        }
+    }
+}
+
+@Preview(widthDp = 320)
+@Composable
+private fun DayIndicatorsPreview() {
+    FocusAppTheme {
+        DayIndicators(
+            activeDays = setOf("Wed", "Thu", "Fri"),
+            modifier = Modifier
+                .background(FocusTheme.colors.surfaceSunken)
+                .padding(12.dp),
+        )
+    }
+}
+
 @Preview(widthDp = 320)
 @Composable
 private fun DaySelectorPreview() {

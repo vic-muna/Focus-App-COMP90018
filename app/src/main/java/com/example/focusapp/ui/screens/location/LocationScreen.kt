@@ -46,6 +46,8 @@ import com.example.focusapp.ui.components.SettingsTopBar
 import com.example.focusapp.ui.components.rememberPullUpPanelState
 import com.example.focusapp.ui.navigation.MainTab
 import com.example.focusapp.ui.navigation.MainTabBar
+import com.example.focusapp.ui.screens.home.BlockedAppGroup
+import com.example.focusapp.ui.screens.home.generateFakeGroups
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
 import kotlinx.coroutines.Dispatchers
@@ -72,6 +74,8 @@ private data class LocationDraft(
     val radiusMeters: Float = DEFAULT_RADIUS_METERS,
     val latitude: Double? = null,
     val longitude: Double? = null,
+    /** App group ("Schedule") this location uses, if any. */
+    val scheduleGroupId: String? = null,
 )
 
 /**
@@ -79,10 +83,12 @@ private data class LocationDraft(
  * Opens with the location group list partly covering the map; swiping down
  * on it (or its top edge) lowers it - it never leaves the screen - to show
  * more map, swiping up brings it back. Long-pressing the map starts adding
- * a location; tapping a group edits it, holding a group deletes it.
+ * a location; tapping a group edits it, holding a group deletes it. The
+ * card's Schedule button opens a picker for the app group the location uses.
  */
 @Composable
 fun LocationScreen(
+    groups: List<BlockedAppGroup>,
     onSettingsClick: () -> Unit,
     onTabClick: (MainTab) -> Unit,
 ) {
@@ -101,6 +107,11 @@ fun LocationScreen(
     // Reverse-geocoded "Approx. ..." names, keyed by zone id (best-effort, may stay missing).
     val placeNames = remember { mutableStateMapOf<String, String>() }
     var draftPlaceName by remember { mutableStateOf<String?>(null) }
+
+    val scheduleStorage = remember { LocationScheduleStorage(context) }
+    // Picker on top of the add/edit card; [pickerGroupId] is its uncommitted choice.
+    var isPickingSchedule by remember { mutableStateOf(false) }
+    var pickerGroupId by remember { mutableStateOf<String?>(null) }
 
     // Tapping the map while the card is open asks before discarding the draft.
     var confirmDiscard by remember { mutableStateOf(false) }
@@ -156,6 +167,7 @@ fun LocationScreen(
             radiusMeters = zone.radiusMeters.coerceIn(LocationRadiusRange),
             latitude = zone.latitude,
             longitude = zone.longitude,
+            scheduleGroupId = scheduleStorage.getGroupId(zone.id),
         )
     }
 
@@ -166,6 +178,7 @@ fun LocationScreen(
                 withContext(Dispatchers.IO) { FocusRepositoryProvider.get(context).deleteFocusZone(zone.id) }
                 enabledZoneIds.remove(zone.id)
                 placeNames.remove(zone.id)
+                scheduleStorage.setGroupId(zone.id, null)
                 reloadZones()
             } catch (e: Exception) {
                 listError = friendlyErrorMessage(e, "Deleting the location")
@@ -187,6 +200,7 @@ fun LocationScreen(
         scope.launch {
             try {
                 withContext(Dispatchers.IO) { FocusRepositoryProvider.get(context).saveFocusZone(zone) }
+                scheduleStorage.setGroupId(zone.id, current.scheduleGroupId)
                 if (current.editingZoneId == null) enabledZoneIds[zone.id] = true
                 // The position may have moved - resolve its name again.
                 placeNames.remove(zone.id)
@@ -198,7 +212,9 @@ fun LocationScreen(
         }
     }
 
-    BackHandler(enabled = draft != null) { draft = null }
+    BackHandler(enabled = draft != null) {
+        if (isPickingSchedule) isPickingSchedule = false else draft = null
+    }
 
     LocationContent(
         zones = zones,
@@ -214,6 +230,19 @@ fun LocationScreen(
         panelState = panelState,
         onMapLongPress = ::startDraft,
         onMapTap = { if (draft != null) confirmDiscard = true },
+        groups = groups,
+        isPickingSchedule = isPickingSchedule,
+        pickerGroupId = pickerGroupId,
+        onScheduleClick = {
+            pickerGroupId = draft?.scheduleGroupId
+            isPickingSchedule = true
+        },
+        onPickerSelect = { pickerGroupId = it },
+        onPickerBack = { isPickingSchedule = false },
+        onPickerConfirm = {
+            draft = draft?.copy(scheduleGroupId = pickerGroupId)
+            isPickingSchedule = false
+        },
         onDraftChange = { draft = it },
         onDraftDiscard = { draft = null },
         onDraftConfirm = ::saveDraft,
@@ -232,6 +261,7 @@ fun LocationScreen(
             confirmColor = FocusTheme.colors.rejection,
             onConfirm = {
                 confirmDiscard = false
+                isPickingSchedule = false
                 draft = null
             },
             onDismiss = { confirmDiscard = false },
@@ -269,6 +299,13 @@ private fun LocationContent(
     panelState: PullUpPanelState,
     onMapLongPress: (Offset) -> Unit,
     onMapTap: (Offset) -> Unit,
+    groups: List<BlockedAppGroup>,
+    isPickingSchedule: Boolean,
+    pickerGroupId: String?,
+    onScheduleClick: () -> Unit,
+    onPickerSelect: (String?) -> Unit,
+    onPickerBack: () -> Unit,
+    onPickerConfirm: () -> Unit,
     onDraftChange: (LocationDraft) -> Unit,
     onDraftDiscard: () -> Unit,
     onDraftConfirm: () -> Unit,
@@ -367,7 +404,13 @@ private fun LocationContent(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 saveError?.let { ErrorBanner(message = it) }
-                AddLocationCard(
+                if (isPickingSchedule) ScheduleGroupPickerCard(
+                    groups = groups,
+                    selectedGroupId = pickerGroupId,
+                    onSelect = onPickerSelect,
+                    onBack = onPickerBack,
+                    onConfirm = onPickerConfirm,
+                ) else AddLocationCard(
                     locationLabel = when {
                         draftPlaceName != null -> "Approx. $draftPlaceName"
                         draft.editingZoneId != null -> "Saved location"
@@ -380,8 +423,9 @@ private fun LocationContent(
                     onNameChange = { onDraftChange(draft.copy(name = it)) },
                     radiusMeters = draft.radiusMeters,
                     onRadiusChange = { onDraftChange(draft.copy(radiusMeters = it)) },
-                    // The Time Focus flow isn't built yet - see the "Time Focuse" Figma frames.
-                    onScheduleClick = {},
+                    onScheduleClick = onScheduleClick,
+                    scheduleName = groups.find { it.id == draft.scheduleGroupId }?.name,
+                    scheduleAppCount = groups.find { it.id == draft.scheduleGroupId }?.apps?.size ?: 0,
                     onClose = onDraftDiscard,
                     onConfirm = onDraftConfirm,
                 )
@@ -408,6 +452,13 @@ private fun LocationContentListPreview() {
             panelState = rememberPullUpPanelState(initiallyExpanded = true),
             onMapLongPress = {},
             onMapTap = {},
+            groups = generateFakeGroups(),
+            isPickingSchedule = false,
+            pickerGroupId = null,
+            onScheduleClick = {},
+            onPickerSelect = {},
+            onPickerBack = {},
+            onPickerConfirm = {},
             onDraftChange = {},
             onDraftDiscard = {},
             onDraftConfirm = {},
@@ -435,6 +486,13 @@ private fun LocationContentAddPreview() {
             panelState = rememberPullUpPanelState(),
             onMapLongPress = {},
             onMapTap = {},
+            groups = generateFakeGroups(),
+            isPickingSchedule = false,
+            pickerGroupId = null,
+            onScheduleClick = {},
+            onPickerSelect = {},
+            onPickerBack = {},
+            onPickerConfirm = {},
             onDraftChange = {},
             onDraftDiscard = {},
             onDraftConfirm = {},

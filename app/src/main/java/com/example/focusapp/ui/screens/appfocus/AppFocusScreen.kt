@@ -18,14 +18,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -57,11 +58,32 @@ private const val SCRIM_ALPHA = 0.8f
 private const val DEFAULT_START_MINUTES = 22 * 60
 private const val DEFAULT_END_MINUTES = 7 * 60
 
-/** Steps of the add-group fly card. */
-private enum class AddGroupStep { APPS, SCHEDULE, BREAKS }
+/** Steps of the add/edit-group fly card. */
+private enum class GroupEditStep { APPS, SCHEDULE, BREAKS }
 
-/** Everything the add-group fly card collects, handed to the caller on confirm. */
-data class NewAppGroup(
+/** The add/edit card's fields while the user fills them in. Times are minutes after midnight. */
+private data class AppGroupDraft(
+    val selectedPackages: Set<String> = emptySet(),
+    val activeDays: Set<String> = emptySet(),
+    val startMinutes: Int = DEFAULT_START_MINUTES,
+    val endMinutes: Int = DEFAULT_END_MINUTES,
+    val breakAllowance: Int? = null,
+    val breakMinutes: Int = DEFAULT_BREAK_MINUTES,
+    val name: String = "",
+)
+
+private fun BlockedAppGroup.toDraft() = AppGroupDraft(
+    selectedPackages = apps.map { it.packageName }.toSet(),
+    activeDays = schedule.activeDays,
+    startMinutes = schedule.start.hour * 60 + schedule.start.minute,
+    endMinutes = schedule.end.hour * 60 + schedule.end.minute,
+    breakAllowance = breakAllowance,
+    breakMinutes = breakMinutes,
+    name = name,
+)
+
+/** What the add/edit card produces on confirm. */
+data class AppGroupInput(
     val name: String,
     val apps: List<AppItem>,
     val schedule: TimeSlot,
@@ -71,111 +93,141 @@ data class NewAppGroup(
 
 /**
  * Figma: "App Focuse" - the Blocked Apps tab. A header illustration over a
- * two-column grid of app-group tiles, ending with an "add group" tile that
- * opens a fly card: step 1 picks the new group's apps, step 2 its schedule,
- * step 3 its breaks.
+ * two-column grid of app-group tiles, ending with an "add group" tile.
+ *  - tap a tile: read-only detail card; its pencil opens the edit flow
+ *  - hold a tile: delete it (after confirming)
+ *  - add tile: the same three-step card (apps, schedule, breaks + name),
+ *    empty instead of prefilled
+ * Tapping outside a card closes the detail card, or asks before discarding
+ * an add/edit in progress.
  */
 @Composable
 fun AppFocusScreen(
     groups: List<BlockedAppGroup>,
-    onGroupClick: (BlockedAppGroup) -> Unit,
-    onCreateGroup: (NewAppGroup) -> Unit,
+    onCreateGroup: (AppGroupInput) -> Unit,
+    onUpdateGroup: (groupId: String, AppGroupInput) -> Unit,
+    onDeleteGroup: (BlockedAppGroup) -> Unit,
     onTabClick: (MainTab) -> Unit,
 ) {
     val context = LocalContext.current
-    // null = not adding a group; otherwise the fly card's current step.
-    var addStep by remember { mutableStateOf<AddGroupStep?>(null) }
-    val isAddingGroup = addStep != null
+    var viewingGroupId by remember { mutableStateOf<String?>(null) }
+    // null = no add/edit card open.
+    var editStep by remember { mutableStateOf<GroupEditStep?>(null) }
+    // Set while editing an existing group (null while adding a new one).
+    var editingGroupId by remember { mutableStateOf<String?>(null) }
+    var draft by remember { mutableStateOf(AppGroupDraft()) }
     var installedApps by remember { mutableStateOf<List<InstalledAppInfo>?>(null) }
-    var selectedPackages by remember { mutableStateOf(emptySet<String>()) }
-    var activeDays by remember { mutableStateOf(emptySet<String>()) }
-    var startMinutes by remember { mutableIntStateOf(DEFAULT_START_MINUTES) }
-    var endMinutes by remember { mutableIntStateOf(DEFAULT_END_MINUTES) }
-    var breakAllowance by remember { mutableStateOf<Int?>(null) }
-    var breakMinutes by remember { mutableIntStateOf(DEFAULT_BREAK_MINUTES) }
-    var groupName by remember { mutableStateOf("") }
-    // Tapping outside the card asks before throwing the half-made group away.
     var confirmDiscard by remember { mutableStateOf(false) }
+    var pendingDelete by remember { mutableStateOf<BlockedAppGroup?>(null) }
+
+    val viewingGroup = groups.find { it.id == viewingGroupId }
 
     // Loaded once, the first time the picker opens - it's slow with many apps installed.
-    LaunchedEffect(isAddingGroup) {
-        if (isAddingGroup && installedApps == null) {
+    LaunchedEffect(editStep != null) {
+        if (editStep != null && installedApps == null) {
             installedApps = withContext(Dispatchers.Default) { getLaunchableApps(context) }
         }
     }
 
-    fun closePicker() {
-        addStep = null
-        selectedPackages = emptySet()
-        activeDays = emptySet()
-        startMinutes = DEFAULT_START_MINUTES
-        endMinutes = DEFAULT_END_MINUTES
-        breakAllowance = null
-        breakMinutes = DEFAULT_BREAK_MINUTES
-        groupName = ""
+    fun closeEditor() {
+        editStep = null
+        editingGroupId = null
+        draft = AppGroupDraft()
         confirmDiscard = false
     }
 
-    // Back steps backwards through the card, then closes it.
-    BackHandler(enabled = isAddingGroup) {
-        when (addStep) {
-            AddGroupStep.BREAKS -> addStep = AddGroupStep.SCHEDULE
-            AddGroupStep.SCHEDULE -> addStep = AddGroupStep.APPS
-            else -> closePicker()
+    fun startEditing(group: BlockedAppGroup) {
+        viewingGroupId = null
+        editingGroupId = group.id
+        draft = group.toDraft()
+        editStep = GroupEditStep.APPS
+    }
+
+    fun buildInput(): AppGroupInput {
+        val installed = installedApps.orEmpty()
+        val picked = installed
+            .filter { it.packageName in draft.selectedPackages }
+            .map { AppItem(packageName = it.packageName, name = it.label, isBlocked = true, icon = it.icon) }
+        // Keep a group's apps that the picker didn't list (e.g. no launcher icon) if still ticked.
+        val kept = groups.find { it.id == editingGroupId }?.apps.orEmpty()
+            .filter { app -> app.packageName in draft.selectedPackages && installed.none { it.packageName == app.packageName } }
+        return AppGroupInput(
+            name = draft.name.trim(),
+            apps = picked + kept,
+            schedule = TimeSlot(
+                activeDays = draft.activeDays,
+                start = ClockTime(draft.startMinutes / 60, draft.startMinutes % 60),
+                end = ClockTime(draft.endMinutes / 60, draft.endMinutes % 60),
+            ),
+            breakAllowance = draft.breakAllowance ?: 0,
+            breakMinutes = draft.breakMinutes,
+        )
+    }
+
+    BackHandler(enabled = editStep != null || viewingGroup != null) {
+        when (editStep) {
+            GroupEditStep.BREAKS -> editStep = GroupEditStep.SCHEDULE
+            GroupEditStep.SCHEDULE -> editStep = GroupEditStep.APPS
+            GroupEditStep.APPS -> closeEditor()
+            null -> viewingGroupId = null
         }
     }
 
     AppFocusContent(
         groups = groups,
-        onGroupClick = onGroupClick,
-        onAddGroupClick = { addStep = AddGroupStep.APPS },
-        onTabClick = onTabClick,
-        addStep = addStep,
-        pickerApps = installedApps,
-        selectedPackages = selectedPackages,
-        onToggleApp = { pkg ->
-            selectedPackages = if (pkg in selectedPackages) selectedPackages - pkg else selectedPackages + pkg
+        onGroupClick = { viewingGroupId = it.id },
+        onGroupLongClick = { pendingDelete = it },
+        onAddGroupClick = {
+            editingGroupId = null
+            draft = AppGroupDraft()
+            editStep = GroupEditStep.APPS
         },
-        onPickerClose = ::closePicker,
-        onPickerNext = { addStep = AddGroupStep.SCHEDULE },
-        activeDays = activeDays,
-        onToggleDay = { day -> activeDays = if (day in activeDays) activeDays - day else activeDays + day },
-        startMinutes = startMinutes,
-        endMinutes = endMinutes,
-        onTimeChange = { start, end -> startMinutes = start; endMinutes = end },
-        onScheduleBack = { addStep = AddGroupStep.APPS },
-        onScheduleNext = { addStep = AddGroupStep.BREAKS },
-        breakAllowance = breakAllowance,
-        onBreakAllowanceChange = { breakAllowance = it },
-        breakMinutes = breakMinutes,
-        onBreakMinutesChange = { breakMinutes = it },
-        groupName = groupName,
-        onGroupNameChange = { groupName = it },
-        onBreaksBack = { addStep = AddGroupStep.SCHEDULE },
-        onOutsideCardClick = { confirmDiscard = true },
-        onBreaksConfirm = {
-            val apps = installedApps.orEmpty()
-                .filter { it.packageName in selectedPackages }
-                .map { AppItem(packageName = it.packageName, name = it.label, isBlocked = true, icon = it.icon) }
-            val schedule = TimeSlot(
-                activeDays = activeDays,
-                start = ClockTime(startMinutes / 60, startMinutes % 60),
-                end = ClockTime(endMinutes / 60, endMinutes % 60),
-            )
-            onCreateGroup(NewAppGroup(groupName.trim(), apps, schedule, breakAllowance ?: 0, breakMinutes))
-            closePicker()
+        onTabClick = onTabClick,
+        viewingGroup = viewingGroup,
+        onEditViewingGroup = { viewingGroup?.let(::startEditing) },
+        editStep = editStep,
+        pickerApps = installedApps,
+        draft = draft,
+        onDraftChange = { draft = it },
+        onStepChange = { editStep = it },
+        onEditorClose = ::closeEditor,
+        onEditorConfirm = {
+            val input = buildInput()
+            val groupId = editingGroupId
+            if (groupId == null) onCreateGroup(input) else onUpdateGroup(groupId, input)
+            closeEditor()
+        },
+        onOutsideCardClick = {
+            if (editStep != null) confirmDiscard = true else viewingGroupId = null
         },
     )
 
     if (confirmDiscard) {
+        val isEditing = editingGroupId != null
         FocusConfirmDialog(
-            title = "Cancel new group?",
-            message = "The apps and settings you picked for this group will be discarded.",
+            title = if (isEditing) "Cancel editing?" else "Cancel new group?",
+            message = if (isEditing) "Your changes to this group will be discarded."
+            else "The apps and settings you picked for this group will be discarded.",
             confirmLabel = "Discard",
             dismissLabel = "Keep editing",
             confirmColor = FocusTheme.colors.rejection,
-            onConfirm = ::closePicker,
+            onConfirm = ::closeEditor,
             onDismiss = { confirmDiscard = false },
+        )
+    }
+
+    pendingDelete?.let { group ->
+        FocusConfirmDialog(
+            title = "Delete \"${group.name}\"?",
+            message = "This app group and its schedule will be removed.",
+            confirmLabel = "Delete",
+            confirmColor = FocusTheme.colors.rejection,
+            onConfirm = {
+                pendingDelete = null
+                if (viewingGroupId == group.id) viewingGroupId = null
+                onDeleteGroup(group)
+            },
+            onDismiss = { pendingDelete = null },
         )
     }
 }
@@ -185,32 +237,22 @@ fun AppFocusScreen(
 private fun AppFocusContent(
     groups: List<BlockedAppGroup>,
     onGroupClick: (BlockedAppGroup) -> Unit,
+    onGroupLongClick: (BlockedAppGroup) -> Unit,
     onAddGroupClick: () -> Unit,
     onTabClick: (MainTab) -> Unit,
-    addStep: AddGroupStep?,
+    viewingGroup: BlockedAppGroup?,
+    onEditViewingGroup: () -> Unit,
+    editStep: GroupEditStep?,
     pickerApps: List<InstalledAppInfo>?,
-    selectedPackages: Set<String>,
-    onToggleApp: (String) -> Unit,
-    onPickerClose: () -> Unit,
-    onPickerNext: () -> Unit,
-    activeDays: Set<String>,
-    onToggleDay: (String) -> Unit,
-    startMinutes: Int,
-    endMinutes: Int,
-    onTimeChange: (Int, Int) -> Unit,
-    onScheduleBack: () -> Unit,
-    onScheduleNext: () -> Unit,
-    breakAllowance: Int?,
-    onBreakAllowanceChange: (Int?) -> Unit,
-    breakMinutes: Int,
-    onBreakMinutesChange: (Int) -> Unit,
-    groupName: String,
-    onGroupNameChange: (String) -> Unit,
-    onBreaksBack: () -> Unit,
-    onBreaksConfirm: () -> Unit,
+    draft: AppGroupDraft,
+    onDraftChange: (AppGroupDraft) -> Unit,
+    onStepChange: (GroupEditStep) -> Unit,
+    onEditorClose: () -> Unit,
+    onEditorConfirm: () -> Unit,
     onOutsideCardClick: () -> Unit,
 ) {
     val colors = FocusTheme.colors
+    val haptics = LocalHapticFeedback.current
 
     Box(
         modifier = Modifier
@@ -250,6 +292,10 @@ private fun AppFocusContent(
                                     appCount = group.apps.size,
                                     icon = group.apps.firstNotNullOfOrNull { it.icon },
                                     onClick = { onGroupClick(group) },
+                                    onLongClick = {
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onGroupLongClick(group)
+                                    },
                                 )
                             }
                         }
@@ -266,7 +312,7 @@ private fun AppFocusContent(
                 .padding(bottom = 32.dp),
         )
 
-        if (addStep != null) {
+        if (editStep != null || viewingGroup != null) {
             // Scrim: dims everything behind the card; tapping it means "leave".
             Box(
                 modifier = Modifier
@@ -281,106 +327,72 @@ private fun AppFocusContent(
             val cardModifier = Modifier
                 .align(Alignment.Center)
                 .padding(horizontal = 32.dp)
-            when (addStep) {
-                AddGroupStep.APPS -> AppGroupAppsCard(
+            when (editStep) {
+                GroupEditStep.APPS -> AppGroupAppsCard(
                     apps = pickerApps,
-                    selectedPackages = selectedPackages,
-                    onToggleApp = onToggleApp,
-                    onClose = onPickerClose,
-                    onNext = onPickerNext,
+                    selectedPackages = draft.selectedPackages,
+                    onToggleApp = { pkg ->
+                        val picked = draft.selectedPackages
+                        onDraftChange(draft.copy(selectedPackages = if (pkg in picked) picked - pkg else picked + pkg))
+                    },
+                    onClose = onEditorClose,
+                    onNext = { onStepChange(GroupEditStep.SCHEDULE) },
                     modifier = cardModifier,
                 )
-                AddGroupStep.SCHEDULE -> AppGroupScheduleCard(
-                    activeDays = activeDays,
-                    onToggleDay = onToggleDay,
-                    startMinutes = startMinutes,
-                    endMinutes = endMinutes,
-                    onTimeChange = onTimeChange,
-                    onBack = onScheduleBack,
-                    onNext = onScheduleNext,
+                GroupEditStep.SCHEDULE -> AppGroupScheduleCard(
+                    activeDays = draft.activeDays,
+                    onToggleDay = { day ->
+                        val days = draft.activeDays
+                        onDraftChange(draft.copy(activeDays = if (day in days) days - day else days + day))
+                    },
+                    startMinutes = draft.startMinutes,
+                    endMinutes = draft.endMinutes,
+                    onTimeChange = { start, end -> onDraftChange(draft.copy(startMinutes = start, endMinutes = end)) },
+                    onBack = { onStepChange(GroupEditStep.APPS) },
+                    onNext = { onStepChange(GroupEditStep.BREAKS) },
                     modifier = cardModifier,
                 )
-                AddGroupStep.BREAKS -> AppGroupBreakCard(
-                    breakAllowance = breakAllowance,
-                    onBreakAllowanceChange = onBreakAllowanceChange,
-                    breakMinutes = breakMinutes,
-                    onBreakMinutesChange = onBreakMinutesChange,
-                    name = groupName,
-                    onNameChange = onGroupNameChange,
-                    onBack = onBreaksBack,
-                    onConfirm = onBreaksConfirm,
+                GroupEditStep.BREAKS -> AppGroupBreakCard(
+                    breakAllowance = draft.breakAllowance,
+                    onBreakAllowanceChange = { onDraftChange(draft.copy(breakAllowance = it)) },
+                    breakMinutes = draft.breakMinutes,
+                    onBreakMinutesChange = { onDraftChange(draft.copy(breakMinutes = it)) },
+                    name = draft.name,
+                    onNameChange = { onDraftChange(draft.copy(name = it)) },
+                    onBack = { onStepChange(GroupEditStep.SCHEDULE) },
+                    onConfirm = onEditorConfirm,
                     modifier = cardModifier,
                 )
+                null -> viewingGroup?.let { group ->
+                    AppGroupDetailCard(group = group, onEdit = onEditViewingGroup, modifier = cardModifier)
+                }
             }
         }
     }
 }
 
-@Preview(widthDp = 393, heightDp = 852)
 @Composable
-private fun AppFocusContentPreview() {
+private fun PreviewContent(
+    viewingGroup: BlockedAppGroup? = null,
+    editStep: GroupEditStep? = null,
+    draft: AppGroupDraft = AppGroupDraft(),
+) {
     FocusAppTheme {
         AppFocusContent(
             groups = generateFakeGroups(),
             onGroupClick = {},
+            onGroupLongClick = {},
             onAddGroupClick = {},
             onTabClick = {},
-            addStep = null,
-            pickerApps = null,
-            selectedPackages = emptySet(),
-            onToggleApp = {},
-            onPickerClose = {},
-            onPickerNext = {},
-            activeDays = emptySet(),
-            onToggleDay = {},
-            startMinutes = DEFAULT_START_MINUTES,
-            endMinutes = DEFAULT_END_MINUTES,
-            onTimeChange = { _, _ -> },
-            onScheduleBack = {},
-            onScheduleNext = {},
-            breakAllowance = null,
-            onBreakAllowanceChange = {},
-            breakMinutes = DEFAULT_BREAK_MINUTES,
-            onBreakMinutesChange = {},
-            groupName = "",
-            onGroupNameChange = {},
-            onBreaksBack = {},
-            onBreaksConfirm = {},
-            onOutsideCardClick = {},
-        )
-    }
-}
-
-@Preview(widthDp = 393, heightDp = 852)
-@Composable
-private fun AppFocusContentPickerPreview() {
-    FocusAppTheme {
-        AppFocusContent(
-            groups = generateFakeGroups(),
-            onGroupClick = {},
-            onAddGroupClick = {},
-            onTabClick = {},
-            addStep = AddGroupStep.APPS,
+            viewingGroup = viewingGroup,
+            onEditViewingGroup = {},
+            editStep = editStep,
             pickerApps = List(12) { InstalledAppInfo("com.example.app$it", "App $it", icon = null) },
-            selectedPackages = setOf("com.example.app0", "com.example.app2"),
-            onToggleApp = {},
-            onPickerClose = {},
-            onPickerNext = {},
-            activeDays = emptySet(),
-            onToggleDay = {},
-            startMinutes = DEFAULT_START_MINUTES,
-            endMinutes = DEFAULT_END_MINUTES,
-            onTimeChange = { _, _ -> },
-            onScheduleBack = {},
-            onScheduleNext = {},
-            breakAllowance = null,
-            onBreakAllowanceChange = {},
-            breakMinutes = DEFAULT_BREAK_MINUTES,
-            onBreakMinutesChange = {},
-            groupName = "",
-            onGroupNameChange = {},
-            onBreaksBack = {},
-            onBreaksConfirm = {},
+            draft = draft,
+            onDraftChange = {},
+            onStepChange = {},
+            onEditorClose = {},
+            onEditorConfirm = {},
             onOutsideCardClick = {},
         )
     }
@@ -388,70 +400,24 @@ private fun AppFocusContentPickerPreview() {
 
 @Preview(widthDp = 393, heightDp = 852)
 @Composable
-private fun AppFocusContentSchedulePreview() {
-    FocusAppTheme {
-        AppFocusContent(
-            groups = generateFakeGroups(),
-            onGroupClick = {},
-            onAddGroupClick = {},
-            onTabClick = {},
-            addStep = AddGroupStep.SCHEDULE,
-            pickerApps = null,
-            selectedPackages = emptySet(),
-            onToggleApp = {},
-            onPickerClose = {},
-            onPickerNext = {},
-            activeDays = setOf("Mon", "Wed", "Fri"),
-            onToggleDay = {},
-            startMinutes = DEFAULT_START_MINUTES,
-            endMinutes = DEFAULT_END_MINUTES,
-            onTimeChange = { _, _ -> },
-            onScheduleBack = {},
-            onScheduleNext = {},
-            breakAllowance = null,
-            onBreakAllowanceChange = {},
-            breakMinutes = DEFAULT_BREAK_MINUTES,
-            onBreakMinutesChange = {},
-            groupName = "",
-            onGroupNameChange = {},
-            onBreaksBack = {},
-            onBreaksConfirm = {},
-            onOutsideCardClick = {},
-        )
-    }
-}
+private fun AppFocusContentPreview() = PreviewContent()
 
 @Preview(widthDp = 393, heightDp = 852)
 @Composable
-private fun AppFocusContentBreaksPreview() {
-    FocusAppTheme {
-        AppFocusContent(
-            groups = generateFakeGroups(),
-            onGroupClick = {},
-            onAddGroupClick = {},
-            onTabClick = {},
-            addStep = AddGroupStep.BREAKS,
-            pickerApps = null,
-            selectedPackages = emptySet(),
-            onToggleApp = {},
-            onPickerClose = {},
-            onPickerNext = {},
-            activeDays = emptySet(),
-            onToggleDay = {},
-            startMinutes = DEFAULT_START_MINUTES,
-            endMinutes = DEFAULT_END_MINUTES,
-            onTimeChange = { _, _ -> },
-            onScheduleBack = {},
-            onScheduleNext = {},
-            breakAllowance = null,
-            onBreakAllowanceChange = {},
-            breakMinutes = DEFAULT_BREAK_MINUTES,
-            onBreakMinutesChange = {},
-            groupName = "",
-            onGroupNameChange = {},
-            onBreaksBack = {},
-            onBreaksConfirm = {},
-            onOutsideCardClick = {},
-        )
-    }
-}
+private fun AppFocusContentDetailPreview() =
+    PreviewContent(viewingGroup = generateFakeGroups().first().copy(breakAllowance = 5))
+
+@Preview(widthDp = 393, heightDp = 852)
+@Composable
+private fun AppFocusContentAppsPreview() =
+    PreviewContent(editStep = GroupEditStep.APPS, draft = AppGroupDraft(selectedPackages = setOf("com.example.app0")))
+
+@Preview(widthDp = 393, heightDp = 852)
+@Composable
+private fun AppFocusContentSchedulePreview() =
+    PreviewContent(editStep = GroupEditStep.SCHEDULE, draft = AppGroupDraft(activeDays = setOf("Mon", "Wed", "Fri")))
+
+@Preview(widthDp = 393, heightDp = 852)
+@Composable
+private fun AppFocusContentBreaksPreview() =
+    PreviewContent(editStep = GroupEditStep.BREAKS)
