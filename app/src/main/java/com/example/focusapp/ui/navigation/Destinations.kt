@@ -29,6 +29,10 @@ object Destinations {
     // location groups. See ui.screens.location.LocationScreen.
     const val LOCATION = "location"
 
+    // Schedule tab (bottom nav clock icon) - list of time slots.
+    // See ui.screens.timefocus.TimeFocusScreen.
+    const val TIME_FOCUS = "time_focus"
+
     // Replaces the old bottom-left "Map" shortcut on Home - Party Mode is the
     // planned "Study Party" feature (see the doc comments in
     // data/remote/RemoteDataSource.kt and data/repository/FocusRepositoryImpl.kt).

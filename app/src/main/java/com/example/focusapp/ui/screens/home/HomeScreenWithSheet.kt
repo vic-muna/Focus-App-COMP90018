@@ -80,7 +80,8 @@ fun HomeScreenWithSheet(
     onPartyModeClick: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
     onEditLocationZoneClick: () -> Unit = {},
-    onLocationTabClick: () -> Unit = {}
+    onLocationTabClick: () -> Unit = {},
+    onScheduleTabClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -104,8 +105,8 @@ fun HomeScreenWithSheet(
         when (tab) {
             MainTab.HOME -> Unit
             MainTab.LOCATION -> onLocationTabClick()
-            // Schedules live inside the blocked-app group sheet for now.
-            MainTab.SCHEDULE, MainTab.BLOCKED_APPS -> openSheet(SheetType.BLOCKED_APPS, tab)
+            MainTab.SCHEDULE -> onScheduleTabClick()
+            MainTab.BLOCKED_APPS -> openSheet(SheetType.BLOCKED_APPS, tab)
         }
     }
 

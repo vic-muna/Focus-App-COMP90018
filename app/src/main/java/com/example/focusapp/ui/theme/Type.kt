@@ -35,6 +35,10 @@ data class FocusTypography(
     val hint: TextStyle,
     /** Card heading, e.g. a location group's name. */
     val cardTitle: TextStyle,
+    /** Heading on a list card or grid tile, e.g. a time slot's "06:10am-08:00am". */
+    val tileTitle: TextStyle,
+    /** Tiny label, e.g. the weekday letter inside a small day circle. */
+    val microLabel: TextStyle,
     /** Large text inside inputs and secondary buttons ("Enter Group Name", "Schedule"). */
     val inputLarge: TextStyle,
     /** Banner / body copy. */
@@ -73,6 +77,16 @@ val DefaultFocusTypography = FocusTypography(
         fontFamily = LineSeedFontFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 22.sp,
+    ),
+    tileTitle = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 20.sp,
+    ),
+    microLabel = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 9.sp,
     ),
     inputLarge = TextStyle(
         fontFamily = LineSeedFontFamily,

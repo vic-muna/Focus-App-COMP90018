@@ -32,6 +32,7 @@ import com.example.focusapp.data.notification.FocusTimerService
 import com.example.focusapp.ui.screens.apps.AddAppGroupScreen
 import com.example.focusapp.ui.screens.apps.AppsScreen
 import com.example.focusapp.ui.screens.apps.EditAppGroupScreen
+import com.example.focusapp.ui.screens.history.HistoryScreen
 import com.example.focusapp.ui.screens.home.BlockedAppGroup
 import com.example.focusapp.ui.screens.home.BlockedAppGroupStorage
 import com.example.focusapp.ui.screens.home.EditLocationZoneScreen
@@ -39,7 +40,6 @@ import com.example.focusapp.ui.screens.home.GroupListScreen
 import com.example.focusapp.ui.screens.home.HomeScreenWithSheet
 import com.example.focusapp.ui.screens.home.generateFakeGroups
 import com.example.focusapp.ui.screens.home.generateFakeTimeSlot
-import com.example.focusapp.ui.screens.history.HistoryScreen
 import com.example.focusapp.ui.screens.location.LocationScreen
 import com.example.focusapp.ui.screens.map.MapScreen
 import com.example.focusapp.ui.screens.party.PartyModeScreen
@@ -47,6 +47,7 @@ import com.example.focusapp.ui.screens.session.ActiveFocusSession
 import com.example.focusapp.ui.screens.session.FocusSessionScreen
 import com.example.focusapp.ui.screens.session.FocusSessionSource
 import com.example.focusapp.ui.screens.settings.SettingsScreen
+import com.example.focusapp.ui.screens.timefocus.TimeFocusScreen
 import com.example.focusapp.ui.theme.WireframeColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -170,6 +171,27 @@ fun FocusAppNavGraph() {
         navController.navigate(Destinations.FOCUS_SESSION)
     }
 
+    // Bottom-nav tabs: Home is the root; Location and Schedule sit directly on
+    // top of it, and Blocked Apps is still Home's bottom sheet.
+    fun navigateToTab(tab: MainTab) {
+        when (tab) {
+            MainTab.HOME -> navController.popBackStack(Destinations.HOME, inclusive = false)
+            MainTab.LOCATION, MainTab.SCHEDULE -> navController.navigate(
+                if (tab == MainTab.LOCATION) Destinations.LOCATION else Destinations.TIME_FOCUS
+            ) {
+                popUpTo(Destinations.HOME)
+                launchSingleTop = true
+            }
+            MainTab.BLOCKED_APPS -> {
+                navController.getBackStackEntry(Destinations.HOME).savedStateHandle.apply {
+                    set("reopenSheetType", "blocked_apps")
+                    set("reopenSheet", true)
+                }
+                navController.popBackStack(Destinations.HOME, inclusive = false)
+            }
+        }
+    }
+
     Scaffold(containerColor = WireframeColors.Background) { innerPadding ->
         NavHost(
             navController = navController,
@@ -225,9 +247,8 @@ fun FocusAppNavGraph() {
                     onEditLocationZoneClick = {
                         navController.navigate(Destinations.EDIT_LOCATION_ZONE)
                     },
-                    onLocationTabClick = {
-                        navController.navigate(Destinations.LOCATION) { launchSingleTop = true }
-                    }
+                    onLocationTabClick = { navigateToTab(MainTab.LOCATION) },
+                    onScheduleTabClick = { navigateToTab(MainTab.SCHEDULE) }
                 )
             }
 
@@ -238,22 +259,16 @@ fun FocusAppNavGraph() {
             ) {
                 LocationScreen(
                     onSettingsClick = { navController.navigate(Destinations.SETTINGS) },
-                    onTabClick = { tab ->
-                        when (tab) {
-                            MainTab.LOCATION -> Unit
-                            MainTab.HOME -> navController.popBackStack(Destinations.HOME, inclusive = false)
-                            // Schedule / Blocked Apps still live in Home's bottom sheet -
-                            // go back to Home and ask it to open that sheet.
-                            MainTab.SCHEDULE, MainTab.BLOCKED_APPS -> {
-                                navController.getBackStackEntry(Destinations.HOME).savedStateHandle.apply {
-                                    set("reopenSheetType", if (tab == MainTab.SCHEDULE) "schedule" else "blocked_apps")
-                                    set("reopenSheet", true)
-                                }
-                                navController.popBackStack(Destinations.HOME, inclusive = false)
-                            }
-                        }
-                    }
+                    onTabClick = ::navigateToTab
                 )
+            }
+
+            composable(
+                route = Destinations.TIME_FOCUS,
+                enterTransition = partyModeEnter,
+                exitTransition = partyModeExit
+            ) {
+                TimeFocusScreen(onTabClick = ::navigateToTab)
             }
 
             composable(
