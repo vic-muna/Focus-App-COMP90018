@@ -32,11 +32,13 @@ val LocationRadiusRange = 50f..500f
 
 /**
  * Figma: "Add new location" card - name the zone, set its radius, then
- * confirm (check) or discard (X). [latitude]/[longitude] are null while the
- * position is still unknown, which also disables confirm.
+ * confirm (check) or discard (X). Also used to edit a saved zone.
+ * [latitude]/[longitude] are null while the position is still unknown, which
+ * also disables confirm; [locationLabel] describes where the pin is.
  */
 @Composable
 fun AddLocationCard(
+    locationLabel: String,
     latitude: Double?,
     longitude: Double?,
     name: String,
@@ -78,7 +80,7 @@ fun AddLocationCard(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = if (latitude != null) "Approx. current location" else "Finding your location…",
+                text = locationLabel,
                 style = typography.caption,
                 color = colors.onSurface,
             )
@@ -140,6 +142,7 @@ private fun formatCoordinates(latitude: Double, longitude: Double): String {
 private fun AddLocationCardPreview() {
     FocusAppTheme {
         AddLocationCard(
+            locationLabel = "Approx. current location",
             latitude = -37.8136,
             longitude = 144.9631,
             name = "",

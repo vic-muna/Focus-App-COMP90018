@@ -39,6 +39,8 @@ data class FocusColors(
     val notification: Color,
     /** Pure white, for content that must stay white in every theme. */
     val pure: Color,
+    /** The elapsed-time readout on the Focus Mode screen. */
+    val sessionTimer: Color,
     /** Saved focus zone on the map. */
     val mapZone: Color,
     /** Zone being created on the map. */
@@ -60,6 +62,7 @@ val DefaultFocusColors = FocusColors(
     rejection = Palette.Rejection,
     notification = Palette.Notification,
     pure = Palette.Pure,
+    sessionTimer = Palette.Truffle,
     mapZone = Palette.Vermilion,
     mapZoneNew = Palette.Turquoise,
 )

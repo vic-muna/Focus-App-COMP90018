@@ -2,16 +2,23 @@ package com.example.focusapp.ui.theme
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.example.focusapp.R
 
 /**
- * The Figma design uses "LINE Seed JP". Until its font files are added to
- * res/font, this falls back to the system font - swap this one value once
- * they are, and every text style below picks it up.
+ * "LINE Seed JP", the Figma design's typeface (res/font). Only these four
+ * weights are bundled - any other FontWeight a style asks for (e.g. Medium)
+ * is drawn with the closest one.
  */
-val LineSeedFontFamily: FontFamily = FontFamily.Default
+val LineSeedFontFamily: FontFamily = FontFamily(
+    Font(R.font.line_seed_jp_thin, FontWeight.Thin),
+    Font(R.font.line_seed_jp_regular, FontWeight.Normal),
+    Font(R.font.line_seed_jp_bold, FontWeight.Bold),
+    Font(R.font.line_seed_jp_extrabold, FontWeight.ExtraBold),
+)
 
 /** Named text styles from the Figma design. Colors are applied by callers from [FocusColors]. */
 @Immutable
@@ -22,6 +29,10 @@ data class FocusTypography(
     val greetingBody: TextStyle,
     /** Large label inside the Quick Focus button. */
     val primaryActionLabel: TextStyle,
+    /** Focus Mode's elapsed-time readout. */
+    val timer: TextStyle,
+    /** Tooltip / hint bubble copy. */
+    val hint: TextStyle,
     /** Card heading, e.g. a location group's name. */
     val cardTitle: TextStyle,
     /** Large text inside inputs and secondary buttons ("Enter Group Name", "Schedule"). */
@@ -48,6 +59,16 @@ val DefaultFocusTypography = FocusTypography(
         fontWeight = FontWeight.Bold,
         fontSize = 24.sp,
     ),
+    timer = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 36.sp,
+    ),
+    hint = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 12.sp,
+    ),
     cardTitle = TextStyle(
         fontFamily = LineSeedFontFamily,
         fontWeight = FontWeight.Bold,
@@ -60,7 +81,7 @@ val DefaultFocusTypography = FocusTypography(
     ),
     body = TextStyle(
         fontFamily = LineSeedFontFamily,
-        fontWeight = FontWeight.Medium,
+        fontWeight = FontWeight.Normal,
         fontSize = 14.sp,
     ),
     caption = TextStyle(

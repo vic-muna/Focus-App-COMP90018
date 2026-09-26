@@ -19,10 +19,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.example.focusapp.R
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
 
@@ -117,6 +119,35 @@ fun ConfirmButton(
     )
 }
 
+/**
+ * Figma Focus Mode "i" button (hints.xml). Unlike [GlyphCircleButton], the
+ * "i" is cut out of the circle, so whatever is behind the button shows
+ * through it - only the circle's [color] is customizable.
+ */
+@Composable
+fun InfoButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    contentDescription: String = "Info",
+    color: Color = FocusTheme.colors.primaryAction,
+    size: Dp = 43.dp,
+) {
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(CircleShape)
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.hints),
+            contentDescription = contentDescription,
+            tint = color,
+            modifier = Modifier.size(size),
+        )
+    }
+}
+
 @Preview
 @Composable
 private fun GlyphCircleButtonPreview() {
@@ -131,6 +162,7 @@ private fun GlyphCircleButtonPreview() {
             RejectButton(onClick = {})
             ConfirmButton(onClick = {})
             ConfirmButton(onClick = {}, enabled = false)
+            InfoButton(onClick = {})
             // Glass-style example: translucent gradient + light rim.
             RejectButton(
                 onClick = {},

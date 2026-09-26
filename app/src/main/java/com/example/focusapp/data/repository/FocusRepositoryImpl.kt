@@ -83,6 +83,15 @@ class FocusRepositoryImpl(
     override suspend fun getFocusZone(): FocusZone? =
         localDataSource.getFocusZone()
 
+    // [Claude, 2026-09-26] Local-only for now - there's no RemoteDataSource
+    // delete yet, so a synced zone's Firebase copy is left behind.
+    // [HANDOFF -> Victor Munacoha / Yu-Hao Lu | README task: "Cloud REST API integration" / "Firebase real-time sync"]
+    // Add a RemoteDataSource delete (e.g. deleteFocusZone(zoneId)) and call it
+    // here best-effort via syncScope, the same way saveFocusZone() pushes.
+    override suspend fun deleteFocusZone(zoneId: String) {
+        localDataSource.deleteFocusZone(zoneId)
+    }
+
     override suspend fun saveFocusZone(zone: FocusZone) {
         FocusValidation.validateFocusZone(zone)
         localDataSource.saveFocusZone(zone)

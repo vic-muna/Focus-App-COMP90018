@@ -244,6 +244,7 @@ file, and search for `[HANDOFF -> <your name>` to find your spot.
 | `ui/screens/map/MapScreen.kt` | Victor Munacoha | GPS + Geofencing sensor integration |
 | `ui/screens/party/PartyModeScreen.kt` | Yu-Hao Lu | Firebase real-time sync for Study Party feature |
 | `ui/navigation/NavGraph.kt` (`onAvatarClick`) | Kai-Jiun Chan | Reward/Progress UI — route the avatar tap to the Report screen (History/Rewards tabs, see `MainActivity.md`) |
+| `data/repository/FocusRepositoryImpl.kt` (`deleteFocusZone`) | Victor Munacoha (REST) / Yu-Hao Lu (Firebase) | Cloud REST API integration / Firebase real-time sync — deleting a location only removes the local copy; add a remote delete |
 
 Note: these are comment-only edits — no logic or function signatures were
 changed, so the project still compiles as-is.
@@ -290,4 +291,35 @@ changed, so the project still compiles as-is.
   added an on/off switch, tap-to-tag on
   the checked SSID, and a "Stored Wi-Fi Source List" button to view/untag
   saved networks. Connecting to a tagged network now shows the same
-  auto-suggestion banner as schedule/location triggers.  
+  auto-suggestion banner as schedule/location triggers.
+
+## 26/09/2026 Update (Jia-Ying Lee)
+
+### Known limitation: one focus location at a time (architecture unchanged)
+
+The new Location screen shows a *list* of location groups (Figma "Location
+Focuse"), but the data layer still follows its original **single-zone
+contract**, and this update deliberately does **not** change that:
+
+- `FocusRepository` only exposes `getFocusZone()` / `saveFocusZone()`, and
+  `RoomLocalDataSource.saveFocusZone()` clears the `focus_zones` table before
+  every insert. So saving a new location **replaces** the existing one, and
+  the list never shows more than one entry.
+- Editing a location (tap a card) saves it under the same id, so it updates
+  in place. Deleting (hold a card, then confirm) goes through the new
+  `FocusRepository.deleteFocusZone()`, which only removes the **local** Room
+  row; see the handoff row above for the missing cloud delete.
+- A multi-zone local API already exists (`LocalDataSource.getFocusZones()` /
+  `addFocusZone()` / `deleteFocusZone()`, used by
+  `data/sensor/GeofenceDataSource.kt`), but it isn't exposed through
+  `FocusRepository`, and `GeofenceDataSource` isn't wired to any UI yet.
+
+**Team decision needed:** whether to move the app to multiple saved zones
+(expose the multi-zone API through `FocusRepository` and stop clearing the
+table on save), and who owns that change. The UI already renders any number
+of zones, so no UI change is needed once the repository returns a list.
+
+Also still pending on the Location screen: the map itself is a placeholder
+(`ui/screens/location/MapPlaceholder.kt`) until the team picks a map SDK
+(Google Maps vs OpenStreetMap), and a zone's on/off switch is UI-only
+(`FocusZone` has no "enabled" field).

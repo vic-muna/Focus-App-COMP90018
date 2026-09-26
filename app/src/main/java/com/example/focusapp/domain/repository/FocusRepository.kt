@@ -24,6 +24,9 @@ interface FocusRepository {
      *  best-effort pushes it to the cloud ("restrictions/plans" - see [syncPendingZoneAndAppGroups]). */
     suspend fun saveFocusZone(zone: FocusZone)
 
+    /** Removes a saved zone from local storage (the cloud copy isn't removed yet). */
+    suspend fun deleteFocusZone(zoneId: String)
+
     suspend fun getAppGroups(): List<AppGroup>
 
     /** Persists an app group, then best-effort pushes it to the cloud - see [saveFocusZone]. */

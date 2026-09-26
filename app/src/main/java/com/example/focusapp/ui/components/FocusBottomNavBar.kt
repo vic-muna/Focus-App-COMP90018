@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.focusapp.R
 import com.example.focusapp.ui.theme.FocusAppTheme
@@ -38,7 +39,9 @@ data class FocusNavItem(
 
 /**
  * Figma: "Navigation Buttom" - a pill-shaped bar with icon-only items and a
- * pill indicator that slides behind the selected one.
+ * pill indicator that slides behind the selected one. The indicator keeps
+ * a fixed [indicatorWidth] (Figma: ~71 dp) centered in its item, however
+ * many items there are.
  */
 @Composable
 fun FocusBottomNavBar(
@@ -46,6 +49,7 @@ fun FocusBottomNavBar(
     selectedIndex: Int,
     onItemClick: (index: Int) -> Unit,
     modifier: Modifier = Modifier,
+    indicatorWidth: Dp = 71.dp,
 ) {
     val colors = FocusTheme.colors
 
@@ -53,20 +57,21 @@ fun FocusBottomNavBar(
         modifier = modifier
             .widthIn(max = 299.dp)
             .fillMaxWidth()
-            .height(46.dp)
+            .height(52.dp)
             .clip(CircleShape)
             .background(colors.surface)
     ) {
         val itemWidth = maxWidth / items.size
+        val pillWidth = minOf(indicatorWidth, itemWidth)
         val indicatorOffset by animateDpAsState(
-            targetValue = itemWidth * selectedIndex,
+            targetValue = itemWidth * selectedIndex + (itemWidth - pillWidth) / 2,
             label = "navIndicatorOffset",
         )
 
         Box(
             modifier = Modifier
                 .offset(x = indicatorOffset)
-                .width(itemWidth)
+                .width(pillWidth)
                 .fillMaxHeight()
                 .clip(CircleShape)
                 .background(colors.surfaceSelected)
