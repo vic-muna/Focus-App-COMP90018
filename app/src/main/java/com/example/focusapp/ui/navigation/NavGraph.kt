@@ -28,19 +28,22 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.focusapp.data.accessibility.AccessibilityBridge
+import com.example.focusapp.data.accessibility.FocusRestManager
 import com.example.focusapp.data.notification.FocusTimerService
 import com.example.focusapp.ui.screens.appfocus.AppFocusScreen
 import com.example.focusapp.ui.screens.apps.AddAppGroupScreen
 import com.example.focusapp.ui.screens.apps.AppsScreen
 import com.example.focusapp.ui.screens.apps.EditAppGroupScreen
+import com.example.focusapp.ui.screens.history.HistoryScreen
 import com.example.focusapp.ui.screens.home.BlockedAppGroup
 import com.example.focusapp.ui.screens.home.BlockedAppGroupStorage
+import com.example.focusapp.ui.screens.home.DEFAULT_BREAK_MINUTES
 import com.example.focusapp.ui.screens.home.EditLocationZoneScreen
 import com.example.focusapp.ui.screens.home.GroupListScreen
 import com.example.focusapp.ui.screens.home.HomeScreenWithSheet
 import com.example.focusapp.ui.screens.home.generateFakeGroups
 import com.example.focusapp.ui.screens.home.generateFakeTimeSlot
-import com.example.focusapp.ui.screens.history.HistoryScreen
+import com.example.focusapp.ui.screens.location.LocationScheduleStorage
 import com.example.focusapp.ui.screens.location.LocationScreen
 import com.example.focusapp.ui.screens.map.MapScreen
 import com.example.focusapp.ui.screens.party.PartyModeScreen
@@ -144,13 +147,31 @@ fun FocusAppNavGraph() {
     // single specific group) fall back to the union of every saved group's
     // packages. [David Shiau, 2026-09-23] Wifi follows Location's behavior
     // here, per the same "no per-trigger group assignment yet" reasoning.
+    // [Claude, 2026-09-26] Which location uses which app group ("Schedule"),
+    // picked on the Location screen - see LocationScheduleStorage.
+    val locationSchedules = remember { LocationScheduleStorage(context) }
+
+    // The one app group a session follows, if any: a schedule's own group, a
+    // location's linked group, or Home's selected group for Quick Focus. Its
+    // rest settings drive FocusRestManager.
+    fun sessionGroupFor(source: FocusSessionSource): BlockedAppGroup? = when (source) {
+        is FocusSessionSource.Schedule -> groups.find { it.id == source.groupId }
+        is FocusSessionSource.Location ->
+            source.zoneId?.let(locationSchedules::getGroupId)?.let { id -> groups.find { it.id == id } }
+        FocusSessionSource.Manual -> groups.find { it.id == selectedGroupId }
+        FocusSessionSource.Party, is FocusSessionSource.Wifi -> null
+    }
+
     fun restrictedPackagesFor(source: FocusSessionSource): List<String> {
         return when (source) {
             is FocusSessionSource.Schedule ->
                 groups.find { it.id == source.groupId }?.apps?.map { it.packageName } ?: emptyList()
             FocusSessionSource.Manual ->
                 groups.find { it.id == selectedGroupId }?.apps?.map { it.packageName } ?: emptyList()
-            FocusSessionSource.Party, is FocusSessionSource.Location, is FocusSessionSource.Wifi ->
+            // [Claude, 2026-09-26] A location with a linked group blocks just that group.
+            is FocusSessionSource.Location -> sessionGroupFor(source)?.apps?.map { it.packageName }
+                ?: groups.flatMap { group -> group.apps.map { it.packageName } }.distinct()
+            FocusSessionSource.Party, is FocusSessionSource.Wifi ->
                 groups.flatMap { group -> group.apps.map { it.packageName } }.distinct()
         }
     }
@@ -159,6 +180,11 @@ fun FocusAppNavGraph() {
     // session's resolved packages via FocusAccessibilityService.
     fun startFocusSession(source: FocusSessionSource) {
         AccessibilityBridge.setRestrictedPackages(restrictedPackagesFor(source))
+        val sessionGroup = sessionGroupFor(source)
+        FocusRestManager.startSession(
+            restsTotal = sessionGroup?.breakAllowance ?: 0,
+            restMinutes = sessionGroup?.breakMinutes ?: DEFAULT_BREAK_MINUTES
+        )
         val startTimeMillis = System.currentTimeMillis()
         activeFocusSession = ActiveFocusSession(
             startTimeMillis = startTimeMillis,
@@ -337,6 +363,7 @@ fun FocusAppNavGraph() {
                         onEndSessionClick = {
                             // [David Shiau, 2026-09-20] Lifts blocking once the session is over.
                             AccessibilityBridge.clearRestrictedPackages()
+                            FocusRestManager.endSession()
                             // [Claude, 2026-09-21] Removes the persistent notification-shade
                             // entry started in startFocusSession above. Runs on both the
                             // normal-completion and hold-to-cancel paths, since both funnel

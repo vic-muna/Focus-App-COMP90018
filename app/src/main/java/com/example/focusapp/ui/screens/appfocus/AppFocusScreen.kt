@@ -34,6 +34,7 @@ import com.example.focusapp.R
 import com.example.focusapp.data.apps.InstalledAppInfo
 import com.example.focusapp.data.apps.getLaunchableApps
 import com.example.focusapp.ui.components.FocusConfirmDialog
+import com.example.focusapp.ui.components.consumeTaps
 import com.example.focusapp.ui.navigation.MainTab
 import com.example.focusapp.ui.navigation.MainTabBar
 import com.example.focusapp.ui.screens.home.AppItem
@@ -325,9 +326,11 @@ private fun AppFocusContent(
                         onClick = onOutsideCardClick,
                     ),
             )
+            // consumeTaps: only taps outside the card's background count as "outside".
             val cardModifier = Modifier
                 .align(Alignment.Center)
                 .padding(horizontal = 32.dp)
+                .consumeTaps()
             when (editStep) {
                 GroupEditStep.APPS -> AppGroupAppsCard(
                     apps = pickerApps,

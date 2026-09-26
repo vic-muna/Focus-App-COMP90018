@@ -43,6 +43,7 @@ import com.example.focusapp.ui.components.FocusRangeMarker
 import com.example.focusapp.ui.components.PullUpPanel
 import com.example.focusapp.ui.components.PullUpPanelState
 import com.example.focusapp.ui.components.SettingsTopBar
+import com.example.focusapp.ui.components.consumeTaps
 import com.example.focusapp.ui.components.rememberPullUpPanelState
 import com.example.focusapp.ui.navigation.MainTab
 import com.example.focusapp.ui.navigation.MainTabBar
@@ -142,12 +143,26 @@ fun LocationScreen(
     // device's current position. With a real map this becomes the camera
     // target, updated whenever the user stops dragging the map.
     val needsPosition = draft != null && draft?.latitude == null
+    // Set when the device couldn't produce a position at all.
+    var positionUnavailable by remember { mutableStateOf(false) }
     LaunchedEffect(needsPosition, permissionState.hasPermission) {
         if (needsPosition && permissionState.hasPermission) {
-            fetchLastKnownLocation(context) { lat, lng ->
-                draft = draft?.let { if (it.latitude == null) it.copy(latitude = lat, longitude = lng) else it }
-            }
+            positionUnavailable = false
+            fetchLastKnownLocation(
+                context = context,
+                onResult = { lat, lng ->
+                    draft = draft?.let { if (it.latitude == null) it.copy(latitude = lat, longitude = lng) else it }
+                },
+                onUnavailable = { positionUnavailable = true },
+            )
         }
+    }
+    // Why a new location has no position yet (shown on the card instead of "Finding...").
+    val positionProblem = when {
+        !needsPosition -> null
+        !permissionState.hasPermission -> "Location access is off - allow it to save"
+        positionUnavailable -> "Couldn't find your location"
+        else -> null
     }
 
     // With a real map, also move the camera so [position] lands under the centered pin.
@@ -225,6 +240,7 @@ fun LocationScreen(
         listError = listError,
         draft = draft,
         draftPlaceName = draftPlaceName,
+        positionProblem = positionProblem,
         saveError = saveError,
         panelState = panelState,
         onMapLongPress = ::startDraft,
@@ -294,6 +310,7 @@ private fun LocationContent(
     listError: String?,
     draft: LocationDraft?,
     draftPlaceName: String?,
+    positionProblem: String?,
     saveError: String?,
     panelState: PullUpPanelState,
     onMapLongPress: (Offset) -> Unit,
@@ -398,7 +415,9 @@ private fun LocationContent(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(start = 32.dp, end = 32.dp, bottom = FocusSpacing.ScreenBottom)
-                    .onSizeChanged { addCardHeight = with(density) { it.height.toDp() } },
+                    .onSizeChanged { addCardHeight = with(density) { it.height.toDp() } }
+                    // Only taps on the map outside the card count as "outside".
+                    .consumeTaps(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 saveError?.let { ErrorBanner(message = it) }
@@ -413,6 +432,7 @@ private fun LocationContent(
                         draftPlaceName != null -> "Approx. $draftPlaceName"
                         draft.editingZoneId != null -> "Saved location"
                         draft.latitude != null -> "Approx. current location"
+                        positionProblem != null -> positionProblem
                         else -> "Finding your location…"
                     },
                     latitude = draft.latitude,
@@ -446,6 +466,7 @@ private fun LocationContentListPreview() {
             listError = null,
             draft = null,
             draftPlaceName = null,
+            positionProblem = null,
             saveError = null,
             panelState = rememberPullUpPanelState(initiallyExpanded = true),
             onMapLongPress = {},
@@ -480,6 +501,7 @@ private fun LocationContentAddPreview() {
             listError = null,
             draft = LocationDraft(latitude = -37.8136, longitude = 144.9631),
             draftPlaceName = "Library at the Dock",
+            positionProblem = null,
             saveError = null,
             panelState = rememberPullUpPanelState(),
             onMapLongPress = {},

@@ -5,7 +5,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import com.example.focusapp.data.accessibility.AccessibilityBridge
+import com.example.focusapp.data.accessibility.FocusRestManager
 import com.example.focusapp.data.apps.getAppLabel
 import com.example.focusapp.ui.screens.blocked.BlockedScreen
 import com.example.focusapp.ui.theme.FocusAppTheme
@@ -30,7 +34,7 @@ import com.example.focusapp.ui.theme.FocusAppTheme
  * screen is launched into its OWN task (see AndroidManifest.xml's
  * `launchMode="singleTask"` + `taskAffinity=""` on this Activity), kept
  * separate from the blocked app's task. Both the Reject button and the
- * system Back gesture ([BackHandler] below) explicitly navigate Home
+ * system Back gesture ([BackHandler] below) explicitly navigate back to Focus
  * rather than just calling `finish()` - if they only called finish(),
  * Android's default back-stack behaviour could reveal the blocked app's
  * task underneath, defeating the whole point of this screen.
@@ -42,6 +46,7 @@ class BlockedActivity : ComponentActivity() {
     // [onNewIntent] can update it even while this screen is already on
     // screen (see that override below for why that case can happen).
     private val blockedAppLabelState = mutableStateOf("This app")
+    private var blockedPackageName: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,21 +54,18 @@ class BlockedActivity : ComponentActivity() {
 
         setContent {
             FocusAppTheme {
+                // [Claude, 2026-09-26] Rests come from the running session's app group -
+                // see FocusRestManager and NavGraph.sessionGroupFor().
+                val restState by FocusRestManager.state.collectAsState()
                 // The system Back gesture does the same as Reject - see the
                 // class doc comment for why it can't be left to the default.
-                BackHandler { goHomeAndFinish() }
-                // [HANDOFF -> David Shiau | README task: "AccessibilityService integration (App Restriction...)"]
-                // Rests aren't implemented yet, so the screen hides "Left" and disables
-                // Confirm. To enable them: pass the active session's rests left / total
-                // (BlockedAppGroup.breakAllowance, minus rests already used this session)
-                // and, in onTakeRest, lift this app's restriction for breakMinutes
-                // before re-applying it (e.g. via AccessibilityBridge).
+                BackHandler { returnToFocusAndFinish() }
                 BlockedScreen(
                     appLabel = blockedAppLabelState.value,
-                    restsLeft = null,
-                    restsTotal = null,
-                    onTakeRest = {},
-                    onReject = { goHomeAndFinish() }
+                    restsLeft = restState?.restsLeft,
+                    restsTotal = restState?.restsTotal,
+                    onTakeRest = ::takeRestAndOpenApp,
+                    onReject = ::returnToFocusAndFinish
                 )
             }
         }
@@ -84,8 +86,54 @@ class BlockedActivity : ComponentActivity() {
     }
 
     private fun updateBlockedLabelFrom(intent: Intent) {
-        val blockedPackageName = intent.getStringExtra(EXTRA_BLOCKED_PACKAGE)
+        blockedPackageName = intent.getStringExtra(EXTRA_BLOCKED_PACKAGE)
         blockedAppLabelState.value = blockedPackageName?.let { getAppLabel(this, it) } ?: "This app"
+    }
+
+    /**
+     * Confirm: spend one rest (which lifts blocking for the rest's length),
+     * then open the app the user was trying to use. When the rest ends, if
+     * they're still in a restricted app, this screen comes straight back -
+     * the accessibility service only reacts to app switches, so it wouldn't
+     * notice on its own.
+     */
+    private fun takeRestAndOpenApp() {
+        val appContext = applicationContext
+        val started = FocusRestManager.takeRest { restored ->
+            val foreground = AccessibilityBridge.currentForegroundApp.value
+            if (foreground != null && foreground in restored) {
+                appContext.startActivity(
+                    Intent(appContext, BlockedActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        putExtra(EXTRA_BLOCKED_PACKAGE, foreground)
+                    }
+                )
+            }
+        }
+        if (!started) return
+        val launch = blockedPackageName?.let { packageManager.getLaunchIntentForPackage(it) }
+        if (launch != null) {
+            startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            finish()
+        } else {
+            returnToFocusAndFinish()
+        }
+    }
+
+    /**
+     * Reject / Back: bring Focus itself (showing the running session) to the
+     * front instead of the blocked app - see the class doc comment for why
+     * just finish()ing isn't safe. Falls back to the home screen when no
+     * session is running.
+     */
+    private fun returnToFocusAndFinish() {
+        val focusApp = packageManager.getLaunchIntentForPackage(packageName)
+        if (FocusRestManager.state.value != null && focusApp != null) {
+            startActivity(focusApp.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            finish()
+        } else {
+            goHomeAndFinish()
+        }
     }
 
     /**

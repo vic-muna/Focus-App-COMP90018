@@ -245,7 +245,6 @@ file, and search for `[HANDOFF -> <your name>` to find your spot.
 | `ui/screens/party/PartyModeScreen.kt` | Yu-Hao Lu | Firebase real-time sync for Study Party feature |
 | `ui/navigation/NavGraph.kt` (`onAvatarClick`) | Kai-Jiun Chan | Reward/Progress UI — route the avatar tap to the Report screen (History/Rewards tabs, see `MainActivity.md`) |
 | `data/repository/FocusRepositoryImpl.kt` (`deleteFocusZone`) | Victor Munacoha (REST) / Yu-Hao Lu (Firebase) | Cloud REST API integration / Firebase real-time sync — deleting a location only removes the local copy; add a remote delete |
-| `BlockedActivity.kt` (rests) | David Shiau | AccessibilityService integration (App Restriction) — the blocking screen's "take a rest?" Confirm is disabled until rests exist: pass rests left/total and lift the restriction for `breakMinutes` on Confirm |
 
 Note: these are comment-only edits — no logic or function signatures were
 changed, so the project still compiles as-is.
@@ -325,16 +324,28 @@ Also still pending on the Location screen: the map itself is a placeholder
 (Google Maps vs OpenStreetMap), and a zone's on/off switch is UI-only
 (`FocusZone` has no "enabled" field).
 
-### Location "Schedule" link is UI-side only
+### Location "Schedule" link (stored UI-side)
 
 The add/edit-location card's **Schedule** button lets the user pick which
-app group (its apps + time slot) a location uses. That link is stored
-**UI-side** in `ui/screens/location/LocationScheduleStorage.kt`
+app group (its apps + time slot + rests) a location uses. That link is
+stored **UI-side** in `ui/screens/location/LocationScheduleStorage.kt`
 (SharedPreferences, keyed by zone id) - `FocusZone` has no group field, and
-this update deliberately doesn't add one.
+this update deliberately doesn't add one. **Team decision needed:** whether
+the link should move onto `FocusZone` in the data layer.
 
-Nothing reads the link when a location triggers a focus session yet:
-`NavGraph.restrictedPackagesFor()` still blocks **every** group's apps for
-`FocusSessionSource.Location`. **Team decision needed:** whether the link
-belongs on `FocusZone` (data layer), and then who wires location sessions to
-block only the linked group.
+When a location triggers a focus session (`FocusSessionSource.Location`,
+which now carries the zone id), `NavGraph` uses the linked group: only its
+apps are blocked (a location with no linked group still blocks every
+group's apps, as before), and its rest settings apply.
+
+### Rests during a focus session
+
+`data/accessibility/FocusRestManager.kt` tracks a session's "tea breaks":
+`NavGraph.startFocusSession()` starts it with the session group's
+`breakAllowance` / `breakMinutes` (schedule -> its group, location -> the
+linked group, Quick Focus -> Home's selected group; Party / Wi-Fi -> no
+rests), and ending the session clears it. On the blocking screen,
+**Confirm** spends a rest - blocking is lifted for `breakMinutes` and the
+blocked app opens - and **Reject** / Back return to the running Focus
+screen. When a rest ends, blocking is restored, and if a restricted app is
+still in front the blocking screen reappears.

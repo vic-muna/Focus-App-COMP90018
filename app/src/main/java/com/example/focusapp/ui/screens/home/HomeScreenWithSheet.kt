@@ -248,7 +248,7 @@ fun HomeScreenWithSheet(
                             is FocusTriggerResult.ScheduleMatch ->
                                 FocusSessionSource.Schedule(suggestion.groupId, suggestion.groupName)
                             is FocusTriggerResult.LocationMatch ->
-                                FocusSessionSource.Location(suggestion.zoneName)
+                                FocusSessionSource.Location(suggestion.zoneName, suggestion.zoneId)
                             is FocusTriggerResult.WifiMatch ->
                                 FocusSessionSource.Wifi(suggestion.ssid)
                             FocusTriggerResult.NoTrigger -> return@AutoFocusSuggestionBanner

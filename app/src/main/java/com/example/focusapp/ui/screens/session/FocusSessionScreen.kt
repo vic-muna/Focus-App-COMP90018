@@ -57,7 +57,8 @@ sealed class FocusSessionSource {
     data object Manual : FocusSessionSource()
     data object Party : FocusSessionSource()
     data class Schedule(val groupId: String, val groupName: String) : FocusSessionSource()
-    data class Location(val zoneName: String) : FocusSessionSource()
+    /** [zoneId] finds the location's linked app group (its "Schedule"), if it has one. */
+    data class Location(val zoneName: String, val zoneId: String? = null) : FocusSessionSource()
     data class Wifi(val ssid: String) : FocusSessionSource()
 }
 
