@@ -31,10 +31,14 @@ import com.example.focusapp.R
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
 
-/** One entry of [FocusBottomNavBar]. */
+/**
+ * One entry of [FocusBottomNavBar]. A non-[enabled] item still shows its
+ * icon (a placeholder for a feature that isn't available) but can't be tapped.
+ */
 data class FocusNavItem(
     @DrawableRes val iconRes: Int,
     val contentDescription: String,
+    val enabled: Boolean = true,
 )
 
 /**
@@ -84,7 +88,7 @@ fun FocusBottomNavBar(
                         .width(itemWidth)
                         .fillMaxHeight()
                         .clip(CircleShape)
-                        .clickable(role = Role.Tab) { onItemClick(index) },
+                        .clickable(enabled = item.enabled, role = Role.Tab) { onItemClick(index) },
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(

@@ -47,7 +47,6 @@ import com.example.focusapp.ui.screens.session.ActiveFocusSession
 import com.example.focusapp.ui.screens.session.FocusSessionScreen
 import com.example.focusapp.ui.screens.session.FocusSessionSource
 import com.example.focusapp.ui.screens.settings.SettingsScreen
-import com.example.focusapp.ui.screens.timefocus.TimeFocusScreen
 import com.example.focusapp.ui.theme.WireframeColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -171,14 +170,14 @@ fun FocusAppNavGraph() {
         navController.navigate(Destinations.FOCUS_SESSION)
     }
 
-    // Bottom-nav tabs: Home is the root; Location and Schedule sit directly on
-    // top of it, and Blocked Apps is still Home's bottom sheet.
+    // Bottom-nav tabs: Home is the root; Location sits directly on top of it,
+    // and Blocked Apps is still Home's bottom sheet. Schedule is a disabled
+    // placeholder (see MainTab) - TimeFocusScreen is kept but not reachable.
     fun navigateToTab(tab: MainTab) {
         when (tab) {
             MainTab.HOME -> navController.popBackStack(Destinations.HOME, inclusive = false)
-            MainTab.LOCATION, MainTab.SCHEDULE -> navController.navigate(
-                if (tab == MainTab.LOCATION) Destinations.LOCATION else Destinations.TIME_FOCUS
-            ) {
+            MainTab.SCHEDULE -> Unit
+            MainTab.LOCATION -> navController.navigate(Destinations.LOCATION) {
                 popUpTo(Destinations.HOME)
                 launchSingleTop = true
             }
@@ -247,8 +246,7 @@ fun FocusAppNavGraph() {
                     onEditLocationZoneClick = {
                         navController.navigate(Destinations.EDIT_LOCATION_ZONE)
                     },
-                    onLocationTabClick = { navigateToTab(MainTab.LOCATION) },
-                    onScheduleTabClick = { navigateToTab(MainTab.SCHEDULE) }
+                    onLocationTabClick = { navigateToTab(MainTab.LOCATION) }
                 )
             }
 
@@ -261,14 +259,6 @@ fun FocusAppNavGraph() {
                     onSettingsClick = { navController.navigate(Destinations.SETTINGS) },
                     onTabClick = ::navigateToTab
                 )
-            }
-
-            composable(
-                route = Destinations.TIME_FOCUS,
-                enterTransition = partyModeEnter,
-                exitTransition = partyModeExit
-            ) {
-                TimeFocusScreen(onTabClick = ::navigateToTab)
             }
 
             composable(

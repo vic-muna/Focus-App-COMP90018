@@ -12,7 +12,8 @@ import com.example.focusapp.ui.theme.FocusAppTheme
 enum class MainTab(val item: FocusNavItem) {
     HOME(FocusNavItem(R.drawable.ic_home_fill, "Home")),
     LOCATION(FocusNavItem(R.drawable.ic_pin_alt_fill, "Location focus")),
-    SCHEDULE(FocusNavItem(R.drawable.ic_clock_fill, "Schedule")),
+    // Study-time tab is cancelled for now: the icon keeps its slot as a demo but does nothing.
+    SCHEDULE(FocusNavItem(R.drawable.ic_clock_fill, "Schedule (not available)", enabled = false)),
     BLOCKED_APPS(FocusNavItem(R.drawable.ic_apps_add, "Blocked apps")),
 }
 

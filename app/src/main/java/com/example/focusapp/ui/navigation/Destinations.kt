@@ -29,8 +29,8 @@ object Destinations {
     // location groups. See ui.screens.location.LocationScreen.
     const val LOCATION = "location"
 
-    // Schedule tab (bottom nav clock icon) - list of time slots.
-    // See ui.screens.timefocus.TimeFocusScreen.
+    // Schedule tab (bottom nav clock icon) - list of time slots. Not routed
+    // while the tab is a disabled placeholder; see ui.screens.timefocus.TimeFocusScreen.
     const val TIME_FOCUS = "time_focus"
 
     // Replaces the old bottom-left "Map" shortcut on Home - Party Mode is the
