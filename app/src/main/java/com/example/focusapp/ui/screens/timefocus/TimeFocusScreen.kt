@@ -3,8 +3,9 @@ package com.example.focusapp.ui.screens.timefocus
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import com.example.focusapp.ui.components.AppSelectCard
+import com.example.focusapp.ui.components.FlyCardOverlay
+import com.example.focusapp.ui.components.NextButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,8 +49,6 @@ import kotlin.math.abs
 
 private val HeaderHeight = 210.dp
 
-/** How dark the screen behind a fly card gets (Figma dims it heavily). */
-private const val SCRIM_ALPHA = 0.8f
 
 /** Default range for a new time slot: 9:00 AM - 5:00 PM (same-day, see TimeSlotScheduleCard). */
 private const val DEFAULT_START_MINUTES = 9 * 60
@@ -317,34 +316,27 @@ private fun TimeFocusContent(
         )
 
         if (editStep != null || viewingGroup != null) {
-            // Scrim: dims everything behind the card; tapping it means "leave".
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(colors.background.copy(alpha = SCRIM_ALPHA))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onOutsideCardClick,
-                    ),
-            )
-            // consumeTaps: only taps outside the card's background count as "outside".
-            val cardModifier = Modifier
-                .align(Alignment.Center)
-                .padding(horizontal = 32.dp)
-                .consumeTaps()
-            when (editStep) {
-                TimeSlotEditStep.APPS -> TimeSlotAppsCard(
-                    apps = pickerApps,
-                    selectedPackages = draft.selectedPackages,
-                    onToggleApp = { pkg ->
-                        val picked = draft.selectedPackages
-                        onDraftChange(draft.copy(selectedPackages = if (pkg in picked) picked - pkg else picked + pkg))
-                    },
-                    onClose = onEditorClose,
-                    onNext = { onStepChange(TimeSlotEditStep.SCHEDULE) },
-                    modifier = cardModifier,
-                )
+            FlyCardOverlay(onOutsideClick = onOutsideCardClick) {
+                // consumeTaps: only taps outside the card's background count as "outside".
+                val cardModifier = Modifier.consumeTaps()
+                when (editStep) {
+                    TimeSlotEditStep.APPS -> AppSelectCard(
+                        title = "Apps Group",
+                        apps = pickerApps,
+                        selectedPackages = draft.selectedPackages,
+                        onToggleApp = { pkg ->
+                            val picked = draft.selectedPackages
+                            onDraftChange(draft.copy(selectedPackages = if (pkg in picked) picked - pkg else picked + pkg))
+                        },
+                        onClose = onEditorClose,
+                        actionButton = {
+                            NextButton(
+                                onClick = { onStepChange(TimeSlotEditStep.SCHEDULE) },
+                                enabled = draft.selectedPackages.isNotEmpty(),
+                            )
+                        },
+                        modifier = cardModifier,
+                    )
                 TimeSlotEditStep.SCHEDULE -> TimeSlotScheduleCard(
                     activeDays = draft.activeDays,
                     onToggleDay = { day ->
@@ -369,10 +361,12 @@ private fun TimeFocusContent(
                     onConfirm = onEditorConfirm,
                     modifier = cardModifier,
                 )
-                null -> viewingGroup?.let { group ->
-                    TimeSlotDetailCard(group = group, onEdit = onEditViewingGroup, modifier = cardModifier)
+                    null -> viewingGroup?.let { group ->
+                        TimeSlotDetailCard(group = group, onEdit = onEditViewingGroup, modifier = cardModifier)
+                    }
                 }
             }
+
         }
     }
 }
