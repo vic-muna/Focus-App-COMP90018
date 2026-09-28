@@ -35,7 +35,6 @@ import com.example.focusapp.ui.screens.apps.EditAppGroupScreen
 import com.example.focusapp.ui.screens.history.HistoryScreen
 import com.example.focusapp.ui.screens.home.BlockedAppGroup
 import com.example.focusapp.ui.screens.home.BlockedAppGroupStorage
-import com.example.focusapp.ui.screens.home.EditLocationZoneScreen
 import com.example.focusapp.ui.screens.home.GroupListScreen
 import com.example.focusapp.ui.screens.home.GroupUsageScreen
 import com.example.focusapp.ui.screens.home.HomeScreenWithSheet
@@ -152,10 +151,9 @@ fun FocusAppNavGraph() {
     val context = LocalContext.current
 
     var groups by remember { mutableStateOf(generateFakeGroups()) }
-    var selectedGroupId by remember { mutableStateOf(groups.first().id) }
     var activeFocusSession by remember { mutableStateOf<ActiveFocusSession?>(null) }
 
-    // [David Shiau, 2026-09-23] Persists `groups`/`selectedGroupId` (see
+    // [David Shiau, 2026-09-23] Persists `groups` (see
     // BlockedAppGroupStorage's doc comment for why they weren't persisted
     // before) - loads saved data once on first composition, then re-saves
     // automatically whenever either value changes.
@@ -178,11 +176,6 @@ fun FocusAppNavGraph() {
         val savedGroups = withContext(Dispatchers.IO) { groupStorage.getGroups() }
         if (savedGroups != null) {
             groups = savedGroups
-            val savedSelectedId = withContext(Dispatchers.IO) { groupStorage.getSelectedGroupId() }
-            selectedGroupId = savedSelectedId
-                ?.takeIf { id -> savedGroups.any { it.id == id } }
-                ?: savedGroups.firstOrNull()?.id
-                        ?: ""
         }
         hasLoadedGroups = true
     }
@@ -190,12 +183,6 @@ fun FocusAppNavGraph() {
     LaunchedEffect(groups, hasLoadedGroups) {
         if (hasLoadedGroups) {
             withContext(Dispatchers.IO) { groupStorage.saveGroups(groups) }
-        }
-    }
-
-    LaunchedEffect(selectedGroupId, hasLoadedGroups) {
-        if (hasLoadedGroups) {
-            withContext(Dispatchers.IO) { groupStorage.saveSelectedGroupId(selectedGroupId) }
         }
     }
 
@@ -261,11 +248,8 @@ fun FocusAppNavGraph() {
 
 
     fun navigateToTab(tab: MainTab) {
-        fun openHomeSheet(sheetType: String) {
-            navController.getBackStackEntry(Destinations.HOME).savedStateHandle.apply {
-                set("reopenSheetType", sheetType)
-                set("reopenSheet", true)
-            }
+        fun openHomeSheet() {
+            navController.getBackStackEntry(Destinations.HOME).savedStateHandle["reopenSheet"] = true
             navController.popBackStack(Destinations.HOME, inclusive = false)
         }
         when (tab) {
@@ -278,7 +262,7 @@ fun FocusAppNavGraph() {
                 popUpTo(Destinations.HOME)
                 launchSingleTop = true
             }
-            MainTab.WIFI_SOURCE -> openHomeSheet("wifi_source")
+            MainTab.WIFI_SOURCE -> openHomeSheet()
         }
     }
 
@@ -299,36 +283,12 @@ fun FocusAppNavGraph() {
                 val reopenSheet by backStackEntry.savedStateHandle
                     .getStateFlow("reopenSheet", false)
                     .collectAsState()
-                val reopenSheetType by backStackEntry.savedStateHandle
-                    .getStateFlow("reopenSheetType", "blocked_apps")
-                    .collectAsState()
 
                 HomeScreenWithSheet(
                     groups = groups,
-                    selectedGroupId = selectedGroupId,
                     reopenSheetSignal = reopenSheet,
-                    reopenSheetType = reopenSheetType,
                     onReopenSheetHandled = {
                         backStackEntry.savedStateHandle["reopenSheet"] = false
-                        backStackEntry.savedStateHandle["reopenSheetType"] = "blocked_apps"
-                    },
-                    onBlockerClick = {
-                        navController.navigate(Destinations.GROUP_LIST)
-                    },
-                    onGroupAppsChange = { groupId, apps ->
-                        groups = groups.map { g -> if (g.id == groupId) g.copy(apps = apps) else g }
-                    },
-                    onGroupScheduleChange = { groupId, schedule ->
-                        groups = groups.map { g -> if (g.id == groupId) g.copy(schedule = schedule) else g }
-                    },
-                    onGroupRename = { groupId, newName ->
-                        groups = groups.map { g -> if (g.id == groupId) g.copy(name = newName) else g }
-                    },
-                    onGroupMaxOpensChange = { groupId, maxOpens ->
-                        groups = groups.map { g -> if (g.id == groupId) g.copy(maxOpensPerApp = maxOpens) else g }
-                    },
-                    onGroupMaxDurationChange = { groupId, maxMinutes ->
-                        groups = groups.map { g -> if (g.id == groupId) g.copy(maxMinutesPerApp = maxMinutes) else g }
                     },
                     // [HANDOFF -> Kai-Jiun Chan | README task: "Reward/Progress UI"]
                     // 首頁規格.md originally wanted this to open a two-tab (History/
@@ -343,18 +303,8 @@ fun FocusAppNavGraph() {
                     },
                     onPartyModeClick = { navController.navigate(Destinations.PARTY_MODE) },
                     onSettingsClick = { navController.navigate(Destinations.SETTINGS) },
-                    onEditLocationZoneClick = {
-                        navController.navigate(Destinations.EDIT_LOCATION_ZONE)
-                    },
                     onLocationTabClick = { navigateToTab(MainTab.LOCATION) },
                     onScheduleTabClick = { navigateToTab(MainTab.SCHEDULE) },
-                    locationGroups = location.groups,
-                    selectedLocationGroupId = location.selectedId,
-                    onLocationGroupAppsChange = { groupId, apps -> location.updateGroup(groupId) { it.copy(apps = apps) } },
-                    onLocationGroupRename = { groupId, newName -> location.updateGroup(groupId) { it.copy(name = newName) } },
-                    onLocationGroupListClick = {
-                        navController.navigate(Destinations.LOCATION_GROUP_LIST)
-                    },
                     wifiGroups = wifi.groups,
                     selectedWifiGroupId = wifi.selectedId,
                     onWifiGroupAppsChange = { groupId, apps -> wifi.updateGroup(groupId) { it.copy(apps = apps) } },
@@ -382,7 +332,10 @@ fun FocusAppNavGraph() {
                             location.groups = location.groups + defaultGroup(zone.id, zone.name).copy(apps = apps)
                         }
                     },
-                    onZoneDeleted = { zoneId -> location.groups = location.groups.filterNot { it.id == zoneId } }
+                    onZoneDeleted = { zoneId -> location.groups = location.groups.filterNot { it.id == zoneId } },
+                    // Drops lists whose location no longer exists (the data layer keeps
+                    // one location at a time, so saving a new one replaces the old).
+                    onZonesLoaded = { zoneIds -> location.groups = location.groups.filter { it.id in zoneIds } }
                 )
             }
             composable(
@@ -449,60 +402,16 @@ fun FocusAppNavGraph() {
                 }
             }
 
-            composable(
-                route = Destinations.GROUP_LIST,
-                enterTransition = enterFromBottom,
-                exitTransition = exitToBottom
-            ) {
-                GroupListScreen(
-                    groups = groups,
-                    selectedGroupId = selectedGroupId,
-                    onGroupSelect = { groupId ->
-                        selectedGroupId = groupId
-                        navController.getBackStackEntry(Destinations.HOME)
-                            .savedStateHandle["reopenSheet"] = true
-                        navController.popBackStack(Destinations.HOME, inclusive = false)
-                    },
-                    onAddGroupClick = { name ->
-                        val newGroup = BlockedAppGroup(
-                            id = "group_${System.currentTimeMillis()}",
-                            name = name.ifBlank { "New Group" },
-                            apps = emptyList(),
-                            schedule = generateFakeTimeSlot()
-                        )
-                        groups = groups + newGroup
-                        selectedGroupId = newGroup.id
-                        navController.getBackStackEntry(Destinations.HOME)
-                            .savedStateHandle["reopenSheet"] = true
-                        navController.popBackStack(Destinations.HOME, inclusive = false)
-                    },
-                    onBackClick = {
-                        navController.previousBackStackEntry
-                            ?.savedStateHandle
-                            ?.set("reopenSheet", true)
-                        navController.popBackStack()
-                    }
-                )
-            }
-
-            // Same flow as GROUP_LIST above, over the location / Wi-Fi groups,
-            // and returning to that feature's own sheet instead.
-            fun groupListRoute(route: String, title: String, list: PersistedGroupList, idPrefix: String, sheetType: String) {
+            // [David Shiau, 2026-09-26] Select / create a Wi-Fi group, then back to
+            // the Wi-Fi sheet on Home.
+            fun groupListRoute(route: String, title: String, list: PersistedGroupList, idPrefix: String) {
                 composable(
                     route = route,
                     enterTransition = enterFromBottom,
                     exitTransition = exitToBottom
                 ) {
                     fun backToSheet() {
-                        // Opened from the Location screen's group sheet: just go back there.
-                        if (navController.previousBackStackEntry?.destination?.route == Destinations.LOCATION) {
-                            navController.popBackStack()
-                            return
-                        }
-                        navController.getBackStackEntry(Destinations.HOME).savedStateHandle.apply {
-                            set("reopenSheetType", sheetType)
-                            set("reopenSheet", true)
-                        }
+                        navController.getBackStackEntry(Destinations.HOME).savedStateHandle["reopenSheet"] = true
                         navController.popBackStack(Destinations.HOME, inclusive = false)
                     }
                     GroupListScreen(
@@ -524,8 +433,7 @@ fun FocusAppNavGraph() {
                 }
             }
 
-            groupListRoute(Destinations.LOCATION_GROUP_LIST, "Location Groups", location, "location_group", "location_zone")
-            groupListRoute(Destinations.WIFI_GROUP_LIST, "Wi-Fi Groups", wifi, "wifi_group", "wifi_source")
+            groupListRoute(Destinations.WIFI_GROUP_LIST, "Wi-Fi Groups", wifi, "wifi_group")
 
             composable(
                 route = Destinations.GROUP_USAGE,
@@ -543,22 +451,6 @@ fun FocusAppNavGraph() {
                         onBackClick = { navController.popBackStack() }
                     )
                 }
-            }
-
-            composable(
-                route = Destinations.EDIT_LOCATION_ZONE,
-                enterTransition = enterFromBottom,
-                exitTransition = exitToBottom
-            ) {
-                EditLocationZoneScreen(
-                    onSaveComplete = {
-                        navController.getBackStackEntry(Destinations.HOME).savedStateHandle.apply {
-                            set("reopenSheetType", "location_zone")
-                            set("reopenSheet", true)
-                        }
-                        navController.popBackStack(Destinations.HOME, inclusive = false)
-                    }
-                )
             }
 
             composable(

@@ -43,24 +43,9 @@ object Destinations {
     // tile on the Home screen (the block above Quick Focus - see HomeScreen.kt).
     const val HISTORY = "history"
 
-    // Blocked Apps group flow (reachable from Home's bottom sheet). Editing
-    // now happens in pickers layered on the summary sheet itself - this is
-    // the only extra destination, for choosing/creating/renaming/deleting
-    // which group is selected.
-    const val GROUP_LIST = "group_list"
-
-    // [David Shiau, 2026-09-26] Location Zone's own group list (select/
-    // create) - the same GroupListScreen as GROUP_LIST, but over the
-    // separate location groups. Reachable from the Location Zone sheet.
-    const val LOCATION_GROUP_LIST = "location_group_list"
-
     // [David Shiau, 2026-09-26] Same again for Wi-Fi Source Detection's own
     // groups. Reachable from the Wi-Fi sheet on Home.
     const val WIFI_GROUP_LIST = "wifi_group_list"
-
-    // Location Zone edit flow (reachable from Home's bottom sheet). Single
-    // zone only - no id/argument needed, unlike the blocked-apps group flow.
-    const val EDIT_LOCATION_ZONE = "edit_location_zone"
 
     // [David Shiau, 2026-09-26] Today's open counts/durations for one
     // Blocked-App-Group - reached by tapping Home's schedule banner. See

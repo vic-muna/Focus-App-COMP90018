@@ -58,7 +58,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-enum class SheetType { NONE, BLOCKED_APPS, LOCATION_ZONE, WIFI_SOURCE }
+enum class SheetType { NONE, WIFI_SOURCE }
 
 /** How often the auto-suggestion check re-evaluates while Home is on screen - schedule
  *  boundaries only need minute-granularity, so there's no need for anything tighter. */
@@ -70,34 +70,20 @@ internal val LegacySheetContainerColor = Color(0xFF3B3B96)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreenWithSheet(
+    // Time Focus's schedule groups - only read here, for the schedule banner.
     groups: List<BlockedAppGroup>,
-    selectedGroupId: String,
+    // Reopens the Wi-Fi sheet, e.g. when coming back from its group list.
     reopenSheetSignal: Boolean,
-    reopenSheetType: String = "blocked_apps",
     onReopenSheetHandled: () -> Unit,
-    onBlockerClick: () -> Unit,
-    onGroupAppsChange: (groupId: String, apps: List<AppItem>) -> Unit,
-    onGroupScheduleChange: (groupId: String, schedule: TimeSlot) -> Unit,
-    onGroupRename: (groupId: String, newName: String) -> Unit = { _, _ -> },
-    onGroupMaxOpensChange: (groupId: String, maxOpens: Int?) -> Unit = { _, _ -> },
-    onGroupMaxDurationChange: (groupId: String, maxMinutes: Int?) -> Unit = { _, _ -> },
     onFocusSessionStart: (FocusSessionSource) -> Unit = {},
     onScheduleBannerClick: (groupId: String) -> Unit = {},
     onAvatarClick: () -> Unit = {},
     onPartyModeClick: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
-    onEditLocationZoneClick: () -> Unit = {},
     onLocationTabClick: () -> Unit = {},
     onScheduleTabClick: () -> Unit = {},
-    // [David Shiau, 2026-09-26] Location Zone's own app groups - separate
-    // from `groups` above (Scheduled Limits).
-    locationGroups: List<BlockedAppGroup> = emptyList(),
-    selectedLocationGroupId: String = "",
-    onLocationGroupAppsChange: (groupId: String, apps: List<AppItem>) -> Unit = { _, _ -> },
-    onLocationGroupRename: (groupId: String, newName: String) -> Unit = { _, _ -> },
-    onLocationGroupListClick: () -> Unit = {},
     // [David Shiau, 2026-09-26] Wi-Fi Source Detection's own app groups -
-    // separate from both of the above.
+    // separate from the schedule groups above.
     wifiGroups: List<BlockedAppGroup> = emptyList(),
     selectedWifiGroupId: String = "",
     onWifiGroupAppsChange: (groupId: String, apps: List<AppItem>) -> Unit = { _, _ -> },
@@ -172,11 +158,7 @@ fun HomeScreenWithSheet(
     LaunchedEffect(reopenSheetSignal) {
         if (reopenSheetSignal) {
             onReopenSheetHandled()
-            when (reopenSheetType) {
-                "location_zone" -> openSheet(SheetType.LOCATION_ZONE, MainTab.LOCATION)
-                "wifi_source" -> openSheet(SheetType.WIFI_SOURCE, MainTab.WIFI_SOURCE)
-                else -> openSheet(SheetType.BLOCKED_APPS, MainTab.SCHEDULE)
-            }
+            openSheet(SheetType.WIFI_SOURCE, MainTab.WIFI_SOURCE)
         }
     }
 
@@ -321,28 +303,6 @@ fun HomeScreenWithSheet(
                 containerColor = LegacySheetContainerColor
             ) {
                 when (activeSheet) {
-                    SheetType.BLOCKED_APPS -> AutoBlockingSheetContent(
-                        groups = groups,
-                        selectedGroupId = selectedGroupId,
-                        onAppsChange = onGroupAppsChange,
-                        onScheduleChange = onGroupScheduleChange,
-                        onRenameGroup = onGroupRename,
-                        onMaxOpensChange = onGroupMaxOpensChange,
-                        onMaxDurationChange = onGroupMaxDurationChange,
-                        onBlockerClick = {
-                            closeSheet { onBlockerClick() }
-                        }
-                    )
-
-                    SheetType.LOCATION_ZONE -> LocationZoneSheetContent(
-                        groups = locationGroups,
-                        selectedGroupId = selectedLocationGroupId,
-                        onAppsChange = onLocationGroupAppsChange,
-                        onRenameGroup = onLocationGroupRename,
-                        onEditClick = { closeSheet { onEditLocationZoneClick() } },
-                        onGroupListClick = { closeSheet { onLocationGroupListClick() } }
-                    )
-
                     SheetType.WIFI_SOURCE -> WifiSourceSheetContent(
                         groups = wifiGroups,
                         selectedGroupId = selectedWifiGroupId,
@@ -469,14 +429,9 @@ private fun fetchCurrentLocationForAutoCheck(
 @Preview(showBackground = true)
 @Composable
 private fun HomeScreenWithSheetPreview() {
-    val fakeGroups = generateFakeGroups()
     HomeScreenWithSheet(
-        groups = fakeGroups,
-        selectedGroupId = fakeGroups.first().id,
+        groups = generateFakeGroups(),
         reopenSheetSignal = false,
-        onReopenSheetHandled = {},
-        onBlockerClick = {},
-        onGroupAppsChange = { _, _ -> },
-        onGroupScheduleChange = { _, _ -> }
+        onReopenSheetHandled = {}
     )
 }

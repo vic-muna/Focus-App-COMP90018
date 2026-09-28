@@ -96,6 +96,7 @@ fun LocationScreen(
     blockedAppsFor: (zoneId: String) -> List<AppItem> = { emptyList() },
     onZoneBlockedAppsChange: (zone: FocusZone, apps: List<AppItem>) -> Unit = { _, _ -> },
     onZoneDeleted: (zoneId: String) -> Unit = {},
+    onZonesLoaded: (zoneIds: Set<String>) -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -123,6 +124,7 @@ fun LocationScreen(
         zones = withContext(Dispatchers.IO) {
             listOfNotNull(FocusRepositoryProvider.get(context).getFocusZone())
         }
+        onZonesLoaded(zones.map { it.id }.toSet())
     }
 
     LaunchedEffect(Unit) { reloadZones() }
