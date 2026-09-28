@@ -1,12 +1,10 @@
 package com.example.focusapp.ui.screens.timefocus
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -21,6 +19,8 @@ import com.example.focusapp.ui.components.FocusTextField
 import com.example.focusapp.ui.components.WheelPicker
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
+import com.example.focusapp.ui.components.FocusCard
+import com.example.focusapp.ui.components.CardButtonRow
 
 /** "Max Minutes" choices: no limit (null), then 5-minute steps up to 4 hours. */
 val LimitMinuteOptions: List<Int?> = listOf<Int?>(null) + (5..240 step 5)
@@ -47,23 +47,11 @@ fun TimeSlotLimitsCard(
 ) {
     val colors = FocusTheme.colors
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(colors.surface, RoundedCornerShape(16.dp))
-            .padding(16.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            BackButton(onClick = onBack)
-            ConfirmButton(
-                onClick = onConfirm,
-                contentDescription = "Save time slot",
-                enabled = name.isNotBlank(),
-            )
-        }
+    FocusCard(modifier = modifier) {
+        CardButtonRow(
+            left = { BackButton(onClick = onBack) },
+            right = { ConfirmButton(onClick = onConfirm, contentDescription = "Save time slot", enabled = name.isNotBlank()) },
+        )
 
         Row(
             modifier = Modifier

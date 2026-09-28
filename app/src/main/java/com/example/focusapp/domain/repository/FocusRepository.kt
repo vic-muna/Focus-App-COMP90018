@@ -9,11 +9,8 @@ import com.example.focusapp.domain.model.PartyMemberStatus
 import kotlinx.coroutines.flow.Flow
 
 /**
- * FocusRepository
- * ------------------
- * The single source of truth that the Domain/UI layers talk to. The real
- * implementation ([com.example.focusapp.data.repository.FocusRepositoryImpl])
- * combines Local (Room) and Remote (Firebase) data sources.
+ * The one place screens get and save data. It combines the phone's storage (Room)
+ * and the cloud (Firebase) - see FocusRepositoryImpl.
  */
 interface FocusRepository {
 
@@ -71,8 +68,7 @@ interface FocusRepository {
 
     fun updateMyPartyStatus(partyId: String, status: PartyMemberStatus)
 
-    // --- Friends (local address book feeding the Study Party invite picker -
-    // see ui/screens/party/FriendListScreen.kt) ---
+    // --- Friends (saved on this phone) ---
 
     suspend fun getFriends(): List<Friend>
 

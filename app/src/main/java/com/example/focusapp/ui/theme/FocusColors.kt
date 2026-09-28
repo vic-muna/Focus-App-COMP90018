@@ -4,12 +4,8 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 
 /**
- * FocusColors
- * -----------
- * Semantic color roles for the app. Components and screens read colors
- * ONLY from here (via `FocusTheme.colors`), never from [Palette] or raw hex
- * values - so switching theme means building a different FocusColors, with
- * no component changes.
+ * The app's colors by role (background, surface, accent...).
+ * Screens use only these (FocusTheme.colors), never raw colors.
  */
 @Immutable
 data class FocusColors(

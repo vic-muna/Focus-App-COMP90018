@@ -38,16 +38,18 @@ import com.example.focusapp.ui.components.FocusConfirmDialog
 import com.example.focusapp.ui.components.consumeTaps
 import com.example.focusapp.ui.navigation.MainTab
 import com.example.focusapp.ui.navigation.MainTabBar
-import com.example.focusapp.ui.screens.home.AppItem
-import com.example.focusapp.ui.screens.home.BlockedAppGroup
-import com.example.focusapp.ui.screens.home.ClockTime
-import com.example.focusapp.ui.screens.home.TimeSlot
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import com.example.focusapp.ui.theme.FocusSpacing
+import com.example.focusapp.data.blocking.AppItem
+import com.example.focusapp.data.blocking.BlockedAppGroup
+import com.example.focusapp.data.blocking.TimeSlot
+import com.example.focusapp.data.blocking.ClockTime
+import com.example.focusapp.ui.common.previewGroups
+import com.example.focusapp.ui.common.rememberInstalledApps
 
 private val HeaderHeight = 210.dp
 
@@ -87,7 +89,7 @@ private fun BlockedAppGroup.toDraft() = TimeSlotDraft(
  * Figma: "Time Focuse" - the Schedule tab. A header illustration over the
  * list of time slots (each with an on/off switch) and an "add" card.
  *
- * Each slot is one of David's Scheduled Limits groups ([BlockedAppGroup]):
+ * Each slot is one [BlockedAppGroup]:
  * its time, apps and daily limits live together, so there's no separate
  * app-group page.
  *  - tap a slot: its read-only summary card; the pencil opens the
@@ -112,16 +114,9 @@ fun TimeFocusScreen(
     // Set while editing an existing slot (null while adding a new one).
     var editingGroupId by remember { mutableStateOf<String?>(null) }
     var draft by remember { mutableStateOf(TimeSlotDraft()) }
-    var installedApps by remember { mutableStateOf<List<InstalledAppInfo>?>(null) }
+    val installedApps = rememberInstalledApps(shouldLoad = editStep != null)
     var confirmDiscard by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<BlockedAppGroup?>(null) }
-
-    // Loaded once, the first time the card opens - it's slow with many apps installed.
-    LaunchedEffect(editStep != null) {
-        if (editStep != null && installedApps == null) {
-            installedApps = withContext(Dispatchers.Default) { getLaunchableApps(context) }
-        }
-    }
 
     fun updateGroup(groupId: String, transform: (BlockedAppGroup) -> BlockedAppGroup) {
         onGroupsChange(groups.map { if (it.id == groupId) transform(it) else it })

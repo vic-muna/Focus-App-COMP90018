@@ -1,16 +1,16 @@
 package com.example.focusapp.domain.usecase
 
 import com.example.focusapp.data.usagestats.AppWindowUsage
-import com.example.focusapp.ui.screens.home.AppItem
-import com.example.focusapp.ui.screens.home.BlockedAppGroup
-import com.example.focusapp.ui.screens.home.ClockTime
-import com.example.focusapp.ui.screens.home.DAY_KEYS
-import com.example.focusapp.ui.screens.home.TimeSlot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Calendar
+import com.example.focusapp.data.blocking.AppItem
+import com.example.focusapp.data.blocking.BlockedAppGroup
+import com.example.focusapp.data.blocking.TimeSlot
+import com.example.focusapp.data.blocking.ClockTime
+import com.example.focusapp.data.blocking.DAY_KEYS
 
 class EvaluateUsageLimitUseCaseTest {
 

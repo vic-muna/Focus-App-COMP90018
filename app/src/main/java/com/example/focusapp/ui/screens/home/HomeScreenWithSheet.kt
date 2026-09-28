@@ -7,7 +7,6 @@ import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -54,10 +53,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import androidx.annotation.DrawableRes
 import com.example.focusapp.R
+import com.example.focusapp.data.blocking.BlockedAppGroup
+import com.example.focusapp.ui.common.previewGroups
 
 
-/** How often the auto-suggestion check re-evaluates while Home is on screen - schedule
- *  boundaries only need minute-granularity, so there's no need for anything tighter. */
+/** How often Home re-checks for a schedule, location or Wi-Fi match. */
 private const val AUTO_TRIGGER_CHECK_INTERVAL_MILLIS = 60_000L
 
 /** Each suggestion banner closes itself after this long. */
@@ -92,19 +92,11 @@ fun HomeScreenWithSheet(
     }
 
 
-    // [David Shiau, 2026-09-20] Blocking only works while
-    // FocusAccessibilityService is enabled - the user has to grant that
-    // themselves in system Settings (Android never lets an app enable its
-    // own AccessibilityService). Every session-start path checks this first
-    // rather than silently starting a session that blocks nothing.
+    // Blocking only works after the user turns on the accessibility service in Android's settings.
     val isAccessibilityEnabled by AccessibilityBridge.isServiceConnected.collectAsState()
     var showAccessibilityPermissionDialog by remember { mutableStateOf(false) }
 
-    // [David Shiau, 2026-09-23] Shared by Quick Focus AND the auto-suggestion
-    // banner's "start a focus session?" accept action - previously only
-    // Quick Focus ran this check, so accepting the banner on a first-time
-    // (permission not yet granted) tap silently started a session with no
-    // blocking instead of prompting for Accessibility access.
+    // Used by Quick Focus and by a banner's "start": ask for the permission first if it's missing.
     fun startFocusSessionIfPermitted(source: FocusSessionSource) {
         if (isAccessibilityEnabled) {
             onFocusSessionStart(source)
@@ -133,8 +125,7 @@ fun HomeScreenWithSheet(
         }
     }
 
-    // --- Wi-Fi trigger: same "UI-simulated only" polling approach as the
-    // location trigger above, over the Wi-Fi tab's switched-on networks. ---
+    // --- Wi-Fi trigger: checks the Wi-Fi tab's switched-on networks. ---
     var tick by remember { mutableStateOf(0L) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -143,8 +134,7 @@ fun HomeScreenWithSheet(
         }
     }
 
-    // Checked even with no networks switched on, so every network the phone
-    // is on gets recorded for the Wi-Fi tab's "Known Wi-Fi" list.
+    // Checked even with no networks switched on, so the Wi-Fi tab can list networks seen before.
     val wifiHistory = remember { WifiHistoryStorage(context) }
     var currentWifiSsid by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(tick) {
@@ -152,8 +142,7 @@ fun HomeScreenWithSheet(
         currentWifiSsid?.let { wifiHistory.remember(it) }
     }
 
-    // [David Shiau, 2026-09-26] All matching triggers, not just the first -
-    // so the schedule banner and the location banner can both show at once.
+    // Every matching trigger, so several banners can show at once.
     val triggers = remember(groups, savedZone, currentLatLng, wifiSsids, currentWifiSsid, tick) {
         EvaluateFocusTriggerUseCase().executeAll(
             groups = groups,
@@ -176,7 +165,7 @@ fun HomeScreenWithSheet(
         suggestionKeyOf(trigger)?.takeIf { it !in dismissedKeys }?.let { key -> key to trigger }
     }
 
-    // 最外層強制全螢幕 Box，阻斷返回 Home 時 BottomSheet 或繪製節點導致的尺寸縮放跳動
+    // Full-screen box, so Home doesn't jump in size when coming back to it.
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -209,10 +198,7 @@ fun HomeScreenWithSheet(
                             result = suggestion,
                             onAccept = {
                                 val source = when (suggestion) {
-                                    // [David Shiau, 2026-09-26] Un-wired from starting a focus
-                                    // session - a schedule match now opens that group's
-                                    // "today's opens/duration" page instead (phase 1 of the
-                                    // daily open-times/duration limit, see GroupUsageScreen).
+                                    // A schedule match opens that group's usage page (no focus session).
                                     is FocusTriggerResult.ScheduleMatch -> {
                                         onScheduleBannerClick(suggestion.groupId)
                                         return@AutoFocusSuggestionBanner
@@ -245,11 +231,8 @@ fun HomeScreenWithSheet(
 }
 
 /**
- * Explains why Quick Focus needs the Accessibility permission before
- * sending the user to system Settings to grant it - Android requires this
- * to be an explicit, informed action there, it can't be requested as an
- * ordinary runtime permission dialog (see FocusAccessibilityService's doc
- * comment).
+ * Explains why app blocking needs the accessibility permission, then
+ * sends the user to Android's settings (it can't be a normal pop-up).
  */
 @Composable
 private fun AccessibilityPermissionDialog(
@@ -276,9 +259,8 @@ private fun AccessibilityPermissionDialog(
 }
 
 /**
- * Dismissible banner for an auto-detected trigger - accepting a location/Wi-Fi
- * match starts a session, accepting a schedule match opens that group's usage
- * page; nothing here ever navigates on its own.
+ * A banner for a detected trigger: "start" begins a focus session
+ * (location/Wi-Fi) or opens the group's usage page (schedule).
  */
 @Composable
 private fun AutoFocusSuggestionBanner(
@@ -340,5 +322,5 @@ private fun fetchCurrentLocationForAutoCheck(
 @Preview(showBackground = true)
 @Composable
 private fun HomeScreenWithSheetPreview() {
-    HomeScreenWithSheet(groups = generateFakeGroups())
+    HomeScreenWithSheet(groups = previewGroups())
 }

@@ -3,9 +3,7 @@ package com.example.focusapp.ui.components
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -55,33 +53,14 @@ fun AppSelectCard(
     val colors = FocusTheme.colors
     val typography = FocusTheme.typography
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(colors.surface, RoundedCornerShape(16.dp))
-            .padding(16.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            leadingButton()
-            actionButton()
-        }
-
-        Text(
-            text = title,
-            style = typography.tileTitle,
-            color = colors.onSurface,
-            modifier = Modifier.padding(start = 12.dp, top = 16.dp, bottom = 8.dp),
-        )
+    FocusCard(modifier = modifier) {
+        CardButtonRow(left = leadingButton, right = actionButton)
+        CardTitle(title)
 
         Box(
             modifier = Modifier
-                .fillMaxWidth()
                 .height(AppListHeight)
-                .clip(RoundedCornerShape(12.dp))
-                .background(colors.surfaceSunken),
+                .sunkenPanel(colors.surfaceSunken),
             contentAlignment = Alignment.Center,
         ) {
             if (apps == null) {

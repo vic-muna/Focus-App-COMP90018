@@ -51,6 +51,12 @@ import com.example.focusapp.data.usagestats.queryAppUsageInWindow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import com.example.focusapp.data.blocking.AppItem
+import com.example.focusapp.data.blocking.BlockedAppGroup
+import com.example.focusapp.data.blocking.formatLimitMinutes
+import com.example.focusapp.data.blocking.formatOpenTimes
+import com.example.focusapp.data.blocking.ClockTime
+import com.example.focusapp.data.blocking.windowOn
 
 // Same dark palette as GroupListScreen, so the two Blocked-App-Group pages match.
 private val ScreenBgColor = Color(0xFF33386D)
@@ -70,20 +76,10 @@ private data class AppUsageToday(
 )
 
 /**
- * GroupUsageScreen
- * -------------------
- * [David Shiau, 2026-09-26] Phase 1 of the "daily open times and duration"
- * limit: reached by tapping Home's schedule banner (which used to start a
- * focus session - see HomeScreenWithSheet). Shows, for every app in
- * [group], how many times it has been opened and how long it has been used
- * inside today's scheduled window, next to the group's limits.
- * [David Shiau, 2026-09-26] Display-only: the actual blocking happens in
- * FocusAccessibilityService (see EvaluateUsageLimitUseCase), from the same
- * numbers.
- *
- * Re-queries whenever the page is resumed (e.g. coming back from granting
- * Usage Access in system Settings) and every [USAGE_REFRESH_INTERVAL_MILLIS]
- * while visible.
+ * Today's usage of each app in [group] (opens and minutes, inside the
+ * scheduled time), next to its limits. Opened from Home's schedule banner.
+ * It only shows numbers; FocusAccessibilityService does the blocking.
+ * Refreshes when the page is shown and every [USAGE_REFRESH_INTERVAL_MILLIS].
  */
 @Composable
 fun GroupUsageScreen(
@@ -96,9 +92,7 @@ fun GroupUsageScreen(
     var hasUsageAccess by remember { mutableStateOf(hasUsageAccessPermission(context)) }
     // null = first load hasn't finished yet.
     var usage by remember { mutableStateOf<List<AppUsageToday>?>(null) }
-    // [David Shiau, 2026-09-26] Numbers only count inside today's scheduled
-    // window - the same numbers the Scheduled Limits are enforced against
-    // (see EvaluateUsageLimitUseCase). null = not scheduled today.
+    // Only usage inside today's scheduled time counts (like the blocker). null = not scheduled today.
     val window = remember(group.schedule) { group.schedule.windowOn() }
 
     LaunchedEffect(group, lifecycleOwner) {

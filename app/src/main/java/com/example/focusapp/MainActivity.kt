@@ -13,28 +13,11 @@ import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import com.example.focusapp.ui.navigation.FocusAppNavGraph
 import com.example.focusapp.ui.theme.FocusAppTheme
-import com.google.android.gms.location.FusedLocationProviderClient
-/**
- * MainActivity
- * -------------
- * The single Activity entry point for the whole app. Every screen is a
- * Composable function, and switching between them is handled entirely by
- * [FocusAppNavGraph] (Jetpack Navigation Compose) - this class does not
- * need to change when new screens are added.
- *
- * This class currently contains NO business logic. It only builds the
- * Compose UI tree. Sensors, background services, permission requests, etc.
- * will be wired up separately, inside the relevant screen/ViewModel/data
- * source files, as those features are implemented.
- */
+
+/** The app's only Activity. It shows [FocusAppNavGraph], which switches between the screens. */
 class MainActivity : ComponentActivity() {
 
-    // [Claude, 2026-09-21] POST_NOTIFICATIONS is a runtime (not just
-    // manifest-declared) permission on API 33+ - without this request the
-    // OS silently drops FocusTimerService's notification, it doesn't
-    // crash or error. Fire-and-forget: does not gate or otherwise affect
-    // setContent below, since the rest of the app doesn't depend on the
-    // result either way.
+    // Android 13+ needs permission to show the focus timer notification.
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
@@ -49,13 +32,9 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            // Provides FocusTheme.colors / FocusTheme.typography to every
-            // screen (see ui/theme/Theme.kt). Material3 keeps its default
-            // scheme until the remaining screens move to the new design.
+            // Gives every screen FocusTheme.colors and FocusTheme.typography.
             FocusAppTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    // Root navigation graph - decides which screen is shown
-                    // and owns the bottom navigation bar.
                     FocusAppNavGraph()
                 }
             }

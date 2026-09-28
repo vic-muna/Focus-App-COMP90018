@@ -4,19 +4,8 @@ import com.example.focusapp.domain.model.AppGroup
 import com.example.focusapp.domain.model.FocusZone
 
 /**
- * FocusValidation
- * ------------------
- * Field-level validation shared by every [com.example.focusapp.domain.repository.FocusRepository]
- * implementation. Deliberately plain Kotlin - no Room/Android import - so:
- *  - it runs as a fast JVM unit test with no emulator/Robolectric needed
- *  - it survives untouched if the local storage layer is ever swapped
- *    (Room -> SharedPreferences -> whatever else), matching the note
- *    already on [FocusZone] about not baking validation into the Entity.
- *
- * Deliberately does NOT check anything that needs a database round trip
- * (e.g. duplicate zone names, which FocusZone's own doc comment flags as
- * a TODO) - that kind of check needs a LocalDataSource lookup and belongs
- * in the Repository/UseCase layer right next to that call, not here.
+ * Checks a zone or app group before it is saved (e.g. no blank name).
+ * Plain Kotlin, so it runs in fast unit tests.
  */
 object FocusValidation {
 

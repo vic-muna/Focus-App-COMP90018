@@ -51,14 +51,15 @@ import com.example.focusapp.ui.components.NextButton
 import com.example.focusapp.ui.theme.FocusSpacing
 import com.example.focusapp.ui.navigation.MainTab
 import com.example.focusapp.ui.navigation.MainTabBar
-import com.example.focusapp.ui.screens.home.AppItem
-import com.example.focusapp.ui.screens.home.BlockedAppGroup
-import com.example.focusapp.ui.screens.home.generateFakeTimeSlot
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.example.focusapp.data.blocking.AppItem
+import com.example.focusapp.data.blocking.BlockedAppGroup
+import com.example.focusapp.data.blocking.defaultTimeSlot
+import com.example.focusapp.ui.common.rememberInstalledApps
 
 private val HeaderHeight = 210.dp
 
@@ -111,7 +112,7 @@ fun WifiFocusScreen(
     val history = remember { WifiHistoryStorage(context) }
     var knownSsids by remember { mutableStateOf<List<String>>(emptyList()) }
     var manualSsid by remember { mutableStateOf("") }
-    var installedApps by remember { mutableStateOf<List<InstalledAppInfo>?>(null) }
+    val installedApps = rememberInstalledApps(shouldLoad = editStep != null)
     var confirmDiscard by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<BlockedAppGroup?>(null) }
 
@@ -149,13 +150,6 @@ fun WifiFocusScreen(
     LaunchedEffect(editStep == WifiEditStep.NETWORK) {
         if (editStep == WifiEditStep.NETWORK) {
             knownSsids = withContext(Dispatchers.IO) { history.getKnownSsids() }
-        }
-    }
-
-    // Loaded once, the first time the card opens - it's slow with many apps installed.
-    LaunchedEffect(editStep != null) {
-        if (editStep != null && installedApps == null) {
-            installedApps = withContext(Dispatchers.Default) { getLaunchableApps(context) }
         }
     }
 
@@ -197,7 +191,7 @@ fun WifiFocusScreen(
         // Keep an entry's apps that the picker didn't list (e.g. no launcher icon) if still ticked.
         val kept = original?.apps.orEmpty()
             .filter { app -> app.packageName in draft.selectedPackages && installed.none { it.packageName == app.packageName } }
-        val saved = (original ?: BlockedAppGroup(id = ssid, name = "", apps = emptyList(), schedule = generateFakeTimeSlot()))
+        val saved = (original ?: BlockedAppGroup(id = ssid, name = "", apps = emptyList(), schedule = defaultTimeSlot()))
             // The schedule / limit fields aren't used for Wi-Fi entries.
             .copy(id = ssid, name = draft.name.trim(), apps = picked + kept)
         onGroupsChange(
@@ -448,8 +442,8 @@ private fun WifiFocusContent(
 }
 
 private val previewGroups = listOf(
-    BlockedAppGroup(id = "MyHome_5G", name = "Home", apps = emptyList(), schedule = generateFakeTimeSlot()),
-    BlockedAppGroup(id = "Library-Guest", name = "Library", apps = emptyList(), schedule = generateFakeTimeSlot(), enabled = false),
+    BlockedAppGroup(id = "MyHome_5G", name = "Home", apps = emptyList(), schedule = defaultTimeSlot()),
+    BlockedAppGroup(id = "Library-Guest", name = "Library", apps = emptyList(), schedule = defaultTimeSlot(), enabled = false),
 )
 
 @Composable

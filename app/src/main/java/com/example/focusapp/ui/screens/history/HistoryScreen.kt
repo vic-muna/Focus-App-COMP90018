@@ -47,22 +47,11 @@ import java.util.concurrent.TimeUnit
 private val BAR_CHART_MAX_BAR_HEIGHT = 100.dp
 
 /**
- * HistoryScreen
- * ---------------
- * The dashboard, reached from Home's illustration. On top, an "ID card" for
- * the current background theme ([ThemeIdCard] - tapping it opens the theme
- * picker via [onChangeThemeClick]); below it, the Focus History pulled from
- * the Local Data Source via [HistoryViewModel]:
- *  - "This week" bar chart (minutes per day)
- *  - "This week" / "Last week" cards - tapping one opens a
- *    [WeekDetailDialogContent] that drills down into that week's days
- *    (see [groupedByDay]), each with its own session rows
- *  - the full, unfiltered session list
- *
- * [HistoryViewModel]'s public surface (sessions/weekBuckets/isLoading/
- * loadSessions()) is unchanged - only the look was redone to the app theme.
- *
- * @param viewModel loads/exposes session history; see [HistoryViewModel].
+ * The dashboard, opened from Home's picture:
+ *  - the background theme's ID card (tap to change theme)
+ *  - this week's minutes per day
+ *  - "This week" / "Last week" cards (tap for each day's sessions)
+ *  - every session
  */
 @Composable
 fun HistoryScreen(

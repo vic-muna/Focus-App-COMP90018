@@ -1,12 +1,10 @@
 package com.example.focusapp.ui.screens.timefocus
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -21,6 +19,10 @@ import com.example.focusapp.ui.components.formatClock
 import com.example.focusapp.ui.components.formatDuration
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
+import com.example.focusapp.ui.components.FocusCard
+import com.example.focusapp.ui.components.CardButtonRow
+import com.example.focusapp.ui.components.CardTitle
+import com.example.focusapp.ui.components.sunkenPanel
 
 /**
  * Figma: "App Focuse" add-group step 2, reused for a time slot - which days it
@@ -43,30 +45,14 @@ fun TimeSlotScheduleCard(
     val colors = FocusTheme.colors
     val typography = FocusTheme.typography
     val crossesMidnight = startMinutes >= endMinutes
-    val panel = Modifier
-        .fillMaxWidth()
-        .background(colors.surfaceSunken, RoundedCornerShape(12.dp))
+    val panel = Modifier.sunkenPanel(colors.surfaceSunken)
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(colors.surface, RoundedCornerShape(16.dp))
-            .padding(16.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            BackButton(onClick = onBack)
-            NextButton(onClick = onNext, enabled = activeDays.isNotEmpty() && !crossesMidnight)
-        }
-
-        Text(
-            text = "Days Activity",
-            style = typography.tileTitle,
-            color = colors.onSurface,
-            modifier = Modifier.padding(start = 4.dp, top = 16.dp, bottom = 8.dp),
+    FocusCard(modifier = modifier) {
+        CardButtonRow(
+            left = { BackButton(onClick = onBack) },
+            right = { NextButton(onClick = onNext, enabled = activeDays.isNotEmpty() && !crossesMidnight) },
         )
+        CardTitle("Days Activity")
 
         DaySelector(
             selected = activeDays,

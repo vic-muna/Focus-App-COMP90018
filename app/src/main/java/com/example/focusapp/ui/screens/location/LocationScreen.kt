@@ -48,8 +48,6 @@ import com.example.focusapp.ui.components.PullUpPanel
 import com.example.focusapp.ui.components.PullUpPanelState
 import com.example.focusapp.ui.components.rememberPullUpPanelState
 import com.example.focusapp.ui.navigation.MainTab
-import com.example.focusapp.ui.screens.home.AppItem
-import com.example.focusapp.ui.screens.home.rememberInstalledApps
 import com.example.focusapp.ui.navigation.MainTabBar
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
@@ -57,6 +55,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.example.focusapp.ui.theme.FocusSpacing
+import com.example.focusapp.data.blocking.AppItem
+import com.example.focusapp.ui.common.rememberInstalledApps
 private const val DEFAULT_RADIUS_METERS = 100f
 
 /** How much of the location list stays visible above the bottom edge when swiped down. */
@@ -249,7 +249,7 @@ fun LocationScreen(
             FlyCardOverlay(onOutsideClick = { showAppPicker = false }) {
                 AppSelectCard(
                     title = "Blocked Apps",
-                    apps = installedApps.apps.takeUnless { installedApps.isLoading || it.isEmpty() },
+                    apps = installedApps,
                     selectedPackages = pickerSelection,
                     onToggleApp = { pkg ->
                         pickerSelection = if (pkg in pickerSelection) pickerSelection - pkg else pickerSelection + pkg
@@ -258,7 +258,7 @@ fun LocationScreen(
                     actionButton = {
                         ConfirmButton(
                             onClick = {
-                                val installed = installedApps.apps
+                                val installed = installedApps.orEmpty()
                                 val picked = installed
                                     .filter { it.packageName in pickerSelection }
                                     .map { AppItem(packageName = it.packageName, name = it.label, isBlocked = true, icon = it.icon) }

@@ -21,27 +21,9 @@ private const val ACTION_STOP = "com.example.focusapp.action.STOP_FOCUS_TIMER"
 private const val EXTRA_START_TIME_MILLIS = "extra_start_time_millis"
 
 /**
- * FocusTimerService
- * ------------------
- * [Claude, 2026-09-21] Foreground Service whose only job is to keep one
- * persistent, non-dismissable notification-shade entry visible for as
- * long as a focus session is active, showing a live "how long has this
- * session been running" timer - the "notification shade" requested
- * alongside the existing full-screen FocusSessionScreen timer.
- *
- * Deliberately dumb and self-contained: it does NOT compute or own the
- * session's elapsed time (FocusSessionScreen's own tick loop is
- * untouched) - it is only ever handed the session's [EXTRA_START_TIME_MILLIS]
- * and passes that same timestamp to NotificationCompat's built-in
- * setUsesChronometer(true)/setWhen(...), which the OS then ticks on its
- * own every second at zero extra cost to this app. Both timers are just
- * independently reading the same wall-clock start time, so they can't
- * drift apart.
- *
- * Started/stopped from NavGraph.kt's startFocusSession()/onEndSessionClick,
- * alongside (never instead of) the existing AccessibilityBridge blocking
- * calls - this class has no dependency on, and no effect on, the actual
- * app-blocking logic in FocusAccessibilityService/AccessibilityBridge.
+ * Shows the focus timer in the notification shade while a session runs.
+ * It only needs the start time; Android counts up the seconds by itself.
+ * Started and stopped by NavGraph.kt.
  */
 class FocusTimerService : Service() {
 

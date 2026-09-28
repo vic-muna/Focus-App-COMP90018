@@ -53,9 +53,7 @@ private const val EXIT_HINT = "Hold for 5 seconds to exit\nthe focus mode"
 private const val CANCEL_HOLD_STEP_MILLIS = 50L
 private const val HINT_AUTO_HIDE_MILLIS = 5_000L
 
-/** Where a focus session was started from. [David Shiau, 2026-09-26] No `Schedule`
- *  source any more - a schedule match now opens GroupUsageScreen (the daily open-times/
- *  duration limit) instead of starting a focus session. */
+/** What started a focus session. */
 sealed class FocusSessionSource {
     data object Manual : FocusSessionSource()
     data object Party : FocusSessionSource()
@@ -63,29 +61,16 @@ sealed class FocusSessionSource {
     data class Wifi(val ssid: String) : FocusSessionSource()
 }
 
-/** The one hoisted piece of state (in NavGraph.kt) for "is a focus session running right now". */
+/** The running focus session (kept in NavGraph.kt). */
 data class ActiveFocusSession(
     val startTimeMillis: Long,
     val source: FocusSessionSource
 )
 
 /**
- * Full-screen "in a focus session" screen. Reached from three places - Home's Quick
- * Focus button, Party Mode's "Go Focus Mode" button, and Home's auto-suggestion banner
- * (see HomeScreenWithSheet.kt) - all of which funnel into the same [ActiveFocusSession]
- * hoisted in NavGraph.kt.
- *
- * Has no entrance/exit animation of its own - moving into and out of this
- * screen is just NavGraph's dissolve (see NavGraph.kt's partyModeEnter /
- * partyModeExit).
- *
- * Layout follows the Figma "Focuse Mode" frames: a full-bleed illustration,
- * the elapsed time near the top, and an "i" button (top-right) that toggles a
- * hint bubble explaining how to leave. There's no button to end the session -
- * holding anywhere on screen for CANCEL_HOLD_DURATION_MILLIS cancels focus
- * (mirrors a "hold to confirm" pattern so it can't be triggered by an
- * accidental tap) - same as the system back gesture, intercepted via
- * BackHandler so leaving always saves the session first.
+ * The focus timer screen: the background art, the elapsed time, and an "i"
+ * button that shows how to leave. Holding anywhere for 5 seconds (or pressing
+ * Back) ends the session, which is saved first.
  */
 @Composable
 fun FocusSessionScreen(
@@ -97,20 +82,10 @@ fun FocusSessionScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // True from the moment cancellation starts until this screen is gone. Stops
-    // the tick loop below (and further hold-gesture handling) from continuing to
-    // recompose this screen while it's mid pop-exit - AnimatedContent's exit
-    // transition (see NavGraph.kt) doesn't dispose this composable until the
-    // transition finishes, so without this guard the tick loop keeps mutating
-    // state and recomposing this screen for the whole fade-out, which is what
-    // was producing the "reopening" artifact on the way back to Home (Party
-    // Mode has no such ongoing ticker, which is why it never showed this).
+    // Set once the session is ending, so the timer stops updating while the screen fades out.
     var isEnding by remember { mutableStateOf(false) }
 
-    // Set when saveFocusSession() throws (a Room-level failure - Firebase push failures are
-    // already swallowed inside FocusRepositoryImpl, so this only fires for a genuinely rare
-    // local-storage error). Shown via ErrorBanner with a manual "Continue" tap, rather than
-    // either crashing or silently losing the session and leaving the user with no idea.
+    // Set if saving the session fails; shown with a "Continue" button instead of crashing.
     var saveError by remember { mutableStateOf<String?>(null) }
 
     var tick by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -147,10 +122,7 @@ fun FocusSessionScreen(
                 }
                 onEndSessionClick()
             } catch (e: Exception) {
-                // Previously uncaught - crashed the app right as the session ended.
-                // Surface it and let the user explicitly continue instead (see
-                // saveError's doc comment above) - don't call onEndSessionClick()
-                // here so the message doesn't flash by unseen.
+                // Show the error and wait for "Continue", so the message isn't missed.
                 saveError = friendlyErrorMessage(e, "Saving the session")
             }
         }

@@ -14,35 +14,10 @@ import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
 /**
- * HistoryViewModel
- * ------------------
- * Loads past focus sessions via FocusRepository.getSessionHistory() (see
- * domain/repository/FocusRepository.kt - backed by RoomLocalDataSource in
- * this branch) and exposes them as a StateFlow for [HistoryScreen] to
- * observe and render in a scrollable list.
- *
- * Also exposes [weekBuckets] - "this week" and "last week" as two separate
- * [WeekBucket]s (each carrying that week's actual sessions, not just a
- * count), using FocusRepository.getSessionsBetween() (the
- * Innovation-criterion time-interval query). This is a rolling 7-day
- * window ending "now", not a calendar week (Mon-Sun etc.) - simpler, and
- * avoids locale-dependent "first day of week" questions. See
- * [loadWeekBuckets] for the exact boundaries.
- *
- * A [WeekBucket]'s sessions can be further split into [DayBucket]s via
- * [groupedByDay] - that's what HistoryScreen shows when a week card is
- * tapped, so "this week" isn't just one aggregate number but drills down
- * to real per-day history. [dailyChartPoints] does something similar but
- * for the bar chart - a fixed 7-day series (0-minute days included) built
- * straight from [sessions], independent of [weekBuckets]'s own rolling
- * window boundaries.
- *
- * Extends AndroidViewModel rather than plain ViewModel purely to get hold
- * of a Context for FocusRepositoryProvider.get(context) - this class has
- * no other Android/lifecycle dependency. The default ViewModelProvider
- * factory Compose's viewModel() already uses (see HistoryScreen.kt) knows
- * how to construct an AndroidViewModel automatically, so no extra
- * ViewModelProvider.Factory wiring is needed here.
+ * Loads past focus sessions for [HistoryScreen]:
+ *  - [sessions]: every session
+ *  - [weekBuckets]: the last 7 days and the 7 days before (rolling, not calendar weeks)
+ *  - [dailyChartPoints]: minutes per day for the chart
  */
 class HistoryViewModel(application: Application) : AndroidViewModel(application) {
 

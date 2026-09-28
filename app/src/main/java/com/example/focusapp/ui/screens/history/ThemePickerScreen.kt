@@ -42,7 +42,7 @@ private val TileShape = RoundedCornerShape(20.dp)
  * Picks the background theme: a 3-column grid of portrait tiles, the
  * current one outlined. Tapping a theme picks it right away ([onSelect]);
  * X or back leaves without changing anything ([onClose]). Slots without a
- * theme yet are grey "Coming soon" tiles.
+ * theme yet are "Coming soon" tiles.
  */
 @Composable
 fun ThemePickerScreen(
@@ -53,8 +53,9 @@ fun ThemePickerScreen(
     BackHandler(onBack = onClose)
 
     val colors = FocusTheme.colors
-    val slots: List<BackgroundTheme?> =
-        BackgroundThemes.all + List((BackgroundThemes.PICKER_SLOTS - BackgroundThemes.all.size).coerceAtLeast(0)) { null }
+    // The real themes, then empty "Coming soon" slots (null) to fill the grid.
+    val emptySlotCount = (BackgroundThemes.PICKER_SLOTS - BackgroundThemes.all.size).coerceAtLeast(0)
+    val slots: List<BackgroundTheme?> = BackgroundThemes.all + List(emptySlotCount) { null }
 
     Column(
         modifier = Modifier
@@ -89,7 +90,7 @@ fun ThemePickerScreen(
     }
 }
 
-/** One picker tile - the theme's art and name, or a grey "Coming soon" tile when [theme] is null. */
+/** One picker tile - the theme's art and name, or a "Coming soon" tile when [theme] is null. */
 @Composable
 private fun ThemeTile(
     theme: BackgroundTheme?,
@@ -104,7 +105,7 @@ private fun ThemeTile(
                 .fillMaxWidth()
                 .aspectRatio(0.72f)
                 .clip(TileShape)
-                .background(colors.primaryAction)
+                .background(colors.onPrimaryAction)
                 .then(if (selected) Modifier.border(4.dp, colors.accent, TileShape) else Modifier)
                 .clickable(enabled = theme != null, role = Role.RadioButton, onClick = onClick),
             contentAlignment = Alignment.Center,
@@ -120,7 +121,7 @@ private fun ThemeTile(
                 Text(
                     text = "Coming\nsoon",
                     style = FocusTheme.typography.caption,
-                    color = colors.onPrimaryAction,
+                    color = colors.onSurface,
                     textAlign = TextAlign.Center,
                 )
             }

@@ -9,18 +9,10 @@ import android.os.Process
 import java.util.Calendar
 
 /**
- * hasUsageAccessPermission
- * ---------------------------
- * UsageStatsManager access is gated by the special "Usage access" toggle
- * in system Settings (opened via Settings.ACTION_USAGE_ACCESS_SETTINGS) -
- * conceptually similar to AccessibilityService's own toggle, but a
- * completely separate permission with its own settings screen and its own
- * check API. There is no runtime permission dialog for it; the only way
- * to find out if it's granted is to ask [AppOpsManager] directly.
+ * Whether the user allowed "Usage access" for this app in Android's settings.
+ * There is no pop-up for this permission, so we can only ask the system.
  */
-@Suppress("DEPRECATION") // checkOpNoThrow works down to API 19; the newer
-// unsafeCheckOpNoThrow needs API 29+, which would be higher than this
-// project's minSdk of 26 without an extra API-level branch.
+@Suppress("DEPRECATION") // The newer call needs Android 10+, but we support Android 8+.
 fun hasUsageAccessPermission(context: Context): Boolean {
     val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
     val mode = appOps.checkOpNoThrow(
@@ -29,54 +21,6 @@ fun hasUsageAccessPermission(context: Context): Boolean {
         context.packageName
     )
     return mode == AppOpsManager.MODE_ALLOWED
-}
-
-/**
- * queryUsageDurationsToday
- * ---------------------------
- * Returns, for every app used at all today (since local midnight), how
- * many milliseconds it has spent in the foreground - a real historical
- * total tracked by the OS itself, independent of whether Focus happens to
- * be running. This is what replaced this project's earlier approach of
- * hand-rolling a stopwatch off FocusAccessibilityService's foreground
- * events: that version reset every time Focus's process died and only
- * counted time since Focus was opened, which is a less useful number than
- * "how long have I used Facebook today" - the number this function
- * actually answers.
- *
- * WHY `queryUsageStats`, NOT `queryEvents`: an earlier version of this
- * file used `UsageStatsManager.queryEvents()` to get a raw log of
- * MOVE_TO_FOREGROUND/MOVE_TO_BACKGROUND transitions and would have had to
- * manually pair them up into durations - exactly the same "stopwatch"
- * bookkeeping this rewrite was meant to get rid of.
- * `queryUsageStats(INTERVAL_DAILY, ...)` does that pairing internally and
- * hands back a ready-to-use total per package, including whatever time
- * has accumulated in the CURRENTLY ongoing session up to the moment this
- * function is called - which is what makes repeatedly polling this (see
- * AppsScreen's usage panel) feel like a live-updating counter, with no
- * manual "is this the current app, add elapsed time" logic needed here.
- *
- * @return empty map if usage access hasn't been granted - callers should
- *         check [hasUsageAccessPermission] to distinguish "no access" from
- *         "access granted, but nothing used yet".
- */
-fun queryUsageDurationsToday(context: Context): Map<String, Long> {
-    if (!hasUsageAccessPermission(context)) return emptyMap()
-
-    val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-
-    val startOfToday = startOfTodayMillis()
-    val now = System.currentTimeMillis()
-
-    val statsList = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startOfToday, now)
-
-    // A single package can appear more than once in the returned list if
-    // the query range crosses an internal stats "bucket" boundary, so sum
-    // by package rather than assuming one entry per app.
-    return statsList
-        .filter { it.totalTimeInForeground > 0 }
-        .groupBy { it.packageName }
-        .mapValues { (_, statsForPackage) -> statsForPackage.sumOf { it.totalTimeInForeground } }
 }
 
 /**
@@ -91,32 +35,16 @@ data class AppWindowUsage(
 )
 
 /**
- * queryAppUsageInWindow
- * ---------------------------
- * [David Shiau, 2026-09-26] For every app used inside [windowStartMillis,
- * windowEndMillis] (both today), how many times it was opened and how long
- * it was on screen - only counting the part inside the window. This is what
- * the Scheduled Limits (daily open times / duration) are checked against.
+ * For each app used between [windowStartMillis] and [windowEndMillis] (today):
+ * how many times it was opened and how long it was on screen.
+ * Time Focus's daily limits are checked against these numbers.
  *
- * Both numbers come from walking the raw `queryEvents` log, not from
- * `queryUsageStats` (like [queryUsageDurationsToday] does): that API only
- * has whole-day buckets, which can't be cut down to e.g. 16:00-18:00, and
- * has no public per-app launch count at all (`appLaunchCount` is hidden).
+ * It reads Android's usage event log from midnight:
+ *  - An "open" = the app comes to the front after a DIFFERENT app (or after the
+ *    screen was off). Moving between screens inside one app is not a new open.
+ *  - An app already on screen when the window starts counts as 1 open.
  *
- * What counts as one "open": the package coming to the foreground when the
- * previously-foregrounded package was a DIFFERENT app (or, on API 28+, the
- * screen was turned off in between). Moving between two activities inside
- * the same app fires a fresh foreground event each time - without the
- * "different from the last one" check, those internal screen changes
- * would each be miscounted as a separate open. An app that is already on
- * screen when the window starts counts as 1 open, and only its time from
- * the window start onwards counts.
- *
- * The log is read from local midnight (not from the window start), so the
- * state at the window start - which app was already open - is known.
- *
- * @return empty map if usage access hasn't been granted - callers should
- *         check [hasUsageAccessPermission] to tell the two cases apart.
+ * Returns an empty map without usage access (see [hasUsageAccessPermission]).
  */
 fun queryAppUsageInWindow(
     context: Context,
@@ -198,7 +126,7 @@ fun queryAppUsageInWindow(
     }
 }
 
-/** Turns raw milliseconds into a short "1h 23m" / "45m 10s" / "12s" style string. */
+/** "1h 23m" / "45m 10s" / "12s". */
 fun formatUsageDuration(millis: Long): String {
     val totalSeconds = millis / 1000
     val hours = totalSeconds / 3600
@@ -211,7 +139,7 @@ fun formatUsageDuration(millis: Long): String {
     }
 }
 
-/** Local midnight today, as epoch millis - the shared "today" window for both queries above. */
+/** Today's midnight, in epoch milliseconds. */
 private fun startOfTodayMillis(): Long = Calendar.getInstance().apply {
     set(Calendar.HOUR_OF_DAY, 0)
     set(Calendar.MINUTE, 0)

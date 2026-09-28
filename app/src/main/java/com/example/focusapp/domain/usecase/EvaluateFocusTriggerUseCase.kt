@@ -2,9 +2,9 @@ package com.example.focusapp.domain.usecase
 
 import com.example.focusapp.domain.model.FocusZone
 import com.example.focusapp.domain.model.containsLocation
-import com.example.focusapp.ui.screens.home.BlockedAppGroup
-import com.example.focusapp.ui.screens.home.isActiveNow
 import java.util.Calendar
+import com.example.focusapp.data.blocking.BlockedAppGroup
+import com.example.focusapp.data.blocking.isActiveNow
 
 /**
  * Result of a single [EvaluateFocusTriggerUseCase.execute] call - lets the
@@ -18,24 +18,10 @@ sealed class FocusTriggerResult {
 }
 
 /**
- * EvaluateFocusTriggerUseCase
- * ------------------------------
- * Domain-layer rule: decides whether Focus Mode should automatically
- * activate right now, based on a Blocked-App-Group's schedule and/or a
- * saved FocusZone - matches the "Trigger (Work Independently)" node in
- * the Runtime-mode part of the process-flow diagram.
- *
- * This is called from a Compose LaunchedEffect while Home is on screen
- * (UI-simulated triggering - see HomeScreenWithSheet.kt), but every input
- * here is plain data (no Context, no Compose types), so a future real
- * background trigger (a WorkManager periodic worker for schedule checks,
- * or a Geofencing API callback for location checks) can call this exact
- * same function without any change to this class.
+ * Decides whether Home should suggest focusing now: a schedule, a saved location
+ * or a Wi-Fi network matches. Plain Kotlin (no Android), so it is easy to test.
  */
-// [HANDOFF -> Victor Munacoha | README task: "Geofencing API + Wi-Fi", "GPS ... sensor integration"]
-// Once SensorDataSource.getCurrentLocation() (and a real Geofencing
-// callback) exist, call this execute() from that real location update
-// instead of only from Home's simulated LaunchedEffect polling.
+// TODO: call this from a real geofence callback too, not only from Home.
 class EvaluateFocusTriggerUseCase {
 
     /**
@@ -59,7 +45,7 @@ class EvaluateFocusTriggerUseCase {
             .firstOrNull() ?: FocusTriggerResult.NoTrigger
 
     /**
-     * [David Shiau, 2026-09-26] Every trigger that should show its own
+     * Every trigger that should show its own
      * banner right now - schedule, location and Wi-Fi are each independent
      * (each has its own app groups), so up to all three at once, in that
      * order. Same parameters as [execute]; empty if nothing matches.

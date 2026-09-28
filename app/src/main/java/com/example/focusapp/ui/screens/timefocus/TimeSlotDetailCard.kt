@@ -25,10 +25,13 @@ import androidx.compose.ui.unit.dp
 import com.example.focusapp.ui.components.DayIndicators
 import com.example.focusapp.ui.components.EditButton
 import com.example.focusapp.ui.components.formatClock
-import com.example.focusapp.ui.screens.home.BlockedAppGroup
-import com.example.focusapp.ui.screens.home.generateFakeGroups
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
+import com.example.focusapp.data.blocking.BlockedAppGroup
+import com.example.focusapp.ui.common.previewGroups
+import com.example.focusapp.ui.components.FocusCard
+import com.example.focusapp.ui.components.CardSectionTitle
+import com.example.focusapp.ui.components.sunkenPanel
 
 /** How many app icons the "Apps Group" row shows before just counting. */
 private const val MAX_PREVIEW_ICONS = 2
@@ -48,16 +51,9 @@ fun TimeSlotDetailCard(
 ) {
     val colors = FocusTheme.colors
     val typography = FocusTheme.typography
-    val panel = Modifier
-        .fillMaxWidth()
-        .background(colors.surfaceSunken, RoundedCornerShape(12.dp))
+    val panel = Modifier.sunkenPanel(colors.surfaceSunken)
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(colors.surface, RoundedCornerShape(16.dp))
-            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 20.dp),
-    ) {
+    FocusCard(modifier = modifier) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -76,7 +72,7 @@ fun TimeSlotDetailCard(
             EditButton(onClick = onEdit, contentDescription = "Edit ${group.name}")
         }
 
-        SectionTitle("Apps Group")
+        CardSectionTitle("Apps Group")
         Row(
             modifier = panel.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -101,7 +97,7 @@ fun TimeSlotDetailCard(
             )
         }
 
-        SectionTitle("Days Activity")
+        CardSectionTitle("Days Activity")
         Column(
             modifier = panel.padding(horizontal = 16.dp, vertical = 18.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -117,7 +113,7 @@ fun TimeSlotDetailCard(
             DayIndicators(activeDays = group.schedule.activeDays)
         }
 
-        SectionTitle("Daily Limits")
+        CardSectionTitle("Daily Limits")
         Row(
             modifier = panel.padding(vertical = 18.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
@@ -126,16 +122,6 @@ fun TimeSlotDetailCard(
             Stat(label = "Max\nMinutes", value = group.maxMinutesPerApp?.toString() ?: "--")
         }
     }
-}
-
-@Composable
-private fun SectionTitle(text: String) {
-    Text(
-        text = text,
-        style = FocusTheme.typography.tileTitle,
-        color = FocusTheme.colors.onSurface,
-        modifier = Modifier.padding(start = 4.dp, top = 24.dp, bottom = 10.dp),
-    )
 }
 
 @Composable
@@ -159,7 +145,7 @@ private fun Stat(label: String, value: String) {
 private fun TimeSlotDetailCardPreview() {
     FocusAppTheme {
         TimeSlotDetailCard(
-            group = generateFakeGroups().first().copy(maxOpensPerApp = 3, maxMinutesPerApp = 30),
+            group = previewGroups().first().copy(maxOpensPerApp = 3, maxMinutesPerApp = 30),
             onEdit = {},
             modifier = Modifier.padding(16.dp),
         )

@@ -1,7 +1,6 @@
 package com.example.focusapp.ui.screens.location
 
 import android.graphics.Bitmap
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,12 +11,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -30,6 +27,9 @@ import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
 import java.util.Locale
 import kotlin.math.abs
+import com.example.focusapp.ui.components.FocusCard
+import com.example.focusapp.ui.components.CardButtonRow
+import com.example.focusapp.ui.components.sunkenPanel
 
 /** Allowed "Effective Range" values, in meters. */
 val LocationRadiusRange = 50f..500f
@@ -61,88 +61,78 @@ fun AddLocationCard(
     val typography = FocusTheme.typography
     val canConfirm = name.isNotBlank() && latitude != null && longitude != null
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(colors.surface, RoundedCornerShape(16.dp))
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            RejectButton(onClick = onClose)
-            ConfirmButton(
-                onClick = onConfirm,
-                contentDescription = "Save location",
-                enabled = canConfirm,
-            )
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = locationLabel,
-                style = typography.caption,
-                color = colors.onSurface,
-            )
-            if (latitude != null && longitude != null) {
-                Text(
-                    text = formatCoordinates(latitude, longitude),
-                    style = typography.caption,
-                    color = colors.onSurface,
-                )
-            }
-        }
-
-        FocusTextField(
-            value = name,
-            onValueChange = onNameChange,
-            placeholder = "Enter Group Name",
+    FocusCard(modifier = modifier) {
+        CardButtonRow(
+            left = { RejectButton(onClick = onClose) },
+            right = { ConfirmButton(onClick = onConfirm, contentDescription = "Save location", enabled = canConfirm) },
         )
-
-        Column {
+        Column(
+            modifier = Modifier.padding(top = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp),
+                    .padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text(text = "Effective Range", style = typography.caption, color = colors.onSurface)
-                Text(text = "${radiusMeters.toInt()}m", style = typography.caption, color = colors.onSurface)
-            }
-            FocusSlider(
-                value = radiusMeters,
-                onValueChange = { onRadiusChange((it / 10f).toInt() * 10f) },
-                valueRange = LocationRadiusRange,
-            )
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(colors.surfaceSunken)
-                .clickable(role = Role.Button, onClick = onBlockedAppsClick),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (blockedAppIcons.isEmpty()) {
-                Text(text = "Blocked app", style = typography.inputLarge, color = colors.onSurfaceMuted)
-            } else {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    AppIconStack(icons = blockedAppIcons)
-                    Spacer(Modifier.width(12.dp))
+                Text(
+                    text = locationLabel,
+                    style = typography.caption,
+                    color = colors.onSurface,
+                )
+                if (latitude != null && longitude != null) {
                     Text(
-                        text = if (blockedAppIcons.size == 1) "1 app" else "${blockedAppIcons.size} apps",
-                        style = typography.inputLarge,
+                        text = formatCoordinates(latitude, longitude),
+                        style = typography.caption,
                         color = colors.onSurface,
                     )
+                }
+            }
+
+            FocusTextField(
+                value = name,
+                onValueChange = onNameChange,
+                placeholder = "Enter Group Name",
+            )
+
+            Column {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(text = "Effective Range", style = typography.caption, color = colors.onSurface)
+                    Text(text = "${radiusMeters.toInt()}m", style = typography.caption, color = colors.onSurface)
+                }
+                FocusSlider(
+                    value = radiusMeters,
+                    onValueChange = { onRadiusChange((it / 10f).toInt() * 10f) },
+                    valueRange = LocationRadiusRange,
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .sunkenPanel(colors.surfaceSunken)
+                    .clickable(role = Role.Button, onClick = onBlockedAppsClick),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (blockedAppIcons.isEmpty()) {
+                    Text(text = "Blocked app", style = typography.inputLarge, color = colors.onSurfaceMuted)
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AppIconStack(icons = blockedAppIcons)
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            text = if (blockedAppIcons.size == 1) "1 app" else "${blockedAppIcons.size} apps",
+                            style = typography.inputLarge,
+                            color = colors.onSurface,
+                        )
+                    }
                 }
             }
         }

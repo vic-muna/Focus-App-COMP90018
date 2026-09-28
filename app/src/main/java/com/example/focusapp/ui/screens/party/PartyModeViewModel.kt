@@ -15,48 +15,16 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 
 /**
- * PartyModeViewModel
- * ---------------------
- * Wires [PartyModeScreen] up to the real Study Party data layer
- * (FocusRepository.observePartyMembers/updateMyPartyStatus - see
- * domain/repository/FocusRepository.kt and data/remote/FirebaseRemoteDataSource.kt)
- * instead of the hardcoded participant lists the screen used to show.
- * Note: FocusRepositoryImpl.updateMyPartyStatus() already throttles by time/distance,
- * so this class (and the location flow it collects) can call it on every GPS tick
- * without worrying about battery/Firebase-quota - that's the data layer's job.
+ * Party Mode's cloud logic (Firebase), used by [FriendsScreen].
  *
- * Party-id contract used here: the 6-character code shown/entered on this screen
- * (see generatePartyCode() in PartyModeScreen.kt) IS the Firebase partyId - both the
- * host's "Invite" flow and a joiner's "Join" flow just call [joinParty] with that
- * same code, which starts (a) observing every member currently under
- * parties/{code}/members, and (b) publishing this device's own PartyMemberStatus
- * into that same path so everyone else with the code sees it too.
+ * The 6-letter group code is the party's id in Firebase. Both the host and
+ * the people joining call [joinParty] with that code, which:
+ *  1. watches everyone in the party ([members]), and
+ *  2. keeps publishing this phone's own status (location, focusing or not).
  *
- * Friend-targeted invites: [inviteFriend] wraps FocusRepository.sendPartyInvite()
- * so a caller just needs a uid (see ui/screens/party/FriendListScreen.kt for where
- * that uid comes from) - it's a no-op if called before [joinParty] has set up a
- * current party. Incoming invites: [incomingInvites] observes every invite
- * currently addressed to this device (across all parties, not just the one
- * [joinParty] was last called with - see FocusRepository.observeMyIncomingInvites's
- * doc comment for the Firebase layout behind this), started as soon as this
- * ViewModel is created rather than waiting for [joinParty], since a person should
- * be able to see/accept an invite before creating or joining a party themselves.
- * [respondToInvite] wraps FocusRepository.respondToPartyInvite() and, on accept,
- * also calls [joinParty] so accepting actually puts the device in that party -
- * before this, respondToPartyInvite() existed on the repository but nothing in
- * the UI ever called it.
- *
- * Error handling: every call into FocusRepository below that ends up hitting Firebase
- * (getMyUid/observePartyMembers/updateMyPartyStatus/sendPartyInvite/respondToInvite) is
- * wrapped, and failures go into [errorMessage] instead of propagating - previously NONE
- * of these were protected, so tapping Invite while e.g. Anonymous Auth wasn't enabled in
- * the Firebase Console (or Realtime Database Rules rejected the read/write) threw straight
- * out of a coroutine launched on viewModelScope and crashed the whole app. Party Mode
- * is inherently online-only (see FocusRepositoryImpl's doc comment), so a Firebase
- * failure here genuinely means the feature can't work right now - [errorMessage] is how
- * PartyModeScreen tells the user that, rather than the screen just sitting there with
- * an empty participant list and no explanation. [incomingInvites] itself is the one
- * exception - see its own doc comment for why failures there are swallowed instead.
+ * Every Firebase call is wrapped in try/catch: a failure shows up in
+ * [errorMessage] instead of crashing the app.
+ * Invites ([inviteFriend], [incomingInvites]) are ready for the friend ID system.
  */
 class PartyModeViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -68,9 +36,7 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
     val members: StateFlow<List<PartyMemberStatus>> = _members.asStateFlow()
 
     private val _errorMessage = MutableStateFlow<String?>(null)
-    /** Non-null when the last Firebase call failed - see this class's doc comment.
-     *  PartyModeScreen shows this inside the Invite/Join dialog; call [clearError] once
-     *  it's been shown (or just call [leaveParty], which already clears it). */
+    /** A message for the user when the last Firebase call failed, else null. */
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
     fun clearError() {
@@ -78,29 +44,18 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     private val _incomingInvites = MutableStateFlow<List<PartyInvite>>(emptyList())
-    /** Every invite currently addressed to this device, across all parties - see this class's
-     *  doc comment. Started in [init] below (not [joinParty]) so it's already populated by the
-     *  time PartyModeScreen opens. Failures here are swallowed (left as an empty list) rather
-     *  than surfaced via [errorMessage] - this listener starts before the user has done
-     *  anything, so a misconfigured Firebase project shouldn't greet them with an error banner
-     *  before they've tapped Invite/Join/Invites; those explicit actions still report failures
-     *  normally. */
+    /** Invites sent to this phone. Errors here are ignored, so nobody sees an error before tapping anything. */
     val incomingInvites: StateFlow<List<PartyInvite>> = _incomingInvites.asStateFlow()
 
     init {
         viewModelScope.launch {
             repository.observeMyIncomingInvites()
-                .catch { /* see incomingInvites' doc comment - stay empty rather than surface this */ }
+                .catch { /* stay empty */ }
                 .collect { _incomingInvites.value = it }
         }
     }
 
-    /**
-     * Accepts or declines [invite]. On accept, also calls [joinParty] with the invite's
-     * partyId (using this device's own uid as a fallback display name) so accepting an
-     * invite actually puts the device in that party, not just marks it "accepted" in
-     * Firebase with nothing else happening locally.
-     */
+    /** Accepts or declines [invite]. Accepting also joins that party. */
     fun respondToInvite(invite: PartyInvite, accept: Boolean) {
         viewModelScope.launch {
             try {
@@ -120,17 +75,9 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
     private var publishJob: Job? = null
 
     /**
-     * Starts observing + publishing this device's status for [partyId]. Safe to call again with
-     * a different code (e.g. the user backs out of one dialog and opens the other) - the
-     * previous jobs are cancelled first so we don't keep writing into an old party.
-     *
-     * Starts GPS tracking via [SensorDataSource] as a side effect. If location permission
-     * hasn't been granted, tracking silently does nothing (see LocationDataSource.startGPSUpdates)
-     * and every published status just carries null lat/lng - Party Mode itself doesn't strictly
-     * need location to show who's in the party, so this still works without it.
-     *
-     * Every Firebase call this kicks off is guarded - see this class's doc comment - so a
-     * misconfigured Firebase project surfaces as [errorMessage], never a crash.
+     * Starts watching [partyId]'s members and publishing this phone's status.
+     * Calling it again with another code leaves the old party first.
+     * GPS starts too; without location permission the status just has no location.
      */
     fun joinParty(partyId: String, displayName: String) {
         if (currentPartyId == partyId && observeJob?.isActive == true) return
@@ -151,7 +98,7 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
                 repository.getMyUid()
             } catch (e: Exception) {
                 _errorMessage.value = friendlyPartyErrorMessage(e)
-                return@launch // no uid, nothing safe to publish - observeJob above still runs
+                return@launch // Without an id we can't publish; watching members still works.
             }
             sensorDataSource.locationFlow.collect { location ->
                 try {
@@ -166,20 +113,14 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
                         )
                     )
                 } catch (e: Exception) {
-                    // Don't cancel the collect just because one push failed - the next GPS
-                    // tick (or the next setFocusing() call) gets another chance.
+                    // Keep going; the next GPS update tries again.
                     _errorMessage.value = friendlyPartyErrorMessage(e)
                 }
             }
         }
     }
 
-    /**
-     * Flips isFocusing and republishes right away - a focus-state change is a real event, not
-     * GPS jitter, so FocusRepositoryImpl's throttle always lets it straight through (see its
-     * updateMyPartyStatus() doc comment). Call this from PartyModeScreen's "Go Focus Mode"
-     * button, before navigating away, so friends see the change immediately.
-     */
+    /** Tells the party whether this phone is focusing, right away. */
     fun setFocusing(focusing: Boolean) {
         isFocusing = focusing
         val partyId = currentPartyId ?: return
@@ -203,12 +144,7 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    /**
-     * Sends a targeted invite to [toUid] for the party this device is currently in - see
-     * FirebaseRemoteDataSource.sendPartyInvite() for exactly what that writes. No-op if there's
-     * no current party (shouldn't normally happen - the friend picker is only reachable from
-     * inside the Invite dialog, which already called [joinParty]).
-     */
+    /** Invites the friend with id [toUid] to the current party (does nothing if not in one). */
     fun inviteFriend(toUid: String) {
         val partyId = currentPartyId ?: return
         try {
@@ -218,10 +154,7 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    /** Stops observing/publishing - call when leaving Party Mode (dialog dismissed, back
-     *  pressed) so we don't keep writing this device's location to a party the screen isn't
-     *  showing anymore. Also clears any [errorMessage] from the last attempt, so reopening
-     *  Invite/Join starts clean. */
+    /** Stops watching and publishing, e.g. when a group card is closed. */
     fun leaveParty() {
         observeJob?.cancel()
         observeJob = null
@@ -238,17 +171,7 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
     }
 }
 
-/**
- * Turns a raw Firebase exception into something worth putting in front of a user (and worth
- * grepping Logcat for) instead of a bare "kotlinx.coroutines.JobCancellationException"-style
- * message. The two branches below match the two most common misconfigurations:
- *  - Authentication -> Sign-in method -> Anonymous not enabled in the Firebase Console.
- *  - Realtime Database Rules rejecting the read/write (default rules require auth, so this
- *    usually goes hand-in-hand with the point above).
- * Anything else falls through to a generic-but-still-useful message with the raw exception
- * type/message attached, since this is a best-effort classification (matching on exception
- * class name / message text, not a documented Firebase API), not a guarantee.
- */
+/** Turns a Firebase error into a message that says what to check. */
 private fun friendlyPartyErrorMessage(e: Throwable): String {
     val raw = e.message.orEmpty()
     return when {

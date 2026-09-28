@@ -1,22 +1,22 @@
 package com.example.focusapp.ui.screens.party
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.focusapp.ui.components.CardButtonRow
+import com.example.focusapp.ui.components.CardLabel
+import com.example.focusapp.ui.components.CardTitle
 import com.example.focusapp.ui.components.ConfirmButton
+import com.example.focusapp.ui.components.FocusCard
 import com.example.focusapp.ui.components.FocusTextField
 import com.example.focusapp.ui.components.RejectButton
+import com.example.focusapp.ui.components.sunkenPanel
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
 
@@ -43,17 +43,16 @@ fun CreateGroupCard(
     onStart: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    PartyCard(
-        title = "Create group",
-        onClose = onClose,
-        confirmDescription = "Start focusing together",
-        onConfirm = onStart,
-        modifier = modifier,
-    ) {
-        PartyLabel("Group code")
+    FocusCard(modifier = modifier) {
+        CardButtonRow(
+            left = { RejectButton(onClick = onClose, contentDescription = "Close") },
+            right = { ConfirmButton(onClick = onStart, contentDescription = "Start focusing together") },
+        )
+        CardTitle("Create group")
+        CardLabel("Group code")
         CodePanel(code)
         PartyNote("Share this code so friends can join.")
-        PartyLabel("Members")
+        CardLabel("Members")
         MemberPanel(members)
         errorMessage?.let { PartyError(it) }
     }
@@ -74,18 +73,22 @@ fun JoinGroupCard(
     onJoin: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    PartyCard(
-        title = "Join group",
-        onClose = onClose,
-        confirmDescription = "Join group",
-        onConfirm = onJoin,
-        confirmEnabled = !joined && codeInput.isNotBlank(),
-        modifier = modifier,
-    ) {
+    FocusCard(modifier = modifier) {
+        CardButtonRow(
+            left = { RejectButton(onClick = onClose, contentDescription = "Close") },
+            right = {
+                ConfirmButton(
+                    onClick = onJoin,
+                    contentDescription = "Join group",
+                    enabled = !joined && codeInput.isNotBlank(),
+                )
+            },
+        )
+        CardTitle("Join group")
         if (joined) {
-            PartyLabel("Group code")
+            CardLabel("Group code")
             CodePanel(codeInput.trim())
-            PartyLabel("Members")
+            CardLabel("Members")
             MemberPanel(members)
             PartyNote("Waiting for the host to start…")
         } else {
@@ -93,54 +96,11 @@ fun JoinGroupCard(
                 value = codeInput,
                 onValueChange = { onCodeInputChange(it.uppercase()) },
                 placeholder = "Enter Group Code",
-                modifier = Modifier.padding(top = 8.dp),
             )
         }
         errorMessage?.let { PartyError(it) }
     }
 }
-
-/** The shared fly-card frame: X on the left, check on the right, then [title] and [content]. */
-@Composable
-private fun PartyCard(
-    title: String,
-    onClose: () -> Unit,
-    confirmDescription: String,
-    onConfirm: () -> Unit,
-    modifier: Modifier = Modifier,
-    confirmEnabled: Boolean = true,
-    content: @Composable () -> Unit,
-) {
-    val colors = FocusTheme.colors
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(colors.surface, RoundedCornerShape(16.dp))
-            .padding(16.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            RejectButton(onClick = onClose, contentDescription = "Close")
-            ConfirmButton(onClick = onConfirm, contentDescription = confirmDescription, enabled = confirmEnabled)
-        }
-        Text(
-            text = title,
-            style = FocusTheme.typography.tileTitle,
-            color = colors.onSurface,
-            modifier = Modifier.padding(start = 4.dp, top = 16.dp),
-        )
-        content()
-    }
-}
-
-private val PanelModifier
-    @Composable get() = Modifier
-        .fillMaxWidth()
-        .clip(RoundedCornerShape(12.dp))
-        .background(FocusTheme.colors.surfaceSunken)
 
 @Composable
 private fun CodePanel(code: String) {
@@ -149,13 +109,19 @@ private fun CodePanel(code: String) {
         style = FocusTheme.typography.statValue,
         color = FocusTheme.colors.accent,
         textAlign = TextAlign.Center,
-        modifier = PanelModifier.padding(vertical = 12.dp),
+        modifier = Modifier
+            .sunkenPanel(FocusTheme.colors.surfaceSunken)
+            .padding(vertical = 12.dp),
     )
 }
 
 @Composable
 private fun MemberPanel(members: List<String>) {
-    Column(modifier = PanelModifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+    Column(
+        modifier = Modifier
+            .sunkenPanel(FocusTheme.colors.surfaceSunken)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
         members.forEach { name ->
             Text(
                 text = name,
@@ -167,16 +133,7 @@ private fun MemberPanel(members: List<String>) {
     }
 }
 
-@Composable
-private fun PartyLabel(text: String) {
-    Text(
-        text = text,
-        style = FocusTheme.typography.caption,
-        color = FocusTheme.colors.onSurfaceMuted,
-        modifier = Modifier.padding(start = 4.dp, top = 16.dp, bottom = 8.dp),
-    )
-}
-
+/** A small centered grey note. */
 @Composable
 private fun PartyNote(text: String) {
     Text(
@@ -190,6 +147,7 @@ private fun PartyNote(text: String) {
     )
 }
 
+/** A small centered error message. */
 @Composable
 private fun PartyError(text: String) {
     Text(

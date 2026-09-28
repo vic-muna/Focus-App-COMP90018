@@ -12,7 +12,6 @@ import com.example.focusapp.ui.theme.FocusAppTheme
 enum class MainTab(val item: FocusNavItem) {
     HOME(FocusNavItem(R.drawable.ic_home_fill, "Home")),
     LOCATION(FocusNavItem(R.drawable.ic_pin_alt_fill, "Location focus")),
-    // Opens the Scheduled Limits sheet (per-app daily limits inside a schedule).
     SCHEDULE(FocusNavItem(R.drawable.ic_clock_fill, "Scheduled limits")),
     WIFI_SOURCE(FocusNavItem(R.drawable.wifi, "Wi-Fi focus")),
 }

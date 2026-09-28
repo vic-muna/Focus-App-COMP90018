@@ -11,41 +11,19 @@ import com.example.focusapp.ui.screens.blocked.BlockedScreen
 import com.example.focusapp.ui.theme.FocusAppTheme
 
 /**
- * BlockedActivity
- * -----------------
- * The "you can't use this app right now" screen. [com.example.focusapp.data.accessibility.FocusAccessibilityService]
- * launches this instead of silently bouncing the user to the home screen
- * (the old `GLOBAL_ACTION_HOME` behaviour) whenever a restricted app
- * comes to the foreground.
+ * The "you can't use this app right now" screen, opened by FocusAccessibilityService
+ * on top of a blocked app. It is a separate Activity because the service can't
+ * show anything on screen by itself.
  *
- * WHY A WHOLE SEPARATE ACTIVITY, NOT A TOAST/SNACKBAR: a Toast or Snackbar
- * can only be shown from inside a currently-visible Activity of the app
- * that requests it - FocusAccessibilityService isn't an Activity, and by
- * the time it runs, Focus itself may not be on screen at all (the user
- * could be deep inside Instagram). Launching an Activity is the one thing
- * that can put content on screen no matter what else was open - it's the
- * same mechanism a phone call or alarm uses to interrupt whatever you're doing.
- *
- * HOW THIS AVOIDS BOUNCING THE USER RIGHT BACK INTO THE BLOCKED APP: this
- * screen is launched into its OWN task (see AndroidManifest.xml's
- * `launchMode="singleTask"` + `taskAffinity=""` on this Activity), kept
- * separate from the blocked app's task. Both the "Got it" button and the
- * system Back gesture ([BackHandler] below) explicitly navigate Home
- * rather than just calling `finish()` - if they only called finish(),
- * Android's default back-stack behaviour could reveal the blocked app's
- * task underneath, defeating the whole point of this screen.
+ * It runs in its own task (see the manifest), and both "Got it" and Back go to
+ * the phone's home screen - just closing it could show the blocked app again.
  */
 class BlockedActivity : ComponentActivity() {
 
-    // A plain Compose `State`, not `remember`ed - it's created once per
-    // Activity instance (as a property, not inside a Composable) so that
-    // [onNewIntent] can update it even while this screen is already on
-    // screen (see that override below for why that case can happen).
+    // Kept outside Compose so onNewIntent can update it while the screen is showing.
     private val blockedAppLabelState = mutableStateOf("This app")
 
-    // [David Shiau, 2026-09-26] Why it was blocked, for a Scheduled Limits
-    // block (e.g. "You've reached your limit of 3 times ..."); null for a
-    // focus-session block, which keeps the original message.
+    // Why it was blocked (e.g. "You've reached your limit of 3 times ..."), or null for the default message.
     private val blockReasonState = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -54,8 +32,7 @@ class BlockedActivity : ComponentActivity() {
 
         setContent {
             FocusAppTheme {
-                // Back does the same as "Got it" - see the class doc comment for
-                // why this can't just be left to the default Back behaviour.
+                // Back does the same as "Got it".
                 BackHandler { goHomeAndFinish() }
                 BlockedScreen(
                     appLabel = blockedAppLabelState.value,
@@ -66,14 +43,7 @@ class BlockedActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * Because this Activity is `launchMode="singleTask"`, Android reuses
-     * the existing instance (calling THIS, not [onCreate] again) if the
-     * user manages to trigger another restricted app while this screen is
-     * already showing. Without this override, the message would keep
-     * showing whichever app was blocked FIRST, even after a second,
-     * different app gets blocked.
-     */
+    /** Called instead of onCreate when another app gets blocked while this screen is already open. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -86,11 +56,7 @@ class BlockedActivity : ComponentActivity() {
         blockReasonState.value = intent.getStringExtra(EXTRA_BLOCK_REASON)
     }
 
-    /**
-     * Explicitly navigates to the home screen, THEN finishes this
-     * Activity - see the class doc comment for why "just finish()" isn't
-     * safe enough here.
-     */
+    /** Goes to the phone's home screen, then closes this screen. */
     private fun goHomeAndFinish() {
         val homeIntent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_HOME)

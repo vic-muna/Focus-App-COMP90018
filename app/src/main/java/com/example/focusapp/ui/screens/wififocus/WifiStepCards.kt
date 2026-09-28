@@ -2,7 +2,6 @@ package com.example.focusapp.ui.screens.wififocus
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,7 +20,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
@@ -38,6 +36,11 @@ import com.example.focusapp.ui.components.RejectButton
 import com.example.focusapp.ui.components.verticalScrollbar
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
+import com.example.focusapp.ui.components.FocusCard
+import com.example.focusapp.ui.components.CardButtonRow
+import com.example.focusapp.ui.components.CardTitle
+import com.example.focusapp.ui.components.CardLabel
+import com.example.focusapp.ui.components.sunkenPanel
 
 private val KnownListMaxHeight = 150.dp
 
@@ -72,33 +75,16 @@ fun WifiNetworkStepCard(
     val colors = FocusTheme.colors
     val typography = FocusTheme.typography
     val selectedTaken = selectedSsid != null && selectedSsid in addedSsids
-    val panel = Modifier
-        .fillMaxWidth()
-        .clip(RoundedCornerShape(12.dp))
-        .background(colors.surfaceSunken)
+    val panel = Modifier.sunkenPanel(colors.surfaceSunken)
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(colors.surface, RoundedCornerShape(16.dp))
-            .padding(16.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            RejectButton(onClick = onClose)
-            NextButton(onClick = onNext, enabled = selectedSsid != null && !selectedTaken)
-        }
-
-        Text(
-            text = "Wi-Fi Network",
-            style = typography.tileTitle,
-            color = colors.onSurface,
-            modifier = Modifier.padding(start = 4.dp, top = 16.dp),
+    FocusCard(modifier = modifier) {
+        CardButtonRow(
+            left = { RejectButton(onClick = onClose) },
+            right = { NextButton(onClick = onNext, enabled = selectedSsid != null && !selectedTaken) },
         )
+        CardTitle("Wi-Fi Network")
 
-        SectionLabel("Connected now")
+        CardLabel("Connected now")
         Column(modifier = panel) {
             if (currentSsid != null) {
                 WifiChoiceRow(
@@ -132,7 +118,7 @@ fun WifiNetworkStepCard(
             )
         }
 
-        SectionLabel("Known Wi-Fi")
+        CardLabel("Known Wi-Fi")
         val others = knownSsids.filter { it != currentSsid }
         if (others.isEmpty()) {
             Text(
@@ -165,7 +151,7 @@ fun WifiNetworkStepCard(
             }
         }
 
-        SectionLabel("Or type its name")
+        CardLabel("Or type its name")
         FocusTextField(
             value = manualSsid,
             onValueChange = onManualChange,
@@ -181,16 +167,6 @@ fun WifiNetworkStepCard(
             )
         }
     }
-}
-
-@Composable
-private fun SectionLabel(text: String) {
-    Text(
-        text = text,
-        style = FocusTheme.typography.caption,
-        color = FocusTheme.colors.onSurfaceMuted,
-        modifier = Modifier.padding(start = 4.dp, top = 12.dp, bottom = 6.dp),
-    )
 }
 
 /**
@@ -271,30 +247,12 @@ fun WifiNameStepCard(
 ) {
     val colors = FocusTheme.colors
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(colors.surface, RoundedCornerShape(16.dp))
-            .padding(16.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            BackButton(onClick = onBack)
-            ConfirmButton(
-                onClick = onConfirm,
-                contentDescription = "Save Wi-Fi",
-                enabled = name.isNotBlank(),
-            )
-        }
-
-        Text(
-            text = "Name",
-            style = FocusTheme.typography.tileTitle,
-            color = colors.onSurface,
-            modifier = Modifier.padding(start = 4.dp, top = 16.dp, bottom = 8.dp),
+    FocusCard(modifier = modifier) {
+        CardButtonRow(
+            left = { BackButton(onClick = onBack) },
+            right = { ConfirmButton(onClick = onConfirm, contentDescription = "Save Wi-Fi", enabled = name.isNotBlank()) },
         )
+        CardTitle("Name")
 
         FocusTextField(
             value = name,

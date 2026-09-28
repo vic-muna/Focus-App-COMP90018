@@ -3,11 +3,7 @@ package com.example.focusapp.data.preferences
 import android.content.Context
 
 /**
- * BackgroundThemeStorage
- * -------------------------
- * Remembers which background theme the user picked on the dashboard
- * (SharedPreferences, same approach as the other small UI stores). Only the
- * theme's id is stored - see ui.theme.BackgroundThemes for what each id means.
+ * Remembers which background theme was picked (only its id; see ui.theme.BackgroundThemes).
  */
 class BackgroundThemeStorage(context: Context) {
 
