@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.focusapp.domain.model.FocusSession
+import com.example.focusapp.ui.components.CloseTopBar
 import com.example.focusapp.ui.components.RejectButton
 import com.example.focusapp.ui.theme.BackgroundTheme
 import com.example.focusapp.ui.theme.BackgroundThemes
@@ -67,6 +68,7 @@ private val BAR_CHART_MAX_BAR_HEIGHT = 100.dp
 fun HistoryScreen(
     theme: BackgroundTheme,
     onChangeThemeClick: () -> Unit,
+    onClose: () -> Unit,
     viewModel: HistoryViewModel = viewModel(),
 ) {
     val sessions by viewModel.sessions.collectAsState()
@@ -83,6 +85,7 @@ fun HistoryScreen(
         isLoading = isLoading,
         weekBuckets = weekBuckets,
         onWeekClick = { selectedWeek = it },
+        onClose = onClose,
     )
 
     val weekToShow = selectedWeek
@@ -102,78 +105,86 @@ private fun HistoryContent(
     isLoading: Boolean,
     weekBuckets: List<WeekBucket>,
     onWeekClick: (WeekBucket) -> Unit,
+    onClose: () -> Unit,
 ) {
     val colors = FocusTheme.colors
     val typography = FocusTheme.typography
 
-    LazyColumn(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.background),
-        contentPadding = PaddingValues(
-            start = 32.dp,
-            end = 32.dp,
-            top = FocusSpacing.ScreenTop,
-            bottom = FocusSpacing.ScreenBottom,
-        ),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item {
-            ThemeIdCard(theme = theme, onChangeClick = onChangeThemeClick)
-        }
-
-        item {
-            Text(
-                text = "Focus History",
-                style = typography.primaryActionLabel,
-                color = colors.onSurface,
-                modifier = Modifier.padding(top = 20.dp),
-            )
-        }
-
-        if (isLoading) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = 32.dp,
+                end = 32.dp,
+                // Starts below the X in the top-right corner.
+                top = FocusSpacing.ScreenTop + 58.dp,
+                bottom = FocusSpacing.ScreenBottom,
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 24.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator(color = colors.accent)
-                }
+                ThemeIdCard(theme = theme, onChangeClick = onChangeThemeClick)
             }
-        } else {
+
             item {
-                Text(text = "This week", style = typography.tileTitle, color = colors.onSurface)
-            }
-            item {
-                WeeklyBarChart(
-                    points = sessions.dailyChartPoints(),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(colors.surface)
-                        .padding(16.dp),
+                Text(
+                    text = "Focus History",
+                    style = typography.primaryActionLabel,
+                    color = colors.onSurface,
+                    modifier = Modifier.padding(top = 20.dp),
                 )
             }
-            item {
-                WeekCardsRow(weekBuckets = weekBuckets, onWeekClick = onWeekClick)
-            }
-            if (sessions.isEmpty()) {
+
+            if (isLoading) {
                 item {
-                    Text(
-                        text = "No session history yet.",
-                        style = typography.body,
-                        color = colors.onSurfaceMuted,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 24.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator(color = colors.accent)
+                    }
                 }
             } else {
-                items(sessions, key = { it.id }) { session ->
-                    SessionRow(session)
+                item {
+                    Text(text = "This week", style = typography.tileTitle, color = colors.onSurface)
+                }
+                item {
+                    WeeklyBarChart(
+                        points = sessions.dailyChartPoints(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(colors.surface)
+                            .padding(16.dp),
+                    )
+                }
+                item {
+                    WeekCardsRow(weekBuckets = weekBuckets, onWeekClick = onWeekClick)
+                }
+                if (sessions.isEmpty()) {
+                    item {
+                        Text(
+                            text = "No session history yet.",
+                            style = typography.body,
+                            color = colors.onSurfaceMuted,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
+                } else {
+                    items(sessions, key = { it.id }) { session ->
+                        SessionRow(session)
+                    }
                 }
             }
         }
+
+        CloseTopBar(contentDescription = "Close dashboard", onCloseClick = onClose, alignment = Alignment.TopEnd)
     }
 }
 
@@ -418,6 +429,7 @@ private fun HistoryContentPreview() {
                 WeekBucket(label = "Last week", sessions = emptyList()),
             ),
             onWeekClick = {},
+            onClose = {},
         )
     }
 }

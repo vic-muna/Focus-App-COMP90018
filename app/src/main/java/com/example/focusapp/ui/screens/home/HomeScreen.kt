@@ -52,6 +52,7 @@ fun HomeScreen(
     @DrawableRes dashboardArt: Int = R.drawable.img_home_dashboard,
     selectedTab: MainTab = MainTab.HOME,
     onSettingsClick: () -> Unit = {},
+    onPartyClick: () -> Unit = {},
     onDashboardClick: () -> Unit = {},
     onQuickFocusClick: () -> Unit = {},
     onTabClick: (MainTab) -> Unit = {},
@@ -62,7 +63,7 @@ fun HomeScreen(
             .background(FocusTheme.colors.background),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        SettingsTopBar(onSettingsClick = onSettingsClick)
+                SettingsTopBar(onSettingsClick = onSettingsClick, onPartyClick = onPartyClick)
 
         GreetingHeader(
             userName = userName,

@@ -39,6 +39,10 @@ object Destinations {
     // UI scaffolding only for now; no networking/P2P logic behind it yet.
     const val PARTY_MODE = "party_mode"
 
+    // Party Mode's first page - the friend list, reached from Home's group icon;
+    // Create / Join group open as fly cards on it. See ui.screens.party.FriendsScreen.
+    const val FRIENDS = "friends"
+
     // Focus History - see ui.screens.history.HistoryScreen. Reachable from the History
     // tile on the Home screen (the block above Quick Focus - see HomeScreen.kt).
     const val HISTORY = "history"

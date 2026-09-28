@@ -20,39 +20,85 @@ import com.example.focusapp.ui.theme.FocusTheme
  * The settings gear pinned to the top-right corner. On the Settings screen
  * itself ([isOpen]) the same spot shows an X instead, which closes it -
  * tapping the same place opens and closes Settings.
+ * When [onPartyClick] is set (Home only), the Party Mode icon sits in the
+ * top-left corner, on the other side of the gear.
  */
 @Composable
 fun SettingsTopBar(
     onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier,
     isOpen: Boolean = false,
+    onPartyClick: (() -> Unit)? = null,
 ) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            // FocusIconButton pads its icon by 4 dp, so this puts the gear itself at ScreenTop.
-            .padding(top = FocusSpacing.ScreenTop - 4.dp, end = 21.dp),
-        contentAlignment = Alignment.TopEnd,
-    ) {
+    Box(modifier = modifier.topCorners()) {
+        if (onPartyClick != null) {
+            FocusIconButton(
+                iconRes = R.drawable.partymod,
+                contentDescription = "Party Mode",
+                onClick = onPartyClick,
+                modifier = Modifier.align(Alignment.TopStart),
+            )
+        }
         if (isOpen) {
-            // Same 50 dp footprint as the gear button, so the X sits exactly where the gear was.
-            Box(modifier = Modifier.size(50.dp), contentAlignment = Alignment.Center) {
-                GlyphCircleButton(
-                    glyph = FocusGlyphs.Close,
-                    contentDescription = "Close settings",
-                    container = SolidColor(FocusTheme.colors.primaryAction),
-                    glyphColor = FocusTheme.colors.onPrimaryAction,
-                    onClick = onSettingsClick,
-                    size = 42.dp,
-                )
-            }
+            CornerCloseButton(
+                contentDescription = "Close settings",
+                onClick = onSettingsClick,
+                modifier = Modifier.align(Alignment.TopEnd),
+            )
         } else {
             FocusIconButton(
                 iconRes = R.drawable.ic_setting_fill,
                 contentDescription = "Settings",
                 onClick = onSettingsClick,
+                modifier = Modifier.align(Alignment.TopEnd),
             )
         }
+    }
+}
+
+/**
+ * A top bar with just an X, in the top-left ([alignment] = TopStart) or
+ * top-right (TopEnd) corner - same spot and size as Home's corner icons.
+ * Party Mode puts it on the left, where Home's Party Mode icon was; the
+ * dashboard puts it on the right.
+ */
+@Composable
+fun CloseTopBar(
+    contentDescription: String,
+    onCloseClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    alignment: Alignment = Alignment.TopStart,
+) {
+    Box(modifier = modifier.topCorners()) {
+        CornerCloseButton(
+            contentDescription = contentDescription,
+            onClick = onCloseClick,
+            modifier = Modifier.align(alignment),
+        )
+    }
+}
+
+/** FocusIconButton pads its icon by 4 dp, so this puts the corner icons themselves at ScreenTop. */
+private fun Modifier.topCorners(): Modifier = this
+    .fillMaxWidth()
+    .padding(top = FocusSpacing.ScreenTop - 4.dp, start = 21.dp, end = 21.dp)
+
+/** An X with the same 50 dp footprint as a corner icon button, so it can take that icon's place. */
+@Composable
+private fun CornerCloseButton(
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier.size(50.dp), contentAlignment = Alignment.Center) {
+        GlyphCircleButton(
+            glyph = FocusGlyphs.Close,
+            contentDescription = contentDescription,
+            container = SolidColor(FocusTheme.colors.primaryAction),
+            glyphColor = FocusTheme.colors.onPrimaryAction,
+            onClick = onClick,
+            size = 42.dp,
+        )
     }
 }
 
@@ -66,8 +112,41 @@ private fun SettingsTopBarPreview() {
 
 @Preview(widthDp = 393)
 @Composable
+private fun SettingsTopBarWithPartyPreview() {
+    FocusAppTheme {
+        SettingsTopBar(onSettingsClick = {}, onPartyClick = {}, modifier = Modifier.background(FocusTheme.colors.background))
+    }
+}
+
+@Preview(widthDp = 393)
+@Composable
 private fun SettingsTopBarOpenPreview() {
     FocusAppTheme {
         SettingsTopBar(onSettingsClick = {}, isOpen = true, modifier = Modifier.background(FocusTheme.colors.background))
+    }
+}
+
+@Preview(widthDp = 393)
+@Composable
+private fun CloseTopBarPreview() {
+    FocusAppTheme {
+        CloseTopBar(
+            contentDescription = "Close",
+            onCloseClick = {},
+            modifier = Modifier.background(FocusTheme.colors.background),
+        )
+    }
+}
+
+@Preview(widthDp = 393)
+@Composable
+private fun CloseTopBarEndPreview() {
+    FocusAppTheme {
+        CloseTopBar(
+            contentDescription = "Close",
+            onCloseClick = {},
+            alignment = Alignment.TopEnd,
+            modifier = Modifier.background(FocusTheme.colors.background),
+        )
     }
 }

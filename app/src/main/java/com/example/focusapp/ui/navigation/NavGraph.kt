@@ -53,6 +53,7 @@ import kotlinx.coroutines.withContext
 import com.example.focusapp.data.preferences.BackgroundThemeStorage
 import com.example.focusapp.ui.screens.history.ThemePickerScreen
 import com.example.focusapp.ui.theme.BackgroundThemes
+import com.example.focusapp.ui.screens.party.FriendsScreen
 
 // Any navigation into or out of Home is a dissolve (cross-fade) - both the
 // leaving and the arriving screen fade, in place, over the same duration.
@@ -280,7 +281,7 @@ fun FocusAppNavGraph() {
                     onScheduleBannerClick = { groupId ->
                         navController.navigate(Destinations.groupUsageRoute(groupId))
                     },
-                    onPartyModeClick = { navController.navigate(Destinations.PARTY_MODE) },
+                    onPartyModeClick = { navController.navigate(Destinations.FRIENDS) },
                     onSettingsClick = { navController.navigate(Destinations.SETTINGS) },
                     onLocationTabClick = { navigateToTab(MainTab.LOCATION) },
                     onScheduleTabClick = { navigateToTab(MainTab.SCHEDULE) },
@@ -331,6 +332,17 @@ fun FocusAppNavGraph() {
                     groups = wifi.groups,
                     onGroupsChange = { wifi.groups = it },
                     onTabClick = ::navigateToTab
+                )
+            }
+
+            composable(
+                route = Destinations.FRIENDS,
+                enterTransition = partyModeEnter,
+                exitTransition = partyModeExit
+            ) {
+                FriendsScreen(
+                    onClose = { navController.popBackStack() },
+                    onStartFocus = { startFocusSession(FocusSessionSource.Party) }
                 )
             }
 
@@ -439,7 +451,8 @@ fun FocusAppNavGraph() {
             ) {
                 HistoryScreen(
                     theme = backgroundTheme,
-                    onChangeThemeClick = { navController.navigate(Destinations.THEME_PICKER) }
+                    onChangeThemeClick = { navController.navigate(Destinations.THEME_PICKER) },
+                    onClose = { navController.popBackStack() }
                 )
             }
 

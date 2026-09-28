@@ -182,13 +182,12 @@ fun HomeScreenWithSheet(
             .fillMaxSize()
             .background(FocusTheme.colors.background)
     ) {
-        // 1. 主要畫面
-        // The new Figma Home has no Party Mode entry, so onPartyModeClick is
-        // currently unused here - kept so NavGraph's wiring doesn't change.
+
         HomeScreen(
             dashboardArt = dashboardArt,
             selectedTab = MainTab.HOME,
             onSettingsClick = onSettingsClick,
+            onPartyClick = onPartyModeClick,
             onDashboardClick = onAvatarClick,
             onQuickFocusClick = { onQuickFocusClick() },
             onTabClick = { tab -> onTabClick(tab) }
