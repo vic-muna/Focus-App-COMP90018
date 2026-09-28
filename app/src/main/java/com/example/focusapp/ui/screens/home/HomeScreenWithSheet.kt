@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -55,6 +56,9 @@ import kotlinx.coroutines.withContext
 /** How often the auto-suggestion check re-evaluates while Home is on screen - schedule
  *  boundaries only need minute-granularity, so there's no need for anything tighter. */
 private const val AUTO_TRIGGER_CHECK_INTERVAL_MILLIS = 60_000L
+
+/** Each suggestion banner closes itself after this long. */
+private const val BANNER_AUTO_HIDE_MILLIS = 5_000L
 
 @Composable
 fun HomeScreenWithSheet(
@@ -190,28 +194,35 @@ fun HomeScreenWithSheet(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 suggestions.forEach { (suggestionKey, suggestion) ->
-                    AutoFocusSuggestionBanner(
-                        result = suggestion,
-                        onAccept = {
-                            val source = when (suggestion) {
-                                // [David Shiau, 2026-09-26] Un-wired from starting a focus
-                                // session - a schedule match now opens that group's
-                                // "today's opens/duration" page instead (phase 1 of the
-                                // daily open-times/duration limit, see GroupUsageScreen).
-                                is FocusTriggerResult.ScheduleMatch -> {
-                                    onScheduleBannerClick(suggestion.groupId)
-                                    return@AutoFocusSuggestionBanner
+                    key(suggestionKey) {
+                        // Closes itself after a few seconds, same as tapping its X.
+                        LaunchedEffect(Unit) {
+                            delay(BANNER_AUTO_HIDE_MILLIS)
+                            dismissedKeys = dismissedKeys + suggestionKey
+                        }
+                        AutoFocusSuggestionBanner(
+                            result = suggestion,
+                            onAccept = {
+                                val source = when (suggestion) {
+                                    // [David Shiau, 2026-09-26] Un-wired from starting a focus
+                                    // session - a schedule match now opens that group's
+                                    // "today's opens/duration" page instead (phase 1 of the
+                                    // daily open-times/duration limit, see GroupUsageScreen).
+                                    is FocusTriggerResult.ScheduleMatch -> {
+                                        onScheduleBannerClick(suggestion.groupId)
+                                        return@AutoFocusSuggestionBanner
+                                    }
+                                    is FocusTriggerResult.LocationMatch ->
+                                        FocusSessionSource.Location(suggestion.zoneName, suggestion.zoneId)
+                                    is FocusTriggerResult.WifiMatch ->
+                                        FocusSessionSource.Wifi(suggestion.ssid)
+                                    FocusTriggerResult.NoTrigger -> return@AutoFocusSuggestionBanner
                                 }
-                                is FocusTriggerResult.LocationMatch ->
-                                    FocusSessionSource.Location(suggestion.zoneName, suggestion.zoneId)
-                                is FocusTriggerResult.WifiMatch ->
-                                    FocusSessionSource.Wifi(suggestion.ssid)
-                                FocusTriggerResult.NoTrigger -> return@AutoFocusSuggestionBanner
-                            }
-                            startFocusSessionIfPermitted(source)
-                        },
-                        onDismiss = { dismissedKeys = dismissedKeys + suggestionKey }
-                    )
+                                startFocusSessionIfPermitted(source)
+                            },
+                            onDismiss = { dismissedKeys = dismissedKeys + suggestionKey }
+                        )
+                    }
                 }
             }
         }

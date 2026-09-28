@@ -50,6 +50,7 @@ import kotlinx.coroutines.withContext
 private const val CANCEL_HOLD_DURATION_MILLIS = 5_000L
 private const val EXIT_HINT = "Hold for 5 seconds to exit\nthe focus mode"
 private const val CANCEL_HOLD_STEP_MILLIS = 50L
+private const val HINT_AUTO_HIDE_MILLIS = 5_000L
 
 /** Where a focus session was started from. [David Shiau, 2026-09-26] No `Schedule`
  *  source any more - a schedule match now opens GroupUsageScreen (the daily open-times/
@@ -119,6 +120,13 @@ fun FocusSessionScreen(
     val elapsedSeconds = ((tick - session.startTimeMillis) / 1000).coerceAtLeast(0)
     val elapsedLabel = formatElapsed(elapsedSeconds)
     var showExitHint by remember { mutableStateOf(false) }
+    // Closes itself after a few seconds (tapping the i again still closes it sooner).
+    LaunchedEffect(showExitHint) {
+        if (showExitHint) {
+            delay(HINT_AUTO_HIDE_MILLIS)
+            showExitHint = false
+        }
+    }
     val colors = FocusTheme.colors
 
     fun saveAndFinish() {
