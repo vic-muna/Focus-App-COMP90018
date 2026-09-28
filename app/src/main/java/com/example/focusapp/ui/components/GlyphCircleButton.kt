@@ -65,6 +65,35 @@ fun GlyphCircleButton(
     }
 }
 
+/**
+ * Figma edit button (edit.xml): an accent circle with a pencil cut out of
+ * it, so the surface behind the button shows through the pencil - only the
+ * circle's [color] is customizable.
+ */
+@Composable
+fun EditButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    contentDescription: String = "Edit",
+    color: Color = FocusTheme.colors.accent,
+    size: Dp = 34.dp,
+) {
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(CircleShape)
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.edit),
+            contentDescription = contentDescription,
+            tint = color,
+            modifier = Modifier.size(size),
+        )
+    }
+}
+
 /** Figma reject icon: a dark circle with a light X. */
 @Composable
 fun RejectButton(

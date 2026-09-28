@@ -89,10 +89,12 @@ private fun BlockedAppGroup.toDraft() = TimeSlotDraft(
  * Each slot is one of David's Scheduled Limits groups ([BlockedAppGroup]):
  * its time, apps and daily limits live together, so there's no separate
  * app-group page.
- *  - tap a slot: the three-step fly card, prefilled
+ *  - tap a slot: its read-only summary card; the pencil opens the
+ *    three-step fly card, prefilled
  *  - "+": the same card, empty - apps, then days + time, then limits + name
  *  - hold a slot: delete it (after confirming)
- * Tapping outside the card asks before discarding what's been filled in.
+ * Tapping outside closes the summary, or asks before discarding what's been
+ * filled in.
  */
 @Composable
 fun TimeFocusScreen(
@@ -101,6 +103,9 @@ fun TimeFocusScreen(
     onTabClick: (MainTab) -> Unit,
 ) {
     val context = LocalContext.current
+    // The slot whose summary card is open, if any.
+    var viewingGroupId by remember { mutableStateOf<String?>(null) }
+    val viewingGroup = groups.find { it.id == viewingGroupId }
     // null = no fly card open.
     var editStep by remember { mutableStateOf<TimeSlotEditStep?>(null) }
     // Set while editing an existing slot (null while adding a new one).
@@ -129,6 +134,7 @@ fun TimeFocusScreen(
     }
 
     fun startEditing(group: BlockedAppGroup) {
+        viewingGroupId = null
         editingGroupId = group.id
         draft = group.toDraft()
         editStep = TimeSlotEditStep.APPS
@@ -173,19 +179,19 @@ fun TimeFocusScreen(
         closeEditor()
     }
 
-    BackHandler(enabled = editStep != null) {
+    BackHandler(enabled = editStep != null || viewingGroup != null) {
         when (editStep) {
             TimeSlotEditStep.LIMITS -> editStep = TimeSlotEditStep.SCHEDULE
             TimeSlotEditStep.SCHEDULE -> editStep = TimeSlotEditStep.APPS
             TimeSlotEditStep.APPS -> closeEditor()
-            null -> Unit
+            null -> viewingGroupId = null
         }
     }
 
     TimeFocusContent(
         groups = groups,
         onEnabledChange = { group, enabled -> updateGroup(group.id) { it.copy(enabled = enabled) } },
-        onGroupClick = ::startEditing,
+        onGroupClick = { viewingGroupId = it.id },
         onGroupLongClick = { pendingDelete = it },
         onAddClick = {
             editingGroupId = null
@@ -193,6 +199,8 @@ fun TimeFocusScreen(
             editStep = TimeSlotEditStep.APPS
         },
         onTabClick = onTabClick,
+        viewingGroup = viewingGroup,
+        onEditViewingGroup = { viewingGroup?.let(::startEditing) },
         editStep = editStep,
         pickerApps = installedApps,
         draft = draft,
@@ -200,7 +208,9 @@ fun TimeFocusScreen(
         onStepChange = { editStep = it },
         onEditorClose = ::closeEditor,
         onEditorConfirm = ::saveDraft,
-        onOutsideCardClick = { confirmDiscard = true },
+        onOutsideCardClick = {
+            if (editStep != null) confirmDiscard = true else viewingGroupId = null
+        },
     )
 
     if (confirmDiscard) {
@@ -226,6 +236,7 @@ fun TimeFocusScreen(
             onConfirm = {
                 pendingDelete = null
                 onGroupsChange(groups.filterNot { it.id == group.id })
+                if (viewingGroupId == group.id) viewingGroupId = null
             },
             onDismiss = { pendingDelete = null },
         )
@@ -242,6 +253,8 @@ private fun TimeFocusContent(
     onAddClick: () -> Unit,
     onTabClick: (MainTab) -> Unit,
     editStep: TimeSlotEditStep?,
+    viewingGroup: BlockedAppGroup?,
+    onEditViewingGroup: () -> Unit,
     pickerApps: List<InstalledAppInfo>?,
     draft: TimeSlotDraft,
     onDraftChange: (TimeSlotDraft) -> Unit,
@@ -303,7 +316,7 @@ private fun TimeFocusContent(
                 .padding(bottom = 32.dp),
         )
 
-        if (editStep != null) {
+        if (editStep != null || viewingGroup != null) {
             // Scrim: dims everything behind the card; tapping it means "leave".
             Box(
                 modifier = Modifier
@@ -356,6 +369,9 @@ private fun TimeFocusContent(
                     onConfirm = onEditorConfirm,
                     modifier = cardModifier,
                 )
+                null -> viewingGroup?.let { group ->
+                    TimeSlotDetailCard(group = group, onEdit = onEditViewingGroup, modifier = cardModifier)
+                }
             }
         }
     }
@@ -385,6 +401,7 @@ private val previewGroups = listOf(
 
 @Composable
 private fun PreviewContent(
+    viewingGroup: BlockedAppGroup? = null,
     editStep: TimeSlotEditStep? = null,
     draft: TimeSlotDraft = TimeSlotDraft(),
 ) {
@@ -396,6 +413,8 @@ private fun PreviewContent(
             onGroupLongClick = {},
             onAddClick = {},
             onTabClick = {},
+            viewingGroup = viewingGroup,
+            onEditViewingGroup = {},
             editStep = editStep,
             pickerApps = List(12) { InstalledAppInfo("com.example.app$it", "App $it", icon = null) },
             draft = draft,
@@ -411,6 +430,12 @@ private fun PreviewContent(
 @Preview(widthDp = 393, heightDp = 852)
 @Composable
 private fun TimeFocusContentPreview() = PreviewContent()
+
+@Preview(widthDp = 393, heightDp = 852)
+@Composable
+private fun TimeFocusContentDetailPreview() =
+    PreviewContent(viewingGroup = previewGroups.first().copy(maxOpensPerApp = 3, maxMinutesPerApp = 30))
+
 
 @Preview(widthDp = 393, heightDp = 852)
 @Composable
