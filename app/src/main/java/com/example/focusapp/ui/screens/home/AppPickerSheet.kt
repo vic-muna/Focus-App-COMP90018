@@ -60,7 +60,9 @@ private val TextSecondary = Color(0xFFA5ABC7)        // 次要淡藍灰色文字
 fun AppPickerSheet(
     apps: List<AppItem>,
     onAppsChange: (List<AppItem>) -> Unit,
-    isLoading: Boolean = false
+    isLoading: Boolean = false,
+    title: String = "Limited Apps",
+    subtitle: String = "Select apps to limit during this group's active time"
 ) {
     var query by remember { mutableStateOf("") }
     val filtered = remember(apps, query) {
@@ -76,7 +78,7 @@ fun AppPickerSheet(
     ) {
         // 標題
         Text(
-            text = "Block Apps",
+            text = title,
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
             color = TextPrimary
@@ -86,7 +88,7 @@ fun AppPickerSheet(
 
         // 副標題
         Text(
-            text = "Select apps to restrict during focus sessions",
+            text = subtitle,
             fontSize = 13.sp,
             color = TextSecondary
         )

@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -57,11 +58,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-enum class SheetType { NONE, BLOCKED_APPS, LOCATION_ZONE }
+enum class SheetType { NONE, BLOCKED_APPS, LOCATION_ZONE, WIFI_SOURCE }
 
 /** How often the auto-suggestion check re-evaluates while Home is on screen - schedule
  *  boundaries only need minute-granularity, so there's no need for anything tighter. */
 private const val AUTO_TRIGGER_CHECK_INTERVAL_MILLIS = 60_000L
+
+/** Background of the old (not yet redesigned) feature sheets - shared with the Location screen. */
+internal val LegacySheetContainerColor = Color(0xFF3B3B96)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,12 +79,29 @@ fun HomeScreenWithSheet(
     onGroupAppsChange: (groupId: String, apps: List<AppItem>) -> Unit,
     onGroupScheduleChange: (groupId: String, schedule: TimeSlot) -> Unit,
     onGroupRename: (groupId: String, newName: String) -> Unit = { _, _ -> },
+    onGroupMaxOpensChange: (groupId: String, maxOpens: Int?) -> Unit = { _, _ -> },
+    onGroupMaxDurationChange: (groupId: String, maxMinutes: Int?) -> Unit = { _, _ -> },
     onFocusSessionStart: (FocusSessionSource) -> Unit = {},
+    onScheduleBannerClick: (groupId: String) -> Unit = {},
     onAvatarClick: () -> Unit = {},
     onPartyModeClick: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
     onEditLocationZoneClick: () -> Unit = {},
-    onLocationTabClick: () -> Unit = {}
+    onLocationTabClick: () -> Unit = {},
+    // [David Shiau, 2026-09-26] Location Zone's own app groups - separate
+    // from `groups` above (Scheduled Limits).
+    locationGroups: List<BlockedAppGroup> = emptyList(),
+    selectedLocationGroupId: String = "",
+    onLocationGroupAppsChange: (groupId: String, apps: List<AppItem>) -> Unit = { _, _ -> },
+    onLocationGroupRename: (groupId: String, newName: String) -> Unit = { _, _ -> },
+    onLocationGroupListClick: () -> Unit = {},
+    // [David Shiau, 2026-09-26] Wi-Fi Source Detection's own app groups -
+    // separate from both of the above.
+    wifiGroups: List<BlockedAppGroup> = emptyList(),
+    selectedWifiGroupId: String = "",
+    onWifiGroupAppsChange: (groupId: String, apps: List<AppItem>) -> Unit = { _, _ -> },
+    onWifiGroupRename: (groupId: String, newName: String) -> Unit = { _, _ -> },
+    onWifiGroupListClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -90,8 +111,8 @@ fun HomeScreenWithSheet(
 
     var activeSheet by remember { mutableStateOf(SheetType.NONE) }
 
-    // Which bottom-nav tab opened the current sheet (Schedule and Blocked Apps
-    // share one sheet), so the nav indicator stays on the tab the user tapped.
+    // Which bottom-nav tab opened the current sheet, so the nav indicator
+    // stays on that tab while the sheet is up.
     var sheetTab by remember { mutableStateOf(MainTab.HOME) }
     val selectedTab = if (activeSheet == SheetType.NONE) MainTab.HOME else sheetTab
 
@@ -104,8 +125,8 @@ fun HomeScreenWithSheet(
         when (tab) {
             MainTab.HOME -> Unit
             MainTab.LOCATION -> onLocationTabClick()
-            MainTab.SCHEDULE -> Unit // disabled placeholder tab
-            MainTab.BLOCKED_APPS -> openSheet(SheetType.BLOCKED_APPS, tab)
+            MainTab.SCHEDULE -> openSheet(SheetType.BLOCKED_APPS, tab)
+            MainTab.WIFI_SOURCE -> openSheet(SheetType.WIFI_SOURCE, tab)
         }
     }
 
@@ -152,8 +173,8 @@ fun HomeScreenWithSheet(
             onReopenSheetHandled()
             when (reopenSheetType) {
                 "location_zone" -> openSheet(SheetType.LOCATION_ZONE, MainTab.LOCATION)
-                "schedule" -> openSheet(SheetType.BLOCKED_APPS, MainTab.SCHEDULE)
-                else -> openSheet(SheetType.BLOCKED_APPS, MainTab.BLOCKED_APPS)
+                "wifi_source" -> openSheet(SheetType.WIFI_SOURCE, MainTab.WIFI_SOURCE)
+                else -> openSheet(SheetType.BLOCKED_APPS, MainTab.SCHEDULE)
             }
         }
     }
@@ -176,12 +197,29 @@ fun HomeScreenWithSheet(
 
     // --- Wi-Fi-source trigger: same "UI-simulated only" polling approach as
     // the location trigger above - see WifiTriggerStorage's doc comment. ---
+    // [David Shiau, 2026-09-26] Edited from the Wi-Fi Source Detection sheet
+    // (moved here from Settings), so these writers keep the in-memory state
+    // and storage in sync - the banner reacts immediately.
     val wifiTriggerStorage = remember { WifiTriggerStorage(context) }
     var wifiTriggerEnabled by remember { mutableStateOf(false) }
     var taggedWifiSsids by remember { mutableStateOf<List<String>>(emptyList()) }
     LaunchedEffect(Unit) {
         wifiTriggerEnabled = withContext(Dispatchers.IO) { wifiTriggerStorage.isEnabled() }
         taggedWifiSsids = withContext(Dispatchers.IO) { wifiTriggerStorage.getTaggedSsids() }
+    }
+
+    fun setWifiTriggerEnabled(enabled: Boolean) {
+        wifiTriggerEnabled = enabled
+        scope.launch { withContext(Dispatchers.IO) { wifiTriggerStorage.setEnabled(enabled) } }
+    }
+
+    fun updateTaggedSsids(change: suspend (WifiTriggerStorage) -> Unit) {
+        scope.launch {
+            taggedWifiSsids = withContext(Dispatchers.IO) {
+                change(wifiTriggerStorage)
+                wifiTriggerStorage.getTaggedSsids()
+            }
+        }
     }
 
     var tick by remember { mutableStateOf(0L) }
@@ -201,8 +239,10 @@ fun HomeScreenWithSheet(
         }
     }
 
-    val trigger = remember(groups, savedZone, currentLatLng, taggedWifiSsids, currentWifiSsid, tick) {
-        EvaluateFocusTriggerUseCase().execute(
+    // [David Shiau, 2026-09-26] All matching triggers, not just the first -
+    // so the schedule banner and the location banner can both show at once.
+    val triggers = remember(groups, savedZone, currentLatLng, taggedWifiSsids, currentWifiSsid, tick) {
+        EvaluateFocusTriggerUseCase().executeAll(
             groups = groups,
             currentZones = listOfNotNull(savedZone),
             currentLatLng = currentLatLng,
@@ -211,14 +251,17 @@ fun HomeScreenWithSheet(
         )
     }
 
-    var dismissedKey by remember { mutableStateOf<String?>(null) }
-    val suggestionKey = when (trigger) {
+    // Each banner is dismissed on its own.
+    var dismissedKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
+    fun suggestionKeyOf(trigger: FocusTriggerResult): String? = when (trigger) {
         is FocusTriggerResult.ScheduleMatch -> "schedule:${trigger.groupId}"
         is FocusTriggerResult.LocationMatch -> "zone:${trigger.zoneId}"
         is FocusTriggerResult.WifiMatch -> "wifi:${trigger.ssid}"
         FocusTriggerResult.NoTrigger -> null
     }
-    val suggestion = trigger.takeIf { suggestionKey != null && suggestionKey != dismissedKey }
+    val suggestions = triggers.mapNotNull { trigger ->
+        suggestionKeyOf(trigger)?.takeIf { it !in dismissedKeys }?.let { key -> key to trigger }
+    }
 
     // 最外層強制全螢幕 Box，阻斷返回 Home 時 BottomSheet 或繪製節點導致的尺寸縮放跳動
     Box(
@@ -237,27 +280,35 @@ fun HomeScreenWithSheet(
             onTabClick = { tab -> onTabClick(tab) }
         )
 
-        if (suggestion != null && suggestionKey != null) {
-            Box(
+        if (suggestions.isNotEmpty()) {
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.TopCenter
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                AutoFocusSuggestionBanner(
-                    result = suggestion,
-                    onAccept = {
-                        val source = when (suggestion) {
-                            is FocusTriggerResult.ScheduleMatch ->
-                                FocusSessionSource.Schedule(suggestion.groupId, suggestion.groupName)
-                            is FocusTriggerResult.LocationMatch ->
-                                FocusSessionSource.Location(suggestion.zoneName)
-                            is FocusTriggerResult.WifiMatch ->
-                                FocusSessionSource.Wifi(suggestion.ssid)
-                            FocusTriggerResult.NoTrigger -> return@AutoFocusSuggestionBanner
-                        }
-                        startFocusSessionIfPermitted(source)
-                    },
-                    onDismiss = { dismissedKey = suggestionKey }
-                )
+                suggestions.forEach { (suggestionKey, suggestion) ->
+                    AutoFocusSuggestionBanner(
+                        result = suggestion,
+                        onAccept = {
+                            val source = when (suggestion) {
+                                // [David Shiau, 2026-09-26] Un-wired from starting a focus
+                                // session - a schedule match now opens that group's
+                                // "today's opens/duration" page instead (phase 1 of the
+                                // daily open-times/duration limit, see GroupUsageScreen).
+                                is FocusTriggerResult.ScheduleMatch -> {
+                                    onScheduleBannerClick(suggestion.groupId)
+                                    return@AutoFocusSuggestionBanner
+                                }
+                                is FocusTriggerResult.LocationMatch ->
+                                    FocusSessionSource.Location(suggestion.zoneName)
+                                is FocusTriggerResult.WifiMatch ->
+                                    FocusSessionSource.Wifi(suggestion.ssid)
+                                FocusTriggerResult.NoTrigger -> return@AutoFocusSuggestionBanner
+                            }
+                            startFocusSessionIfPermitted(source)
+                        },
+                        onDismiss = { dismissedKeys = dismissedKeys + suggestionKey }
+                    )
+                }
             }
         }
 
@@ -266,7 +317,7 @@ fun HomeScreenWithSheet(
             ModalBottomSheet(
                 onDismissRequest = { activeSheet = SheetType.NONE },
                 sheetState = sheetState,
-                containerColor = Color(0xFF3B3B96)
+                containerColor = LegacySheetContainerColor
             ) {
                 when (activeSheet) {
                     SheetType.BLOCKED_APPS -> AutoBlockingSheetContent(
@@ -275,13 +326,33 @@ fun HomeScreenWithSheet(
                         onAppsChange = onGroupAppsChange,
                         onScheduleChange = onGroupScheduleChange,
                         onRenameGroup = onGroupRename,
+                        onMaxOpensChange = onGroupMaxOpensChange,
+                        onMaxDurationChange = onGroupMaxDurationChange,
                         onBlockerClick = {
                             closeSheet { onBlockerClick() }
                         }
                     )
 
                     SheetType.LOCATION_ZONE -> LocationZoneSheetContent(
-                        onEditClick = { closeSheet { onEditLocationZoneClick() } }
+                        groups = locationGroups,
+                        selectedGroupId = selectedLocationGroupId,
+                        onAppsChange = onLocationGroupAppsChange,
+                        onRenameGroup = onLocationGroupRename,
+                        onEditClick = { closeSheet { onEditLocationZoneClick() } },
+                        onGroupListClick = { closeSheet { onLocationGroupListClick() } }
+                    )
+
+                    SheetType.WIFI_SOURCE -> WifiSourceSheetContent(
+                        groups = wifiGroups,
+                        selectedGroupId = selectedWifiGroupId,
+                        isTriggerEnabled = wifiTriggerEnabled,
+                        taggedSsids = taggedWifiSsids,
+                        onTriggerToggle = { setWifiTriggerEnabled(it) },
+                        onTagSsid = { ssid -> updateTaggedSsids { it.addTaggedSsid(ssid) } },
+                        onUntagSsid = { ssid -> updateTaggedSsids { it.removeTaggedSsid(ssid) } },
+                        onAppsChange = onWifiGroupAppsChange,
+                        onRenameGroup = onWifiGroupRename,
+                        onGroupListClick = { closeSheet { onWifiGroupListClick() } }
                     )
 
                     SheetType.NONE -> Unit
@@ -332,7 +403,11 @@ private fun AccessibilityPermissionDialog(
     )
 }
 
-/** Dismissible banner for an auto-detected trigger - accepting starts a session, but nothing here ever navigates on its own. */
+/**
+ * Dismissible banner for an auto-detected trigger - accepting a location/Wi-Fi
+ * match starts a session, accepting a schedule match opens that group's usage
+ * page; nothing here ever navigates on its own.
+ */
 @Composable
 private fun AutoFocusSuggestionBanner(
     result: FocusTriggerResult,
@@ -341,7 +416,7 @@ private fun AutoFocusSuggestionBanner(
 ) {
     val colors = FocusTheme.colors
     val message = when (result) {
-        is FocusTriggerResult.ScheduleMatch -> "You're in your ${result.groupName} schedule - start a focus session?"
+        is FocusTriggerResult.ScheduleMatch -> "You're in your ${result.groupName} schedule - tap to see today's app usage"
         is FocusTriggerResult.LocationMatch -> "You've arrived at ${result.zoneName} - start a focus session?"
         is FocusTriggerResult.WifiMatch -> "You're connecting to ${result.ssid} Wi-Fi - start a focus session?"
         FocusTriggerResult.NoTrigger -> return

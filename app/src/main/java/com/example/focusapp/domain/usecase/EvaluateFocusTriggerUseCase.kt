@@ -54,18 +54,32 @@ class EvaluateFocusTriggerUseCase {
         taggedWifiSsids: List<String> = emptyList(),
         currentWifiSsid: String? = null,
         now: Calendar = Calendar.getInstance()
-    ): FocusTriggerResult {
-        groups.firstOrNull { it.schedule.isActiveNow(now) }?.let {
-            return FocusTriggerResult.ScheduleMatch(it.id, it.name)
+    ): FocusTriggerResult =
+        executeAll(groups, currentZones, currentLatLng, taggedWifiSsids, currentWifiSsid, now)
+            .firstOrNull() ?: FocusTriggerResult.NoTrigger
+
+    /**
+     * [David Shiau, 2026-09-26] Every trigger that should show its own
+     * banner right now - schedule, location and Wi-Fi are each independent
+     * (each has its own app groups), so up to all three at once, in that
+     * order. Same parameters as [execute]; empty if nothing matches.
+     */
+    fun executeAll(
+        groups: List<BlockedAppGroup> = emptyList(),
+        currentZones: List<FocusZone> = emptyList(),
+        currentLatLng: Pair<Double, Double>? = null,
+        taggedWifiSsids: List<String> = emptyList(),
+        currentWifiSsid: String? = null,
+        now: Calendar = Calendar.getInstance()
+    ): List<FocusTriggerResult> {
+        val scheduleMatch = groups.firstOrNull { it.schedule.isActiveNow(now) }
+            ?.let { FocusTriggerResult.ScheduleMatch(it.id, it.name) }
+        val locationMatch = currentLatLng?.let { (lat, lng) ->
+            currentZones.firstOrNull { it.containsLocation(lat, lng) }
+                ?.let { FocusTriggerResult.LocationMatch(it.id, it.name) }
         }
-        currentLatLng?.let { (lat, lng) ->
-            currentZones.firstOrNull { it.containsLocation(lat, lng) }?.let {
-                return FocusTriggerResult.LocationMatch(it.id, it.name)
-            }
-        }
-        currentWifiSsid?.takeIf { it in taggedWifiSsids }?.let {
-            return FocusTriggerResult.WifiMatch(it)
-        }
-        return FocusTriggerResult.NoTrigger
+        val wifiMatch = currentWifiSsid?.takeIf { it in taggedWifiSsids }
+            ?.let { FocusTriggerResult.WifiMatch(it) }
+        return listOfNotNull(scheduleMatch, locationMatch, wifiMatch)
     }
 }

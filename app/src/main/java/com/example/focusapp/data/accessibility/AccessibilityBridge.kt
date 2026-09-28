@@ -114,15 +114,26 @@ object AccessibilityBridge {
      * restricted before, since a new session should only block its own
      * group, not accumulate leftovers from a previous one.
      */
-    fun setRestrictedPackages(packageNames: Collection<String>) {
+    fun setRestrictedPackages(packageNames: Collection<String>, reason: String? = null) {
+        restrictionReason = reason
         _restrictedPackages.value = packageNames.map { it.trim() }.filter { it.isNotEmpty() }.toSet()
     }
+
+    /**
+     * [David Shiau, 2026-09-26] Why [restrictedPackages] are blocked (e.g.
+     * "Blocked while you're at Library."), shown on the blocked screen; null
+     * keeps its default message. Set together with the packages.
+     */
+    @Volatile
+    var restrictionReason: String? = null
+        private set
 
     /**
      * [David Shiau, 2026-09-20] Called when a focus session ends or is
      * cancelled - nothing should stay blocked afterwards.
      */
     fun clearRestrictedPackages() {
+        restrictionReason = null
         _restrictedPackages.value = emptySet()
     }
 

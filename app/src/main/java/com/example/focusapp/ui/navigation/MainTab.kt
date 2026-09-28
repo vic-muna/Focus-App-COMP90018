@@ -12,9 +12,10 @@ import com.example.focusapp.ui.theme.FocusAppTheme
 enum class MainTab(val item: FocusNavItem) {
     HOME(FocusNavItem(R.drawable.ic_home_fill, "Home")),
     LOCATION(FocusNavItem(R.drawable.ic_pin_alt_fill, "Location focus")),
-    // Study-time tab is cancelled for now: the icon keeps its slot as a demo but does nothing.
-    SCHEDULE(FocusNavItem(R.drawable.ic_clock_fill, "Schedule (not available)", enabled = false)),
-    BLOCKED_APPS(FocusNavItem(R.drawable.ic_apps_add, "Blocked apps")),
+    // Opens the Scheduled Limits sheet (per-app daily limits inside a schedule).
+    SCHEDULE(FocusNavItem(R.drawable.ic_clock_fill, "Scheduled limits")),
+    // TODO(design): still the "apps add" icon - no Wi-Fi icon in Figma yet.
+    WIFI_SOURCE(FocusNavItem(R.drawable.ic_apps_add, "Wi-Fi source detection")),
 }
 
 /** [FocusBottomNavBar] preloaded with every [MainTab] - drop this into any top-level screen. */

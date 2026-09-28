@@ -11,7 +11,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,6 +48,10 @@ import com.example.focusapp.ui.components.PullUpPanelState
 import com.example.focusapp.ui.components.SettingsTopBar
 import com.example.focusapp.ui.components.rememberPullUpPanelState
 import com.example.focusapp.ui.navigation.MainTab
+import com.example.focusapp.ui.screens.home.AppItem
+import com.example.focusapp.ui.screens.home.BlockedAppGroup
+import com.example.focusapp.ui.screens.home.LegacySheetContainerColor
+import com.example.focusapp.ui.screens.home.LocationZoneSheetContent
 import com.example.focusapp.ui.navigation.MainTabBar
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
@@ -80,11 +87,19 @@ private data class LocationDraft(
  * on it (or its top edge) lowers it - it never leaves the screen - to show
  * more map, swiping up brings it back. Long-pressing the map starts adding
  * a location; tapping a group edits it, holding a group deletes it.
+ * The add/edit card's Schedule button opens the Location Zone app-group
+ * sheet (which apps a location focus session blocks).
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LocationScreen(
     onSettingsClick: () -> Unit,
     onTabClick: (MainTab) -> Unit,
+    locationGroups: List<BlockedAppGroup> = emptyList(),
+    selectedLocationGroupId: String = "",
+    onLocationGroupAppsChange: (groupId: String, apps: List<AppItem>) -> Unit = { _, _ -> },
+    onLocationGroupRename: (groupId: String, newName: String) -> Unit = { _, _ -> },
+    onLocationGroupListClick: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -104,6 +119,10 @@ fun LocationScreen(
 
     // Set by holding a group card; deleting waits for the confirm dialog.
     var pendingDelete by remember { mutableStateOf<FocusZone?>(null) }
+
+    // TODO(design): still the old Location Zone sheet - no Figma frame for it yet.
+    var showGroupSheet by remember { mutableStateOf(false) }
+    val groupSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     suspend fun reloadZones() {
         zones = withContext(Dispatchers.IO) {
@@ -213,9 +232,31 @@ fun LocationScreen(
         onDraftChange = { draft = it },
         onDraftDiscard = { draft = null },
         onDraftConfirm = ::saveDraft,
+        onScheduleClick = { showGroupSheet = true },
         onSettingsClick = onSettingsClick,
         onTabClick = onTabClick,
     )
+
+    if (showGroupSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showGroupSheet = false },
+            sheetState = groupSheetState,
+            containerColor = LegacySheetContainerColor,
+        ) {
+            LocationZoneSheetContent(
+                groups = locationGroups,
+                selectedGroupId = selectedLocationGroupId,
+                onAppsChange = onLocationGroupAppsChange,
+                onRenameGroup = onLocationGroupRename,
+                // The location itself is already being edited in the card behind the sheet.
+                onEditClick = { showGroupSheet = false },
+                onGroupListClick = {
+                    showGroupSheet = false
+                    onLocationGroupListClick()
+                },
+            )
+        }
+    }
 
     pendingDelete?.let { zone ->
         FocusConfirmDialog(
@@ -250,6 +291,7 @@ private fun LocationContent(
     onDraftChange: (LocationDraft) -> Unit,
     onDraftDiscard: () -> Unit,
     onDraftConfirm: () -> Unit,
+    onScheduleClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onTabClick: (MainTab) -> Unit,
 ) {
@@ -357,8 +399,7 @@ private fun LocationContent(
                     onNameChange = { onDraftChange(draft.copy(name = it)) },
                     radiusMeters = draft.radiusMeters,
                     onRadiusChange = { onDraftChange(draft.copy(radiusMeters = it)) },
-                    // The Time Focus flow isn't built yet - see the "Time Focuse" Figma frames.
-                    onScheduleClick = {},
+                    onScheduleClick = onScheduleClick,
                     onClose = onDraftDiscard,
                     onConfirm = onDraftConfirm,
                 )
@@ -387,6 +428,7 @@ private fun LocationContentListPreview() {
             onDraftChange = {},
             onDraftDiscard = {},
             onDraftConfirm = {},
+            onScheduleClick = {},
             onSettingsClick = {},
             onTabClick = {},
         )
@@ -413,6 +455,7 @@ private fun LocationContentAddPreview() {
             onDraftChange = {},
             onDraftDiscard = {},
             onDraftConfirm = {},
+            onScheduleClick = {},
             onSettingsClick = {},
             onTabClick = {},
         )

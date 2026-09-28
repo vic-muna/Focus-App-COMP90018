@@ -27,17 +27,31 @@ import org.json.JSONObject
  * through JSON. It's re-resolved from packageName via [getAppIcon] on load,
  * the same way AppsScreen's GroupMemberIcon resolves icons on demand.
  */
-class BlockedAppGroupStorage(context: Context) {
+class BlockedAppGroupStorage(
+    context: Context,
+    prefsName: String = PREFS_NAME
+) {
 
     private val appContext = context.applicationContext
-    private val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val prefs = appContext.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
 
     /** Null if nothing has ever been saved (first launch) - caller should fall back to default/fake data. */
-    suspend fun getGroups(): List<BlockedAppGroup>? {
+    suspend fun getGroups(): List<BlockedAppGroup>? = readGroups(loadIcons = true)
+
+    /**
+     * [David Shiau, 2026-09-26] Same as [getGroups] but without resolving
+     * app icons (every [AppItem.icon] is null) - for FocusAccessibilityService's
+     * usage-limit check, which runs on every app switch and only needs
+     * package names, not Bitmaps. Plain (non-suspend) so the service can
+     * call it from its own background coroutine.
+     */
+    fun getGroupsWithoutIcons(): List<BlockedAppGroup>? = readGroups(loadIcons = false)
+
+    private fun readGroups(loadIcons: Boolean): List<BlockedAppGroup>? {
         val json = prefs.getString(KEY_GROUPS, null) ?: return null
         return runCatching {
             val array = JSONArray(json)
-            (0 until array.length()).map { index -> groupFromJson(array.getJSONObject(index)) }
+            (0 until array.length()).map { index -> groupFromJson(array.getJSONObject(index), loadIcons) }
         }.getOrNull()
     }
 
@@ -77,9 +91,12 @@ class BlockedAppGroupStorage(context: Context) {
                 put("endMinute", group.schedule.end.minute)
             }
         )
+        // Omitted (not stored as JSON null) when there's no limit.
+        group.maxOpensPerApp?.let { put("maxOpensPerApp", it) }
+        group.maxMinutesPerApp?.let { put("maxMinutesPerApp", it) }
     }
 
-    private fun groupFromJson(obj: JSONObject): BlockedAppGroup {
+    private fun groupFromJson(obj: JSONObject, loadIcons: Boolean): BlockedAppGroup {
         val appsJson = obj.getJSONArray("apps")
         val apps = (0 until appsJson.length()).map { index ->
             val appObj = appsJson.getJSONObject(index)
@@ -88,7 +105,7 @@ class BlockedAppGroupStorage(context: Context) {
                 packageName = packageName,
                 name = appObj.getString("name"),
                 isBlocked = appObj.getBoolean("isBlocked"),
-                icon = getAppIcon(appContext, packageName)
+                icon = if (loadIcons) getAppIcon(appContext, packageName) else null
             )
         }
         val scheduleObj = obj.getJSONObject("schedule")
@@ -103,13 +120,32 @@ class BlockedAppGroupStorage(context: Context) {
             id = obj.getString("id"),
             name = obj.getString("name"),
             apps = apps,
-            schedule = schedule
+            schedule = schedule,
+            // [David Shiau, 2026-09-26] Optional keys - groups saved before
+            // these limits existed simply load with no limit.
+            maxOpensPerApp = if (obj.has("maxOpensPerApp")) obj.getInt("maxOpensPerApp") else null,
+            maxMinutesPerApp = if (obj.has("maxMinutesPerApp")) obj.getInt("maxMinutesPerApp") else null
         )
     }
 
-    private companion object {
-        const val PREFS_NAME = "focus_blocked_groups"
-        const val KEY_GROUPS = "groups_json"
-        const val KEY_SELECTED_GROUP_ID = "selected_group_id"
+    companion object {
+        private const val PREFS_NAME = "focus_blocked_groups"
+
+        // [David Shiau, 2026-09-26] Location Zone's own app groups - same
+        // shape as the Scheduled Limits groups (reuses BlockedAppGroup, whose
+        // schedule/limit fields are simply unused here), but a completely
+        // separate list in a separate prefs file, so the two never mix.
+        private const val LOCATION_PREFS_NAME = "focus_location_groups"
+
+        fun forLocationGroups(context: Context) = BlockedAppGroupStorage(context, LOCATION_PREFS_NAME)
+
+        // [David Shiau, 2026-09-26] Wi-Fi Source Detection's own app groups -
+        // same arrangement as the location groups above, in a third file.
+        private const val WIFI_PREFS_NAME = "focus_wifi_groups"
+
+        fun forWifiGroups(context: Context) = BlockedAppGroupStorage(context, WIFI_PREFS_NAME)
+
+        private const val KEY_GROUPS = "groups_json"
+        private const val KEY_SELECTED_GROUP_ID = "selected_group_id"
     }
 }
