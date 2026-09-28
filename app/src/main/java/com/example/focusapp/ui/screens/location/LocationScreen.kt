@@ -38,15 +38,18 @@ import com.example.focusapp.ui.common.fetchLastKnownLocation
 import com.example.focusapp.ui.common.friendlyErrorMessage
 import com.example.focusapp.ui.common.rememberLocationPermissionState
 import com.example.focusapp.ui.common.resolveApproxPlaceName
+import com.example.focusapp.ui.components.AppSelectCard
+import com.example.focusapp.ui.components.ConfirmButton
+import com.example.focusapp.ui.components.FlyCardOverlay
 import com.example.focusapp.ui.components.FocusConfirmDialog
 import com.example.focusapp.ui.components.FocusRangeMarker
 import com.example.focusapp.ui.components.PullUpPanel
 import com.example.focusapp.ui.components.PullUpPanelState
 import com.example.focusapp.ui.components.SettingsTopBar
+import com.example.focusapp.ui.components.consumeTaps
 import com.example.focusapp.ui.components.rememberPullUpPanelState
 import com.example.focusapp.ui.navigation.MainTab
 import com.example.focusapp.ui.screens.home.AppItem
-import com.example.focusapp.ui.screens.home.GroupAppPickerBottomSheet
 import com.example.focusapp.ui.screens.home.rememberInstalledApps
 import com.example.focusapp.ui.navigation.MainTabBar
 import com.example.focusapp.ui.theme.FocusAppTheme
@@ -119,6 +122,8 @@ fun LocationScreen(
 
     var showAppPicker by remember { mutableStateOf(false) }
     val installedApps = rememberInstalledApps(shouldLoad = showAppPicker)
+    // The picker's ticks - only copied into the draft when its check is tapped.
+    var pickerSelection by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     suspend fun reloadZones() {
         zones = withContext(Dispatchers.IO) {
@@ -215,8 +220,11 @@ fun LocationScreen(
     }
 
     BackHandler(enabled = draft != null) { draft = null }
+    // Registered after the one above, so while the picker is open, back closes only the picker.
+    BackHandler(enabled = showAppPicker) { showAppPicker = false }
 
-    LocationContent(
+    Box(modifier = Modifier.fillMaxSize()) {
+        LocationContent(
         zones = zones,
         isZoneEnabled = { zone -> enabledZoneIds[zone.id] ?: true },
         onZoneEnabledChange = { zone, enabled -> enabledZoneIds[zone.id] = enabled },
@@ -232,24 +240,48 @@ fun LocationScreen(
         onDraftChange = { draft = it },
         onDraftDiscard = { draft = null },
         onDraftConfirm = ::saveDraft,
-        onBlockedAppsClick = { showAppPicker = true },
+            onBlockedAppsClick = {
+                pickerSelection = draft?.blockedApps.orEmpty().map { it.packageName }.toSet()
+                showAppPicker = true
+            },
         onSettingsClick = onSettingsClick,
         onTabClick = onTabClick,
     )
 
     // Edits the draft; the apps are saved with the location when it's confirmed.
     val pickerDraft = draft
-    if (showAppPicker && pickerDraft != null) {
-        GroupAppPickerBottomSheet(
-            installedApps = installedApps,
-            selectedApps = pickerDraft.blockedApps,
-            onAppsChange = { apps -> draft = pickerDraft.copy(blockedApps = apps) },
-            onDismiss = { showAppPicker = false },
-            title = "Blocked Apps",
-            subtitle = "Select apps to block while you're at this location",
-        )
+        if (showAppPicker && pickerDraft != null) {
+            FlyCardOverlay(onOutsideClick = { showAppPicker = false }) {
+                AppSelectCard(
+                    title = "Blocked Apps",
+                    apps = installedApps.apps.takeUnless { installedApps.isLoading || it.isEmpty() },
+                    selectedPackages = pickerSelection,
+                    onToggleApp = { pkg ->
+                        pickerSelection = if (pkg in pickerSelection) pickerSelection - pkg else pickerSelection + pkg
+                    },
+                    onClose = { showAppPicker = false },
+                    actionButton = {
+                        ConfirmButton(
+                            onClick = {
+                                val installed = installedApps.apps
+                                val picked = installed
+                                    .filter { it.packageName in pickerSelection }
+                                    .map { AppItem(packageName = it.packageName, name = it.label, isBlocked = true, icon = it.icon) }
+                                // Keep ticked apps the picker didn't list (e.g. no launcher icon).
+                                val kept = pickerDraft.blockedApps.filter { app ->
+                                    app.packageName in pickerSelection && installed.none { it.packageName == app.packageName }
+                                }
+                                draft = pickerDraft.copy(blockedApps = picked + kept)
+                                showAppPicker = false
+                            },
+                            contentDescription = "Save blocked apps",
+                        )
+                    },
+                    modifier = Modifier.consumeTaps(),
+                )
+            }
+        }
     }
-
     pendingDelete?.let { zone ->
         FocusConfirmDialog(
             title = "Delete \"${zone.name}\"?",
@@ -392,6 +424,7 @@ private fun LocationContent(
                     radiusMeters = draft.radiusMeters,
                     onRadiusChange = { onDraftChange(draft.copy(radiusMeters = it)) },
                     onBlockedAppsClick = onBlockedAppsClick,
+                    blockedAppIcons = draft.blockedApps.map { it.icon },
                     onClose = onDraftDiscard,
                     onConfirm = onDraftConfirm,
                 )

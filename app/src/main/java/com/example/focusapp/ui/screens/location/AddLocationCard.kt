@@ -1,14 +1,17 @@
 package com.example.focusapp.ui.screens.location
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,6 +22,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.focusapp.ui.components.ConfirmButton
+import com.example.focusapp.ui.components.AppIconStack
 import com.example.focusapp.ui.components.FocusSlider
 import com.example.focusapp.ui.components.FocusTextField
 import com.example.focusapp.ui.components.RejectButton
@@ -35,6 +39,8 @@ val LocationRadiusRange = 50f..500f
  * confirm (check) or discard (X). Also used to edit a saved zone.
  * [latitude]/[longitude] are null while the position is still unknown, which
  * also disables confirm; [locationLabel] describes where the pin is.
+ *  * [blockedAppIcons] previews the apps picked via "Blocked app" (one entry
+ *  * per app, null when its icon isn't resolved).
  */
 @Composable
 fun AddLocationCard(
@@ -49,6 +55,7 @@ fun AddLocationCard(
     onClose: () -> Unit,
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier,
+    blockedAppIcons: List<Bitmap?> = emptyList(),
 ) {
     val colors = FocusTheme.colors
     val typography = FocusTheme.typography
@@ -125,7 +132,19 @@ fun AddLocationCard(
                 .clickable(role = Role.Button, onClick = onBlockedAppsClick),
             contentAlignment = Alignment.Center,
         ) {
-            Text(text = "Blocked app", style = typography.inputLarge, color = colors.onSurfaceMuted)
+            if (blockedAppIcons.isEmpty()) {
+                Text(text = "Blocked app", style = typography.inputLarge, color = colors.onSurfaceMuted)
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AppIconStack(icons = blockedAppIcons)
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        text = if (blockedAppIcons.size == 1) "1 app" else "${blockedAppIcons.size} apps",
+                        style = typography.inputLarge,
+                        color = colors.onSurface,
+                    )
+                }
+            }
         }
     }
 }
@@ -152,6 +171,7 @@ private fun AddLocationCardPreview() {
             onBlockedAppsClick = {},
             onClose = {},
             onConfirm = {},
+            blockedAppIcons = List(5) { null },
         )
     }
 }

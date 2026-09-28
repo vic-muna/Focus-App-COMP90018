@@ -39,6 +39,8 @@ data class FocusTypography(
     val tileTitle: TextStyle,
     /** Tiny label, e.g. the weekday letter inside a small day circle. */
     val microLabel: TextStyle,
+    /** Label on a compact list row, e.g. an app name in the app picker. */
+    val listLabel: TextStyle,
     /** Large text inside inputs and secondary buttons ("Enter Group Name", "Schedule"). */
     val inputLarge: TextStyle,
     /** Banner / body copy. */
@@ -87,6 +89,11 @@ val DefaultFocusTypography = FocusTypography(
         fontFamily = LineSeedFontFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 9.sp,
+    ),
+    listLabel = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 12.sp,
     ),
     inputLarge = TextStyle(
         fontFamily = LineSeedFontFamily,
