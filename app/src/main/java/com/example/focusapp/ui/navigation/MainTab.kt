@@ -14,8 +14,7 @@ enum class MainTab(val item: FocusNavItem) {
     LOCATION(FocusNavItem(R.drawable.ic_pin_alt_fill, "Location focus")),
     // Opens the Scheduled Limits sheet (per-app daily limits inside a schedule).
     SCHEDULE(FocusNavItem(R.drawable.ic_clock_fill, "Scheduled limits")),
-    // TODO(design): still the "apps add" icon - no Wi-Fi icon in Figma yet.
-    WIFI_SOURCE(FocusNavItem(R.drawable.ic_apps_add, "Wi-Fi source detection")),
+    WIFI_SOURCE(FocusNavItem(R.drawable.wifi, "Wi-Fi focus")),
 }
 
 /** [FocusBottomNavBar] preloaded with every [MainTab] - drop this into any top-level screen. */

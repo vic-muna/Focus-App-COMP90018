@@ -37,8 +37,9 @@ private val AppIconSize = 26.dp
 /**
  * Figma: "App Focuse" add-group step 1 - a card listing the phone's apps
  * with a checkbox each. [apps] is null while the installed-app list is
- * still loading. X ([onClose]) sits top-left; [actionButton] top-right
- * (a check to finish, or an arrow to go to the next step).
+ * still loading. [leadingButton] sits top-left (an X calling [onClose] by
+ * default, or a back arrow on a later step); [actionButton] top-right (a
+ * check to finish, or an arrow to go to the next step).
  */
 @Composable
 fun AppSelectCard(
@@ -49,6 +50,7 @@ fun AppSelectCard(
     onClose: () -> Unit,
     actionButton: @Composable () -> Unit,
     modifier: Modifier = Modifier,
+    leadingButton: @Composable () -> Unit = { RejectButton(onClick = onClose) },
 ) {
     val colors = FocusTheme.colors
     val typography = FocusTheme.typography
@@ -63,7 +65,7 @@ fun AppSelectCard(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            RejectButton(onClick = onClose)
+            leadingButton()
             actionButton()
         }
 

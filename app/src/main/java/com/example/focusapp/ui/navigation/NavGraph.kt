@@ -35,13 +35,13 @@ import com.example.focusapp.ui.screens.apps.EditAppGroupScreen
 import com.example.focusapp.ui.screens.history.HistoryScreen
 import com.example.focusapp.ui.screens.home.BlockedAppGroup
 import com.example.focusapp.ui.screens.home.BlockedAppGroupStorage
-import com.example.focusapp.ui.screens.home.GroupListScreen
 import com.example.focusapp.ui.screens.home.GroupUsageScreen
 import com.example.focusapp.ui.screens.home.HomeScreenWithSheet
 import com.example.focusapp.ui.screens.home.generateFakeGroups
 import com.example.focusapp.ui.screens.home.generateFakeTimeSlot
 import com.example.focusapp.ui.screens.location.LocationScreen
 import com.example.focusapp.ui.screens.timefocus.TimeFocusScreen
+import com.example.focusapp.ui.screens.wififocus.WifiFocusScreen
 import com.example.focusapp.ui.screens.map.MapScreen
 import com.example.focusapp.ui.screens.party.PartyModeScreen
 import com.example.focusapp.ui.screens.session.ActiveFocusSession
@@ -60,7 +60,7 @@ private val dissolveOut = fadeOut(tween(DISSOLVE_DURATION_MILLIS))
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.involvesHome(): Boolean =
     initialState.destination.route == Destinations.HOME ||
-        targetState.destination.route == Destinations.HOME
+            targetState.destination.route == Destinations.HOME
 
 // Every other screen uses this same vertical motion for consistency - except
 // when the other side of the transition is Home, which dissolves instead.
@@ -84,9 +84,8 @@ private val partyModeExit: AnimatedContentTransitionScope<NavBackStackEntry>.() 
 }
 
 /**
- * A starting (empty) location/Wi-Fi group, used on first launch and as the
- * base for newly created ones. Those groups reuse BlockedAppGroup, but
- * their schedule/limit fields are never used.
+ * A new (empty) per-location group - reuses BlockedAppGroup, but its
+ * schedule/limit fields are never used.
  */
 private fun defaultGroup(id: String, name: String) = BlockedAppGroup(
     id = id,
@@ -95,13 +94,9 @@ private fun defaultGroup(id: String, name: String) = BlockedAppGroup(
     schedule = generateFakeTimeSlot()
 )
 
-/** A group list + which one is selected, kept in sync with a [BlockedAppGroupStorage]. */
-private class PersistedGroupList(initial: BlockedAppGroup) {
-    var groups by mutableStateOf(listOf(initial))
-    var selectedId by mutableStateOf(initial.id)
-
-    fun selectedPackages(): List<String> =
-        groups.find { it.id == selectedId }?.apps?.map { it.packageName } ?: emptyList()
+/** A group list kept in sync with a [BlockedAppGroupStorage]. */
+private class PersistedGroupList {
+    var groups by mutableStateOf(emptyList<BlockedAppGroup>())
 
     fun updateGroup(groupId: String, transform: (BlockedAppGroup) -> BlockedAppGroup) {
         groups = groups.map { g -> if (g.id == groupId) transform(g) else g }
@@ -110,36 +105,23 @@ private class PersistedGroupList(initial: BlockedAppGroup) {
 
 /**
  * [David Shiau, 2026-09-26] Loads the saved list once on first composition,
- * then re-saves automatically whenever the list or selection changes - the
+ * then re-saves automatically whenever the list changes - the
  * same pattern FocusAppNavGraph uses for the Scheduled Limits `groups`,
  * factored out since Location and Wi-Fi both need it.
  */
 @Composable
-private fun rememberPersistedGroupList(
-    storage: BlockedAppGroupStorage,
-    defaultGroup: () -> BlockedAppGroup
-): PersistedGroupList {
-    val state = remember { PersistedGroupList(defaultGroup()) }
+private fun rememberPersistedGroupList(storage: BlockedAppGroupStorage): PersistedGroupList {
+    val state = remember { PersistedGroupList() }
     var hasLoaded by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         val saved = withContext(Dispatchers.IO) { storage.getGroups() }
-        if (!saved.isNullOrEmpty()) {
-            state.groups = saved
-            val savedSelectedId = withContext(Dispatchers.IO) { storage.getSelectedGroupId() }
-            state.selectedId = savedSelectedId
-                ?.takeIf { id -> saved.any { it.id == id } }
-                ?: saved.first().id
-        }
+        if (saved != null) state.groups = saved
         hasLoaded = true
     }
 
     LaunchedEffect(state.groups, hasLoaded) {
         if (hasLoaded) withContext(Dispatchers.IO) { storage.saveGroups(state.groups) }
-    }
-
-    LaunchedEffect(state.selectedId, hasLoaded) {
-        if (hasLoaded) withContext(Dispatchers.IO) { storage.saveSelectedGroupId(state.selectedId) }
     }
 
     return state
@@ -189,14 +171,9 @@ fun FocusAppNavGraph() {
     // [David Shiau, 2026-09-26] Location Zone's and Wi-Fi Source Detection's
     // own app groups - two more lists, independent of `groups` (Scheduled
     // Limits) and of each other, each persisted in its own file.
-    val location = rememberPersistedGroupList(
-        storage = remember { BlockedAppGroupStorage.forLocationGroups(context) },
-        defaultGroup = { defaultGroup("location_group_default", "Location Group") }
-    )
-    val wifi = rememberPersistedGroupList(
-        storage = remember { BlockedAppGroupStorage.forWifiGroups(context) },
-        defaultGroup = { defaultGroup("wifi_group_default", "Wi-Fi Group") }
-    )
+    val location = rememberPersistedGroupList(remember { BlockedAppGroupStorage.forLocationGroups(context) })
+    // One entry per watched Wi-Fi network - its id is the SSID.
+    val wifi = rememberPersistedGroupList(remember { BlockedAppGroupStorage.forWifiNetworks(context) })
 
     // [David Shiau, 2026-09-20] Which packages a session should restrict,
     // resolved per source: Party sessions (no single specific group) fall
@@ -214,7 +191,8 @@ fun FocusAppNavGraph() {
                 location.groups.find { it.id == source.zoneId }?.apps?.map { it.packageName }.orEmpty()
             FocusSessionSource.Manual ->
                 location.groups.flatMap { group -> group.apps.map { it.packageName } }.distinct()
-            is FocusSessionSource.Wifi -> wifi.selectedPackages()
+            is FocusSessionSource.Wifi ->
+                wifi.groups.find { it.id == source.ssid }?.apps?.map { it.packageName }.orEmpty()
             FocusSessionSource.Party ->
                 groups.flatMap { group -> group.apps.map { it.packageName } }.distinct()
         }
@@ -247,11 +225,8 @@ fun FocusAppNavGraph() {
     }
 
 
+    // Bottom-nav tabs: Home is the root; every other tab sits directly on top of it.
     fun navigateToTab(tab: MainTab) {
-        fun openHomeSheet() {
-            navController.getBackStackEntry(Destinations.HOME).savedStateHandle["reopenSheet"] = true
-            navController.popBackStack(Destinations.HOME, inclusive = false)
-        }
         when (tab) {
             MainTab.HOME -> navController.popBackStack(Destinations.HOME, inclusive = false)
             MainTab.LOCATION -> navController.navigate(Destinations.LOCATION) {
@@ -262,7 +237,10 @@ fun FocusAppNavGraph() {
                 popUpTo(Destinations.HOME)
                 launchSingleTop = true
             }
-            MainTab.WIFI_SOURCE -> openHomeSheet()
+            MainTab.WIFI_SOURCE -> navController.navigate(Destinations.WIFI) {
+                popUpTo(Destinations.HOME)
+                launchSingleTop = true
+            }
         }
     }
 
@@ -279,17 +257,11 @@ fun FocusAppNavGraph() {
                 route = Destinations.HOME,
                 enterTransition = homeEnter,
                 exitTransition = homeExit
-            ) { backStackEntry ->
-                val reopenSheet by backStackEntry.savedStateHandle
-                    .getStateFlow("reopenSheet", false)
-                    .collectAsState()
-
+            ) {
                 HomeScreenWithSheet(
                     groups = groups,
-                    reopenSheetSignal = reopenSheet,
-                    onReopenSheetHandled = {
-                        backStackEntry.savedStateHandle["reopenSheet"] = false
-                    },
+                    // The networks whose switch is on.
+                    wifiSsids = wifi.groups.filter { it.enabled }.map { it.id },
                     // [HANDOFF -> Kai-Jiun Chan | README task: "Reward/Progress UI"]
                     // 首頁規格.md originally wanted this to open a two-tab (History/
                     // Rewards) Report screen. Rewards isn't built yet, so this routes
@@ -305,13 +277,7 @@ fun FocusAppNavGraph() {
                     onSettingsClick = { navController.navigate(Destinations.SETTINGS) },
                     onLocationTabClick = { navigateToTab(MainTab.LOCATION) },
                     onScheduleTabClick = { navigateToTab(MainTab.SCHEDULE) },
-                    wifiGroups = wifi.groups,
-                    selectedWifiGroupId = wifi.selectedId,
-                    onWifiGroupAppsChange = { groupId, apps -> wifi.updateGroup(groupId) { it.copy(apps = apps) } },
-                    onWifiGroupRename = { groupId, newName -> wifi.updateGroup(groupId) { it.copy(name = newName) } },
-                    onWifiGroupListClick = {
-                        navController.navigate(Destinations.WIFI_GROUP_LIST)
-                    }
+                    onWifiTabClick = { navigateToTab(MainTab.WIFI_SOURCE) }
                 )
             }
 
@@ -346,6 +312,18 @@ fun FocusAppNavGraph() {
                 TimeFocusScreen(
                     groups = groups,
                     onGroupsChange = { groups = it },
+                    onTabClick = ::navigateToTab
+                )
+            }
+
+            composable(
+                route = Destinations.WIFI,
+                enterTransition = partyModeEnter,
+                exitTransition = partyModeExit
+            ) {
+                WifiFocusScreen(
+                    groups = wifi.groups,
+                    onGroupsChange = { wifi.groups = it },
                     onTabClick = ::navigateToTab
                 )
             }
@@ -401,39 +379,6 @@ fun FocusAppNavGraph() {
                     )
                 }
             }
-
-            // [David Shiau, 2026-09-26] Select / create a Wi-Fi group, then back to
-            // the Wi-Fi sheet on Home.
-            fun groupListRoute(route: String, title: String, list: PersistedGroupList, idPrefix: String) {
-                composable(
-                    route = route,
-                    enterTransition = enterFromBottom,
-                    exitTransition = exitToBottom
-                ) {
-                    fun backToSheet() {
-                        navController.getBackStackEntry(Destinations.HOME).savedStateHandle["reopenSheet"] = true
-                        navController.popBackStack(Destinations.HOME, inclusive = false)
-                    }
-                    GroupListScreen(
-                        title = title,
-                        groups = list.groups,
-                        selectedGroupId = list.selectedId,
-                        onGroupSelect = { groupId ->
-                            list.selectedId = groupId
-                            backToSheet()
-                        },
-                        onAddGroupClick = { name ->
-                            val newGroup = defaultGroup("${idPrefix}_${System.currentTimeMillis()}", name.ifBlank { "New Group" })
-                            list.groups = list.groups + newGroup
-                            list.selectedId = newGroup.id
-                            backToSheet()
-                        },
-                        onBackClick = { backToSheet() }
-                    )
-                }
-            }
-
-            groupListRoute(Destinations.WIFI_GROUP_LIST, "Wi-Fi Groups", wifi, "wifi_group")
 
             composable(
                 route = Destinations.GROUP_USAGE,

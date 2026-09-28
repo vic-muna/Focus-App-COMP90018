@@ -43,9 +43,8 @@ object Destinations {
     // tile on the Home screen (the block above Quick Focus - see HomeScreen.kt).
     const val HISTORY = "history"
 
-    // [David Shiau, 2026-09-26] Same again for Wi-Fi Source Detection's own
-    // groups. Reachable from the Wi-Fi sheet on Home.
-    const val WIFI_GROUP_LIST = "wifi_group_list"
+    // The Wi-Fi tab - see ui.screens.wififocus.WifiFocusScreen.
+    const val WIFI = "wifi"
 
     // [David Shiau, 2026-09-26] Today's open counts/durations for one
     // Blocked-App-Group - reached by tapping Home's schedule banner. See

@@ -3,6 +3,7 @@ package com.example.focusapp.ui.screens.timefocus
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import com.example.focusapp.ui.components.AddItemCard
 import com.example.focusapp.ui.components.AppSelectCard
 import com.example.focusapp.ui.components.FlyCardOverlay
 import com.example.focusapp.ui.components.NextButton
@@ -303,7 +304,7 @@ private fun TimeFocusContent(
                         },
                     )
                 }
-                AddTimeSlotCard(onClick = onAddClick)
+                AddItemCard(onClick = onAddClick, onClickLabel = "Add time slot")
             }
         }
 

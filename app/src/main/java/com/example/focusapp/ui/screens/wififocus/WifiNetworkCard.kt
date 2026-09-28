@@ -1,5 +1,6 @@
-package com.example.focusapp.ui.screens.timefocus
+package com.example.focusapp.ui.screens.wififocus
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -20,20 +21,22 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.focusapp.ui.components.AddItemCard
-import com.example.focusapp.ui.components.DayIndicators
+import com.example.focusapp.ui.components.AppIconStack
 import com.example.focusapp.ui.components.FocusSwitch
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
 
-private val CardShape = RoundedCornerShape(14.dp)
-
-
+/**
+ * One row of the Wi-Fi list - the entry's name, the network (SSID) it
+ * watches, the apps it blocks, and an on/off switch. Tap = [onClick]
+ * (summary), hold = [onLongClick] (delete); the switch handles its own taps.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun TimeSlotCard(
+fun WifiNetworkCard(
     name: String,
-    timeLabel: String,
-    activeDays: Set<String>,
+    ssid: String,
+    appIcons: List<Bitmap?>,
     enabled: Boolean,
     onEnabledChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
@@ -41,11 +44,12 @@ fun TimeSlotCard(
     onLongClick: () -> Unit = {},
 ) {
     val colors = FocusTheme.colors
+    val typography = FocusTheme.typography
 
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(CardShape)
+            .clip(RoundedCornerShape(14.dp))
             .background(colors.surface)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 12.dp, vertical = 14.dp),
@@ -53,17 +57,25 @@ fun TimeSlotCard(
     ) {
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Text(
                 text = name,
-                style = FocusTheme.typography.body,
+                style = typography.body,
                 color = colors.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(text = timeLabel, style = FocusTheme.typography.tileTitle, color = colors.onSurface)
-            DayIndicators(activeDays = activeDays)
+            Text(
+                text = ssid,
+                style = typography.tileTitle,
+                color = colors.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (appIcons.isNotEmpty()) {
+                AppIconStack(icons = appIcons, iconSize = 22.dp, ringColor = colors.surface)
+            }
         }
         Spacer(Modifier.width(8.dp))
         FocusSwitch(checked = enabled, onCheckedChange = onEnabledChange)
@@ -72,7 +84,7 @@ fun TimeSlotCard(
 
 @Preview(widthDp = 360)
 @Composable
-private fun TimeSlotCardPreview() {
+private fun WifiNetworkCardPreview() {
     FocusAppTheme {
         Column(
             modifier = Modifier
@@ -80,14 +92,14 @@ private fun TimeSlotCardPreview() {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            TimeSlotCard(
-                name = "Study Group",
-                timeLabel = "06:10am-08:00am",
-                activeDays = setOf("Mon", "Tue", "Wed"),
+            WifiNetworkCard(
+                name = "Home",
+                ssid = "MyHome_5G",
+                appIcons = List(3) { null },
                 enabled = true,
                 onEnabledChange = {},
             )
-            AddItemCard(onClick = {}, onClickLabel = "Add time slot")
+            AddItemCard(onClick = {}, onClickLabel = "Add Wi-Fi network")
         }
     }
 }

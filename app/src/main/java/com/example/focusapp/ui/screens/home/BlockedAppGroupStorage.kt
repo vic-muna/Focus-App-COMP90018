@@ -142,11 +142,12 @@ class BlockedAppGroupStorage(
 
         fun forLocationGroups(context: Context) = BlockedAppGroupStorage(context, LOCATION_PREFS_NAME)
 
-        // [David Shiau, 2026-09-26] Wi-Fi Source Detection's own app groups -
-        // same arrangement as the location groups above, in a third file.
-        private const val WIFI_PREFS_NAME = "focus_wifi_groups"
+        // The Wi-Fi tab's entries (one per watched network, id = SSID). A new
+        // file: David's old Wi-Fi groups (focus_wifi_groups) had a different
+        // shape - one shared, selectable app list - and are left behind.
+        private const val WIFI_PREFS_NAME = "focus_wifi_networks"
 
-        fun forWifiGroups(context: Context) = BlockedAppGroupStorage(context, WIFI_PREFS_NAME)
+        fun forWifiNetworks(context: Context) = BlockedAppGroupStorage(context, WIFI_PREFS_NAME)
 
         private const val KEY_GROUPS = "groups_json"
         private const val KEY_SELECTED_GROUP_ID = "selected_group_id"

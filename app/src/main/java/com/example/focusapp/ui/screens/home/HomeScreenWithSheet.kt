@@ -1,5 +1,6 @@
 package com.example.focusapp.ui.screens.home
 
+import com.example.focusapp.data.wifi.WifiHistoryStorage
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
@@ -20,30 +21,24 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.data.repository.FocusRepositoryProvider
-import com.example.focusapp.data.wifi.WifiTriggerStorage
 import com.example.focusapp.data.wifi.getCurrentWifiSsid
 import com.example.focusapp.domain.model.FocusZone
 import com.example.focusapp.domain.usecase.EvaluateFocusTriggerUseCase
@@ -55,26 +50,18 @@ import com.example.focusapp.ui.theme.FocusTheme
 import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-enum class SheetType { NONE, WIFI_SOURCE }
 
 /** How often the auto-suggestion check re-evaluates while Home is on screen - schedule
  *  boundaries only need minute-granularity, so there's no need for anything tighter. */
 private const val AUTO_TRIGGER_CHECK_INTERVAL_MILLIS = 60_000L
 
-/** Background of the old (not yet redesigned) feature sheets - shared with the Location screen. */
-internal val LegacySheetContainerColor = Color(0xFF3B3B96)
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreenWithSheet(
     // Time Focus's schedule groups - only read here, for the schedule banner.
     groups: List<BlockedAppGroup>,
-    // Reopens the Wi-Fi sheet, e.g. when coming back from its group list.
-    reopenSheetSignal: Boolean,
-    onReopenSheetHandled: () -> Unit,
+    // The Wi-Fi tab's networks that are switched on - only read here, for the Wi-Fi banner.
+    wifiSsids: List<String> = emptyList(),
     onFocusSessionStart: (FocusSessionSource) -> Unit = {},
     onScheduleBannerClick: (groupId: String) -> Unit = {},
     onAvatarClick: () -> Unit = {},
@@ -82,49 +69,16 @@ fun HomeScreenWithSheet(
     onSettingsClick: () -> Unit = {},
     onLocationTabClick: () -> Unit = {},
     onScheduleTabClick: () -> Unit = {},
-    // [David Shiau, 2026-09-26] Wi-Fi Source Detection's own app groups -
-    // separate from the schedule groups above.
-    wifiGroups: List<BlockedAppGroup> = emptyList(),
-    selectedWifiGroupId: String = "",
-    onWifiGroupAppsChange: (groupId: String, apps: List<AppItem>) -> Unit = { _, _ -> },
-    onWifiGroupRename: (groupId: String, newName: String) -> Unit = { _, _ -> },
-    onWifiGroupListClick: () -> Unit = {}
+    onWifiTabClick: () -> Unit = {},
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
-    // ModalBottomSheet 專用的 State
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    var activeSheet by remember { mutableStateOf(SheetType.NONE) }
-
-    // Which bottom-nav tab opened the current sheet, so the nav indicator
-    // stays on that tab while the sheet is up.
-    var sheetTab by remember { mutableStateOf(MainTab.HOME) }
-    val selectedTab = if (activeSheet == SheetType.NONE) MainTab.HOME else sheetTab
-
-    fun openSheet(type: SheetType, tab: MainTab) {
-        sheetTab = tab
-        activeSheet = type
-    }
 
     fun onTabClick(tab: MainTab) {
         when (tab) {
             MainTab.HOME -> Unit
             MainTab.LOCATION -> onLocationTabClick()
             MainTab.SCHEDULE -> onScheduleTabClick()
-            MainTab.WIFI_SOURCE -> openSheet(SheetType.WIFI_SOURCE, tab)
-        }
-    }
-
-    fun closeSheet(onFinished: () -> Unit = {}) {
-        scope.launch {
-            sheetState.hide()
-        }.invokeOnCompletion {
-            if (!sheetState.isVisible) {
-                activeSheet = SheetType.NONE
-                onFinished()
-            }
+            MainTab.WIFI_SOURCE -> onWifiTabClick()
         }
     }
 
@@ -154,14 +108,6 @@ fun HomeScreenWithSheet(
         startFocusSessionIfPermitted(FocusSessionSource.Manual)
     }
 
-    // 重開 Sheet 的 Signal 處理
-    LaunchedEffect(reopenSheetSignal) {
-        if (reopenSheetSignal) {
-            onReopenSheetHandled()
-            openSheet(SheetType.WIFI_SOURCE, MainTab.WIFI_SOURCE)
-        }
-    }
-
     // --- Auto-suggestion: UI-simulated only, never navigates on its own -----------
     var savedZone by remember { mutableStateOf<FocusZone?>(null) }
     LaunchedEffect(Unit) {
@@ -178,33 +124,8 @@ fun HomeScreenWithSheet(
         }
     }
 
-    // --- Wi-Fi-source trigger: same "UI-simulated only" polling approach as
-    // the location trigger above - see WifiTriggerStorage's doc comment. ---
-    // [David Shiau, 2026-09-26] Edited from the Wi-Fi Source Detection sheet
-    // (moved here from Settings), so these writers keep the in-memory state
-    // and storage in sync - the banner reacts immediately.
-    val wifiTriggerStorage = remember { WifiTriggerStorage(context) }
-    var wifiTriggerEnabled by remember { mutableStateOf(false) }
-    var taggedWifiSsids by remember { mutableStateOf<List<String>>(emptyList()) }
-    LaunchedEffect(Unit) {
-        wifiTriggerEnabled = withContext(Dispatchers.IO) { wifiTriggerStorage.isEnabled() }
-        taggedWifiSsids = withContext(Dispatchers.IO) { wifiTriggerStorage.getTaggedSsids() }
-    }
-
-    fun setWifiTriggerEnabled(enabled: Boolean) {
-        wifiTriggerEnabled = enabled
-        scope.launch { withContext(Dispatchers.IO) { wifiTriggerStorage.setEnabled(enabled) } }
-    }
-
-    fun updateTaggedSsids(change: suspend (WifiTriggerStorage) -> Unit) {
-        scope.launch {
-            taggedWifiSsids = withContext(Dispatchers.IO) {
-                change(wifiTriggerStorage)
-                wifiTriggerStorage.getTaggedSsids()
-            }
-        }
-    }
-
+    // --- Wi-Fi trigger: same "UI-simulated only" polling approach as the
+    // location trigger above, over the Wi-Fi tab's switched-on networks. ---
     var tick by remember { mutableStateOf(0L) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -213,23 +134,23 @@ fun HomeScreenWithSheet(
         }
     }
 
+    // Checked even with no networks switched on, so every network the phone
+    // is on gets recorded for the Wi-Fi tab's "Known Wi-Fi" list.
+    val wifiHistory = remember { WifiHistoryStorage(context) }
     var currentWifiSsid by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(wifiTriggerEnabled, tick) {
-        currentWifiSsid = if (wifiTriggerEnabled) {
-            withContext(Dispatchers.IO) { getCurrentWifiSsid(context) }
-        } else {
-            null
-        }
+    LaunchedEffect(tick) {
+        currentWifiSsid = withContext(Dispatchers.IO) { getCurrentWifiSsid(context) }
+        currentWifiSsid?.let { wifiHistory.remember(it) }
     }
 
     // [David Shiau, 2026-09-26] All matching triggers, not just the first -
     // so the schedule banner and the location banner can both show at once.
-    val triggers = remember(groups, savedZone, currentLatLng, taggedWifiSsids, currentWifiSsid, tick) {
+    val triggers = remember(groups, savedZone, currentLatLng, wifiSsids, currentWifiSsid, tick) {
         EvaluateFocusTriggerUseCase().executeAll(
             groups = groups,
             currentZones = listOfNotNull(savedZone),
             currentLatLng = currentLatLng,
-            taggedWifiSsids = taggedWifiSsids,
+            taggedWifiSsids = wifiSsids,
             currentWifiSsid = currentWifiSsid
         )
     }
@@ -256,7 +177,7 @@ fun HomeScreenWithSheet(
         // The new Figma Home has no Party Mode entry, so onPartyModeClick is
         // currently unused here - kept so NavGraph's wiring doesn't change.
         HomeScreen(
-            selectedTab = selectedTab,
+            selectedTab = MainTab.HOME,
             onSettingsClick = onSettingsClick,
             onDashboardClick = onAvatarClick,
             onQuickFocusClick = { onQuickFocusClick() },
@@ -295,32 +216,6 @@ fun HomeScreenWithSheet(
             }
         }
 
-        // 2. BottomSheet 區塊
-        if (activeSheet != SheetType.NONE) {
-            ModalBottomSheet(
-                onDismissRequest = { activeSheet = SheetType.NONE },
-                sheetState = sheetState,
-                containerColor = LegacySheetContainerColor
-            ) {
-                when (activeSheet) {
-                    SheetType.WIFI_SOURCE -> WifiSourceSheetContent(
-                        groups = wifiGroups,
-                        selectedGroupId = selectedWifiGroupId,
-                        isTriggerEnabled = wifiTriggerEnabled,
-                        taggedSsids = taggedWifiSsids,
-                        onTriggerToggle = { setWifiTriggerEnabled(it) },
-                        onTagSsid = { ssid -> updateTaggedSsids { it.addTaggedSsid(ssid) } },
-                        onUntagSsid = { ssid -> updateTaggedSsids { it.removeTaggedSsid(ssid) } },
-                        onAppsChange = onWifiGroupAppsChange,
-                        onRenameGroup = onWifiGroupRename,
-                        onGroupListClick = { closeSheet { onWifiGroupListClick() } }
-                    )
-
-                    SheetType.NONE -> Unit
-                }
-            }
-        }
-
         if (showAccessibilityPermissionDialog) {
             AccessibilityPermissionDialog(
                 onConfirm = {
@@ -351,8 +246,8 @@ private fun AccessibilityPermissionDialog(
         text = {
             Text(
                 "To block apps during a focus session, Focus needs the " +
-                    "Accessibility permission. Turn it on for Focus in the " +
-                    "Settings screen that opens next."
+                        "Accessibility permission. Turn it on for Focus in the " +
+                        "Settings screen that opens next."
             )
         },
         confirmButton = {
@@ -429,9 +324,5 @@ private fun fetchCurrentLocationForAutoCheck(
 @Preview(showBackground = true)
 @Composable
 private fun HomeScreenWithSheetPreview() {
-    HomeScreenWithSheet(
-        groups = generateFakeGroups(),
-        reopenSheetSignal = false,
-        onReopenSheetHandled = {}
-    )
+    HomeScreenWithSheet(groups = generateFakeGroups())
 }
