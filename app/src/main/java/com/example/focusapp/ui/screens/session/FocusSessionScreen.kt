@@ -37,8 +37,6 @@ import com.example.focusapp.data.repository.FocusRepositoryProvider
 import com.example.focusapp.domain.model.FocusSession
 import com.example.focusapp.ui.common.ErrorBanner
 import com.example.focusapp.ui.common.friendlyErrorMessage
-import com.example.focusapp.ui.components.HintBubble
-import com.example.focusapp.ui.components.InfoButton
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
 import kotlinx.coroutines.Dispatchers
@@ -46,6 +44,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.annotation.DrawableRes
+import com.example.focusapp.ui.components.button.InfoButton
 
 // Matches the hint bubble's "Hold for 5 seconds" copy - change both together.
 private const val CANCEL_HOLD_DURATION_MILLIS = 5_000L

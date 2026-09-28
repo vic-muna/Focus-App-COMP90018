@@ -28,19 +28,19 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.focusapp.R
 import com.example.focusapp.data.wifi.WifiCheckResult
-import com.example.focusapp.ui.components.BackButton
-import com.example.focusapp.ui.components.ConfirmButton
-import com.example.focusapp.ui.components.FocusTextField
-import com.example.focusapp.ui.components.NextButton
-import com.example.focusapp.ui.components.RejectButton
-import com.example.focusapp.ui.components.verticalScrollbar
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
-import com.example.focusapp.ui.components.FocusCard
-import com.example.focusapp.ui.components.CardButtonRow
-import com.example.focusapp.ui.components.CardTitle
-import com.example.focusapp.ui.components.CardLabel
-import com.example.focusapp.ui.components.sunkenPanel
+import com.example.focusapp.ui.components.button.BackButton
+import com.example.focusapp.ui.components.button.ConfirmButton
+import com.example.focusapp.ui.components.button.NextButton
+import com.example.focusapp.ui.components.button.RejectButton
+import com.example.focusapp.ui.components.card.CardButtonRow
+import com.example.focusapp.ui.components.card.CardLabel
+import com.example.focusapp.ui.components.card.CardTitle
+import com.example.focusapp.ui.components.card.FocusCard
+import com.example.focusapp.ui.components.input.FocusTextField
+import com.example.focusapp.ui.components.bar.verticalScrollbar
+import com.example.focusapp.ui.components.card.sunkenPanel
 
 private val KnownListMaxHeight = 150.dp
 
@@ -82,7 +82,7 @@ fun WifiNetworkStepCard(
             left = { RejectButton(onClick = onClose) },
             right = { NextButton(onClick = onNext, enabled = selectedSsid != null && !selectedTaken) },
         )
-        CardTitle("Wi-Fi Network")
+        CardTitle("Wi-Fi Network", bottomPadding = 0.dp)
 
         CardLabel("Connected now")
         Column(modifier = panel) {

@@ -11,18 +11,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.focusapp.ui.components.BackButton
-import com.example.focusapp.ui.components.DaySelector
-import com.example.focusapp.ui.components.NextButton
-import com.example.focusapp.ui.components.ScheduleDial
-import com.example.focusapp.ui.components.formatClock
-import com.example.focusapp.ui.components.formatDuration
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
-import com.example.focusapp.ui.components.FocusCard
-import com.example.focusapp.ui.components.CardButtonRow
-import com.example.focusapp.ui.components.CardTitle
-import com.example.focusapp.ui.components.sunkenPanel
+import com.example.focusapp.ui.components.button.BackButton
+import com.example.focusapp.ui.components.button.NextButton
+import com.example.focusapp.ui.components.card.CardButtonRow
+import com.example.focusapp.ui.components.card.CardTitle
+import com.example.focusapp.ui.components.card.FocusCard
+import com.example.focusapp.ui.components.card.sunkenPanel
 
 /**
  * Figma: "App Focuse" add-group step 2, reused for a time slot - which days it

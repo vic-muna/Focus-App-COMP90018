@@ -18,9 +18,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.focusapp.R
-import com.example.focusapp.ui.components.GreetingHeader
-import com.example.focusapp.ui.components.QuickFocusButton
-import com.example.focusapp.ui.components.SettingsTopBar
 import com.example.focusapp.ui.navigation.MainTab
 import com.example.focusapp.ui.navigation.MainTabBar
 import com.example.focusapp.ui.theme.FocusAppTheme
@@ -31,6 +28,7 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.ui.draw.clipToBounds
 import com.example.focusapp.ui.theme.FocusSpacing
 import androidx.annotation.DrawableRes
+import com.example.focusapp.ui.components.bar.SettingsTopBar
 /**
  * img_home_dashboard.png is 960 x 903 px, but the artwork only covers a
  * 692 x 795 px area (the rest is background-colored margin), sitting ~19 px

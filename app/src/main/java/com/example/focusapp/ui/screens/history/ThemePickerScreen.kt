@@ -29,12 +29,12 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.focusapp.ui.components.RejectButton
 import com.example.focusapp.ui.theme.BackgroundTheme
 import com.example.focusapp.ui.theme.BackgroundThemes
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusSpacing
 import com.example.focusapp.ui.theme.FocusTheme
+import com.example.focusapp.ui.components.button.RejectButton
 
 private val TileShape = RoundedCornerShape(20.dp)
 

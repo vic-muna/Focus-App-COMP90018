@@ -13,11 +13,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.focusapp.ui.components.FocusPillButton
-import com.example.focusapp.ui.components.WarningSign
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusSpacing
 import com.example.focusapp.ui.theme.FocusTheme
+import com.example.focusapp.ui.components.button.FocusPillButton
 
 /** Shown when the block didn't come with a reason (e.g. a plain focus session). */
 private const val DEFAULT_REASON = "This app is in your Focus restricted list right now."

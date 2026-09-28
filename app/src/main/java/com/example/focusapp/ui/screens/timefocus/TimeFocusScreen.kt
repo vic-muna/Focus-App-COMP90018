@@ -2,57 +2,37 @@ package com.example.focusapp.ui.screens.timefocus
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import com.example.focusapp.ui.components.AddItemCard
-import com.example.focusapp.ui.components.AppSelectCard
-import com.example.focusapp.ui.components.FlyCardOverlay
-import com.example.focusapp.ui.components.NextButton
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.focusapp.R
 import com.example.focusapp.data.apps.InstalledAppInfo
-import com.example.focusapp.data.apps.getLaunchableApps
-import com.example.focusapp.ui.components.FocusConfirmDialog
-import com.example.focusapp.ui.components.consumeTaps
-import com.example.focusapp.ui.navigation.MainTab
-import com.example.focusapp.ui.navigation.MainTabBar
-import com.example.focusapp.ui.theme.FocusAppTheme
-import com.example.focusapp.ui.theme.FocusTheme
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlin.math.abs
-import com.example.focusapp.ui.theme.FocusSpacing
-import com.example.focusapp.data.blocking.AppItem
 import com.example.focusapp.data.blocking.BlockedAppGroup
-import com.example.focusapp.data.blocking.TimeSlot
 import com.example.focusapp.data.blocking.ClockTime
-import com.example.focusapp.ui.common.previewGroups
+import com.example.focusapp.data.blocking.TimeSlot
+import com.example.focusapp.ui.common.pickedApps
 import com.example.focusapp.ui.common.rememberInstalledApps
+import com.example.focusapp.ui.common.toggle
+import com.example.focusapp.ui.components.button.NextButton
+import com.example.focusapp.ui.components.card.AppSelectCard
+import com.example.focusapp.ui.components.card.DeleteDialog
+import com.example.focusapp.ui.components.card.DiscardDialog
+import com.example.focusapp.ui.components.layout.GroupListLayout
+import com.example.focusapp.ui.navigation.MainTab
+import com.example.focusapp.ui.theme.FocusAppTheme
+import kotlin.math.abs
 
 private val HeaderHeight = 210.dp
-
 
 /** Default range for a new time slot: 9:00 AM - 5:00 PM (same-day, see TimeSlotScheduleCard). */
 private const val DEFAULT_START_MINUTES = 9 * 60
@@ -105,7 +85,6 @@ fun TimeFocusScreen(
     onGroupsChange: (List<BlockedAppGroup>) -> Unit,
     onTabClick: (MainTab) -> Unit,
 ) {
-    val context = LocalContext.current
     // The slot whose summary card is open, if any.
     var viewingGroupId by remember { mutableStateOf<String?>(null) }
     val viewingGroup = groups.find { it.id == viewingGroupId }
@@ -137,41 +116,25 @@ fun TimeFocusScreen(
     }
 
     fun saveDraft() {
-        val installed = installedApps.orEmpty()
-        val picked = installed
-            .filter { it.packageName in draft.selectedPackages }
-            .map { AppItem(packageName = it.packageName, name = it.label, isBlocked = true, icon = it.icon) }
-        // Keep a slot's apps that the picker didn't list (e.g. no launcher icon) if still ticked.
-        val kept = groups.find { it.id == editingGroupId }?.apps.orEmpty()
-            .filter { app -> app.packageName in draft.selectedPackages && installed.none { it.packageName == app.packageName } }
+        val original = groups.find { it.id == editingGroupId }
+        val apps = pickedApps(installedApps, draft.selectedPackages, original?.apps.orEmpty())
         val schedule = TimeSlot(
             activeDays = draft.activeDays,
             start = ClockTime(draft.startMinutes / 60, draft.startMinutes % 60),
             end = ClockTime(draft.endMinutes / 60, draft.endMinutes % 60),
         )
-        val groupId = editingGroupId
-        if (groupId == null) {
-            onGroupsChange(
-                groups + BlockedAppGroup(
-                    id = "group_${System.currentTimeMillis()}",
-                    name = draft.name.trim(),
-                    apps = picked + kept,
-                    schedule = schedule,
-                    maxOpensPerApp = draft.maxOpens,
-                    maxMinutesPerApp = draft.maxMinutes,
-                )
-            )
-        } else {
-            updateGroup(groupId) {
-                it.copy(
-                    name = draft.name.trim(),
-                    apps = picked + kept,
-                    schedule = schedule,
-                    maxOpensPerApp = draft.maxOpens,
-                    maxMinutesPerApp = draft.maxMinutes,
-                )
-            }
-        }
+        val newGroup = BlockedAppGroup(id = "group_${System.currentTimeMillis()}", name = "", apps = emptyList(), schedule = schedule)
+        val saved = (original ?: newGroup).copy(
+            name = draft.name.trim(),
+            apps = apps,
+            schedule = schedule,
+            maxOpensPerApp = draft.maxOpens,
+            maxMinutesPerApp = draft.maxMinutes,
+        )
+        onGroupsChange(
+            if (original == null) groups + saved
+            else groups.map { if (it.id == original.id) saved else it }
+        )
         closeEditor()
     }
 
@@ -211,28 +174,23 @@ fun TimeFocusScreen(
 
     if (confirmDiscard) {
         val isEditing = editingGroupId != null
-        FocusConfirmDialog(
+        DiscardDialog(
             title = if (isEditing) "Cancel editing?" else "Cancel new time slot?",
             message = if (isEditing) "Your changes to this time slot will be discarded."
             else "The apps and settings you picked for this time slot will be discarded.",
-            confirmLabel = "Discard",
-            dismissLabel = "Keep editing",
-            confirmColor = FocusTheme.colors.rejection,
-            onConfirm = ::closeEditor,
-            onDismiss = { confirmDiscard = false },
+            onDiscard = ::closeEditor,
+            onKeepEditing = { confirmDiscard = false },
         )
     }
 
     pendingDelete?.let { group ->
-        FocusConfirmDialog(
-            title = "Delete \"${group.name}\"?",
+        DeleteDialog(
+            name = group.name,
             message = "This time slot and its app limits will be removed.",
-            confirmLabel = "Delete",
-            confirmColor = FocusTheme.colors.rejection,
-            onConfirm = {
+            onDelete = {
                 pendingDelete = null
-                onGroupsChange(groups.filterNot { it.id == group.id })
                 if (viewingGroupId == group.id) viewingGroupId = null
+                onGroupsChange(groups.filterNot { it.id == group.id })
             },
             onDismiss = { pendingDelete = null },
         )
@@ -259,19 +217,14 @@ private fun TimeFocusContent(
     onEditorConfirm: () -> Unit,
     onOutsideCardClick: () -> Unit,
 ) {
-    val colors = FocusTheme.colors
-    val haptics = LocalHapticFeedback.current
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(colors.background),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
-        ) {
+    GroupListLayout(
+        selectedTab = MainTab.SCHEDULE,
+        onTabClick = onTabClick,
+        addLabel = "Add time slot",
+        onAddClick = onAddClick,
+        showCard = editStep != null || viewingGroup != null,
+        onOutsideCardClick = onOutsideCardClick,
+        header = {
             Image(
                 painter = painterResource(R.drawable.img_app_focus_header),
                 contentDescription = null,
@@ -281,65 +234,26 @@ private fun TimeFocusContent(
                     .fillMaxWidth()
                     .height(HeaderHeight),
             )
-
-            Column(
-                modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 32.dp, bottom = 120.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                groups.forEach { group ->
-                    TimeSlotCard(
-                        name = group.name,
-                        timeLabel = formatSlotRange(group.schedule),
-                        activeDays = group.schedule.activeDays,
-                        enabled = group.enabled,
-                        onEnabledChange = { onEnabledChange(group, it) },
-                        onClick = { onGroupClick(group) },
-                        onLongClick = {
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onGroupLongClick(group)
-                        },
-                    )
-                }
-                AddItemCard(onClick = onAddClick, onClickLabel = "Add time slot")
-            }
-        }
-
-        MainTabBar(
-            selectedTab = MainTab.SCHEDULE,
-            onTabClick = onTabClick,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = FocusSpacing.ScreenBottom),
-        )
-
-        if (editStep != null || viewingGroup != null) {
-            FlyCardOverlay(onOutsideClick = onOutsideCardClick) {
-                // consumeTaps: only taps outside the card's background count as "outside".
-                val cardModifier = Modifier.consumeTaps()
-                when (editStep) {
-                    TimeSlotEditStep.APPS -> AppSelectCard(
-                        title = "Apps Group",
-                        apps = pickerApps,
-                        selectedPackages = draft.selectedPackages,
-                        onToggleApp = { pkg ->
-                            val picked = draft.selectedPackages
-                            onDraftChange(draft.copy(selectedPackages = if (pkg in picked) picked - pkg else picked + pkg))
-                        },
-                        onClose = onEditorClose,
-                        actionButton = {
-                            NextButton(
-                                onClick = { onStepChange(TimeSlotEditStep.SCHEDULE) },
-                                enabled = draft.selectedPackages.isNotEmpty(),
-                            )
-                        },
-                        modifier = cardModifier,
-                    )
+        },
+        card = { cardModifier ->
+            when (editStep) {
+                TimeSlotEditStep.APPS -> AppSelectCard(
+                    title = "Apps Group",
+                    apps = pickerApps,
+                    selectedPackages = draft.selectedPackages,
+                    onToggleApp = { pkg -> onDraftChange(draft.copy(selectedPackages = draft.selectedPackages.toggle(pkg))) },
+                    onClose = onEditorClose,
+                    actionButton = {
+                        NextButton(
+                            onClick = { onStepChange(TimeSlotEditStep.SCHEDULE) },
+                            enabled = draft.selectedPackages.isNotEmpty(),
+                        )
+                    },
+                    modifier = cardModifier,
+                )
                 TimeSlotEditStep.SCHEDULE -> TimeSlotScheduleCard(
                     activeDays = draft.activeDays,
-                    onToggleDay = { day ->
-                        val days = draft.activeDays
-                        onDraftChange(draft.copy(activeDays = if (day in days) days - day else days + day))
-                    },
+                    onToggleDay = { day -> onDraftChange(draft.copy(activeDays = draft.activeDays.toggle(day))) },
                     startMinutes = draft.startMinutes,
                     endMinutes = draft.endMinutes,
                     onTimeChange = { start, end -> onDraftChange(draft.copy(startMinutes = start, endMinutes = end)) },
@@ -358,12 +272,22 @@ private fun TimeFocusContent(
                     onConfirm = onEditorConfirm,
                     modifier = cardModifier,
                 )
-                    null -> viewingGroup?.let { group ->
-                        TimeSlotDetailCard(group = group, onEdit = onEditViewingGroup, modifier = cardModifier)
-                    }
+                null -> viewingGroup?.let { group ->
+                    TimeSlotDetailCard(group = group, onEdit = onEditViewingGroup, modifier = cardModifier)
                 }
             }
-
+        },
+    ) {
+        groups.forEach { group ->
+            TimeSlotCard(
+                name = group.name,
+                timeLabel = formatSlotRange(group.schedule),
+                activeDays = group.schedule.activeDays,
+                enabled = group.enabled,
+                onEnabledChange = { onEnabledChange(group, it) },
+                onClick = { onGroupClick(group) },
+                onLongClick = { onGroupLongClick(group) },
+            )
         }
     }
 }

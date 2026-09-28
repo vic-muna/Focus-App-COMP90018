@@ -18,18 +18,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.focusapp.ui.components.ConfirmButton
-import com.example.focusapp.ui.components.AppIconStack
-import com.example.focusapp.ui.components.FocusSlider
-import com.example.focusapp.ui.components.FocusTextField
-import com.example.focusapp.ui.components.RejectButton
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
 import java.util.Locale
 import kotlin.math.abs
-import com.example.focusapp.ui.components.FocusCard
-import com.example.focusapp.ui.components.CardButtonRow
-import com.example.focusapp.ui.components.sunkenPanel
+import com.example.focusapp.ui.components.button.ConfirmButton
+import com.example.focusapp.ui.components.button.RejectButton
+import com.example.focusapp.ui.components.card.AppIconStack
+import com.example.focusapp.ui.components.card.CardButtonRow
+import com.example.focusapp.ui.components.card.FocusCard
+import com.example.focusapp.ui.components.input.FocusTextField
+import com.example.focusapp.ui.components.card.sunkenPanel
 
 /** Allowed "Effective Range" values, in meters. */
 val LocationRadiusRange = 50f..500f

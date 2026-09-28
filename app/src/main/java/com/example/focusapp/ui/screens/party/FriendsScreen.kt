@@ -29,16 +29,16 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.focusapp.domain.model.Friend
 import com.example.focusapp.ui.common.rememberLocationPermissionState
-import com.example.focusapp.ui.components.CloseTopBar
-import com.example.focusapp.ui.components.FlyCardOverlay
-import com.example.focusapp.ui.components.FocusPillButton
-import com.example.focusapp.ui.components.FocusSearchField
-import com.example.focusapp.ui.components.SettingsRow
-import com.example.focusapp.ui.components.SettingsSection
-import com.example.focusapp.ui.components.consumeTaps
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusSpacing
 import com.example.focusapp.ui.theme.FocusTheme
+import com.example.focusapp.ui.components.bar.CloseTopBar
+import com.example.focusapp.ui.components.bar.SettingsRow
+import com.example.focusapp.ui.components.bar.SettingsSection
+import com.example.focusapp.ui.components.button.FocusPillButton
+import com.example.focusapp.ui.components.card.FlyCardOverlay
+import com.example.focusapp.ui.components.input.FocusSearchField
+import com.example.focusapp.ui.components.card.consumeTaps
 
 /** Which fly card is open on top of the friend list. */
 private enum class GroupCard { NONE, CREATE, JOIN }

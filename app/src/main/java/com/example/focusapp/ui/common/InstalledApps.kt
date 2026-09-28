@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.example.focusapp.data.apps.InstalledAppInfo
 import com.example.focusapp.data.apps.getLaunchableApps
+import com.example.focusapp.data.blocking.AppItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -26,4 +27,27 @@ fun rememberInstalledApps(shouldLoad: Boolean): List<InstalledAppInfo>? {
         }
     }
     return apps
+}
+
+/** Adds [item] if it isn't in the set, or removes it if it is (for tick boxes). */
+fun Set<String>.toggle(item: String): Set<String> = if (item in this) this - item else this + item
+
+/**
+ * Turns the ticked package names into [AppItem]s to save.
+ * Apps from [previousApps] that the picker didn't list (e.g. no home-screen icon)
+ * are kept too, as long as they are still ticked.
+ */
+fun pickedApps(
+    installed: List<InstalledAppInfo>?,
+    selectedPackages: Set<String>,
+    previousApps: List<AppItem> = emptyList(),
+): List<AppItem> {
+    val listed = installed.orEmpty()
+    val picked = listed
+        .filter { it.packageName in selectedPackages }
+        .map { AppItem(packageName = it.packageName, name = it.label, isBlocked = true, icon = it.icon) }
+    val kept = previousApps.filter { app ->
+        app.packageName in selectedPackages && listed.none { it.packageName == app.packageName }
+    }
+    return picked + kept
 }

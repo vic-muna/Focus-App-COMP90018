@@ -17,15 +17,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.focusapp.R
-import com.example.focusapp.ui.components.AppIconStack
-import com.example.focusapp.ui.components.EditButton
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
 import com.example.focusapp.data.blocking.BlockedAppGroup
 import com.example.focusapp.ui.common.previewGroups
-import com.example.focusapp.ui.components.FocusCard
-import com.example.focusapp.ui.components.CardSectionTitle
-import com.example.focusapp.ui.components.sunkenPanel
+import com.example.focusapp.ui.components.button.EditButton
+import com.example.focusapp.ui.components.card.AppIconStack
+import com.example.focusapp.ui.components.card.CardSectionTitle
+import com.example.focusapp.ui.components.card.FocusCard
+import com.example.focusapp.ui.components.card.sunkenPanel
 
 /**
  * The read-only summary of a Wi-Fi entry (same layout idea as the time

@@ -12,15 +12,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.focusapp.ui.components.BackButton
-import com.example.focusapp.ui.components.ConfirmButton
-import com.example.focusapp.ui.components.FocusNumberField
-import com.example.focusapp.ui.components.FocusTextField
-import com.example.focusapp.ui.components.WheelPicker
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
-import com.example.focusapp.ui.components.FocusCard
-import com.example.focusapp.ui.components.CardButtonRow
+import com.example.focusapp.ui.components.button.BackButton
+import com.example.focusapp.ui.components.button.ConfirmButton
+import com.example.focusapp.ui.components.card.CardButtonRow
+import com.example.focusapp.ui.components.card.FocusCard
+import com.example.focusapp.ui.components.input.FocusTextField
 
 /** "Max Minutes" choices: no limit (null), then 5-minute steps up to 4 hours. */
 val LimitMinuteOptions: List<Int?> = listOf<Int?>(null) + (5..240 step 5)

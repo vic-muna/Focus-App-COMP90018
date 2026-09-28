@@ -9,16 +9,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.focusapp.ui.components.CardButtonRow
-import com.example.focusapp.ui.components.CardLabel
-import com.example.focusapp.ui.components.CardTitle
-import com.example.focusapp.ui.components.ConfirmButton
-import com.example.focusapp.ui.components.FocusCard
-import com.example.focusapp.ui.components.FocusTextField
-import com.example.focusapp.ui.components.RejectButton
-import com.example.focusapp.ui.components.sunkenPanel
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
+import com.example.focusapp.ui.components.button.ConfirmButton
+import com.example.focusapp.ui.components.button.RejectButton
+import com.example.focusapp.ui.components.card.CardButtonRow
+import com.example.focusapp.ui.components.card.CardLabel
+import com.example.focusapp.ui.components.card.CardTitle
+import com.example.focusapp.ui.components.card.FocusCard
+import com.example.focusapp.ui.components.input.FocusTextField
+import com.example.focusapp.ui.components.card.sunkenPanel
 
 /**
  * A random, easy-to-read group code (no O/0/I/1). It is also the group's id
@@ -48,11 +48,11 @@ fun CreateGroupCard(
             left = { RejectButton(onClick = onClose, contentDescription = "Close") },
             right = { ConfirmButton(onClick = onStart, contentDescription = "Start focusing together") },
         )
-        CardTitle("Create group")
-        CardLabel("Group code")
+        CardTitle("Create group", bottomPadding = 0.dp)
+        PartyLabel("Group code")
         CodePanel(code)
         PartyNote("Share this code so friends can join.")
-        CardLabel("Members")
+        PartyLabel("Members")
         MemberPanel(members)
         errorMessage?.let { PartyError(it) }
     }
@@ -84,11 +84,11 @@ fun JoinGroupCard(
                 )
             },
         )
-        CardTitle("Join group")
+        CardTitle("Join group", bottomPadding = 0.dp)
         if (joined) {
-            CardLabel("Group code")
+            PartyLabel("Group code")
             CodePanel(codeInput.trim())
-            CardLabel("Members")
+            PartyLabel("Members")
             MemberPanel(members)
             PartyNote("Waiting for the host to start…")
         } else {
@@ -96,6 +96,7 @@ fun JoinGroupCard(
                 value = codeInput,
                 onValueChange = { onCodeInputChange(it.uppercase()) },
                 placeholder = "Enter Group Code",
+                modifier = Modifier.padding(top = 8.dp),
             )
         }
         errorMessage?.let { PartyError(it) }
@@ -132,6 +133,10 @@ private fun MemberPanel(members: List<String>) {
         }
     }
 }
+
+/** A label with Party's spacing (more room above than other cards). */
+@Composable
+private fun PartyLabel(text: String) = CardLabel(text, topPadding = 16.dp, bottomPadding = 8.dp)
 
 /** A small centered grey note. */
 @Composable

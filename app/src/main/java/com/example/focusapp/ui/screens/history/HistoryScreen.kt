@@ -32,8 +32,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.focusapp.domain.model.FocusSession
-import com.example.focusapp.ui.components.CloseTopBar
-import com.example.focusapp.ui.components.RejectButton
 import com.example.focusapp.ui.theme.BackgroundTheme
 import com.example.focusapp.ui.theme.BackgroundThemes
 import com.example.focusapp.ui.theme.FocusAppTheme
@@ -43,6 +41,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import com.example.focusapp.ui.components.bar.CloseTopBar
+import com.example.focusapp.ui.components.button.RejectButton
 
 private val BAR_CHART_MAX_BAR_HEIGHT = 100.dp
 

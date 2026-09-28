@@ -4,19 +4,11 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -26,40 +18,34 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.focusapp.R
 import com.example.focusapp.data.apps.InstalledAppInfo
-import com.example.focusapp.data.apps.getLaunchableApps
+import com.example.focusapp.data.blocking.BlockedAppGroup
+import com.example.focusapp.data.blocking.defaultTimeSlot
 import com.example.focusapp.data.wifi.WifiCheckResult
 import com.example.focusapp.data.wifi.WifiHistoryStorage
 import com.example.focusapp.data.wifi.checkCurrentWifi
 import com.example.focusapp.data.wifi.hasLocationPermissionForWifi
+import com.example.focusapp.ui.common.pickedApps
+import com.example.focusapp.ui.common.rememberInstalledApps
 import com.example.focusapp.ui.common.rememberLocationPermissionState
-import com.example.focusapp.ui.components.AddItemCard
-import com.example.focusapp.ui.components.AppSelectCard
-import com.example.focusapp.ui.components.BackButton
-import com.example.focusapp.ui.components.FlyCardOverlay
-import com.example.focusapp.ui.components.FocusConfirmDialog
-import com.example.focusapp.ui.components.consumeTaps
-import com.example.focusapp.ui.components.NextButton
-import com.example.focusapp.ui.theme.FocusSpacing
+import com.example.focusapp.ui.common.toggle
+import com.example.focusapp.ui.components.button.BackButton
+import com.example.focusapp.ui.components.button.NextButton
+import com.example.focusapp.ui.components.card.AppSelectCard
+import com.example.focusapp.ui.components.card.DeleteDialog
+import com.example.focusapp.ui.components.card.DiscardDialog
+import com.example.focusapp.ui.components.layout.GroupListLayout
 import com.example.focusapp.ui.navigation.MainTab
-import com.example.focusapp.ui.navigation.MainTabBar
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.example.focusapp.data.blocking.AppItem
-import com.example.focusapp.data.blocking.BlockedAppGroup
-import com.example.focusapp.data.blocking.defaultTimeSlot
-import com.example.focusapp.ui.common.rememberInstalledApps
 
 private val HeaderHeight = 210.dp
 
@@ -183,17 +169,11 @@ fun WifiFocusScreen(
 
     fun saveDraft() {
         val ssid = draft.ssid ?: return
-        val installed = installedApps.orEmpty()
         val original = groups.find { it.id == editingGroupId }
-        val picked = installed
-            .filter { it.packageName in draft.selectedPackages }
-            .map { AppItem(packageName = it.packageName, name = it.label, isBlocked = true, icon = it.icon) }
-        // Keep an entry's apps that the picker didn't list (e.g. no launcher icon) if still ticked.
-        val kept = original?.apps.orEmpty()
-            .filter { app -> app.packageName in draft.selectedPackages && installed.none { it.packageName == app.packageName } }
-        val saved = (original ?: BlockedAppGroup(id = ssid, name = "", apps = emptyList(), schedule = defaultTimeSlot()))
-            // The schedule / limit fields aren't used for Wi-Fi entries.
-            .copy(id = ssid, name = draft.name.trim(), apps = picked + kept)
+        val apps = pickedApps(installedApps, draft.selectedPackages, original?.apps.orEmpty())
+        // The schedule and limit fields aren't used for Wi-Fi entries.
+        val newGroup = BlockedAppGroup(id = ssid, name = "", apps = emptyList(), schedule = defaultTimeSlot())
+        val saved = (original ?: newGroup).copy(id = ssid, name = draft.name.trim(), apps = apps)
         onGroupsChange(
             if (original == null) groups + saved
             else groups.map { if (it.id == original.id) saved else it }
@@ -263,25 +243,20 @@ fun WifiFocusScreen(
 
     if (confirmDiscard) {
         val isEditing = editingGroupId != null
-        FocusConfirmDialog(
+        DiscardDialog(
             title = if (isEditing) "Cancel editing?" else "Cancel new Wi-Fi?",
             message = if (isEditing) "Your changes to this Wi-Fi will be discarded."
             else "The network and apps you picked will be discarded.",
-            confirmLabel = "Discard",
-            dismissLabel = "Keep editing",
-            confirmColor = FocusTheme.colors.rejection,
-            onConfirm = ::closeEditor,
-            onDismiss = { confirmDiscard = false },
+            onDiscard = ::closeEditor,
+            onKeepEditing = { confirmDiscard = false },
         )
     }
 
     pendingDelete?.let { group ->
-        FocusConfirmDialog(
-            title = "Delete \"${group.name}\"?",
+        DeleteDialog(
+            name = group.name,
             message = "This Wi-Fi and its blocked apps will be removed.",
-            confirmLabel = "Delete",
-            confirmColor = FocusTheme.colors.rejection,
-            onConfirm = {
+            onDelete = {
                 pendingDelete = null
                 if (viewingGroupId == group.id) viewingGroupId = null
                 onGroupsChange(groups.filterNot { it.id == group.id })
@@ -320,19 +295,15 @@ private fun WifiFocusContent(
     onEditorConfirm: () -> Unit,
     onOutsideCardClick: () -> Unit,
 ) {
-    val colors = FocusTheme.colors
-    val haptics = LocalHapticFeedback.current
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(colors.background),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
-        ) {
+    GroupListLayout(
+        selectedTab = MainTab.WIFI_SOURCE,
+        onTabClick = onTabClick,
+        addLabel = "Add Wi-Fi network",
+        onAddClick = onAddClick,
+        showCard = editStep != null || viewingGroup != null,
+        onOutsideCardClick = onOutsideCardClick,
+        emptyText = if (groups.isEmpty()) "No Wi-Fi yet.\nConnect to a network, then tap + to add it." else null,
+        header = {
             // TODO(design): swap for a Wi-Fi header illustration once there is one.
             Box(
                 modifier = Modifier
@@ -343,100 +314,66 @@ private fun WifiFocusContent(
                 Icon(
                     painter = painterResource(R.drawable.wifi),
                     contentDescription = null,
-                    tint = colors.accent,
+                    tint = FocusTheme.colors.accent,
                     modifier = Modifier.size(width = 138.dp, height = 108.dp),
                 )
             }
-
-            Column(
-                modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 32.dp, bottom = 120.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                if (groups.isEmpty()) {
-                    Text(
-                        text = "No Wi-Fi yet.\nConnect to a network, then tap + to add it.",
-                        style = FocusTheme.typography.body,
-                        color = colors.onSurfaceMuted,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                groups.forEach { group ->
-                    WifiNetworkCard(
-                        name = group.name,
-                        ssid = group.id,
-                        appIcons = group.apps.map { it.icon },
-                        enabled = group.enabled,
-                        onEnabledChange = { onEnabledChange(group, it) },
-                        onClick = { onGroupClick(group) },
-                        onLongClick = {
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onGroupLongClick(group)
-                        },
-                    )
-                }
-                AddItemCard(onClick = onAddClick, onClickLabel = "Add Wi-Fi network")
-            }
-        }
-
-        MainTabBar(
-            selectedTab = MainTab.WIFI_SOURCE,
-            onTabClick = onTabClick,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = FocusSpacing.ScreenBottom),
-        )
-
-        if (editStep != null || viewingGroup != null) {
-            FlyCardOverlay(onOutsideClick = onOutsideCardClick) {
-                // consumeTaps: only taps outside the card's background count as "outside".
-                val cardModifier = Modifier.consumeTaps()
-                when (editStep) {
-                    WifiEditStep.NETWORK -> WifiNetworkStepCard(
-                        selectedSsid = draft.ssid,
-                        currentSsid = currentSsid,
-                        checkResult = checkResult,
-                        knownSsids = knownSsids,
-                        addedSsids = addedSsids,
-                        manualSsid = manualSsid,
-                        onSelect = onSelectSsid,
-                        onManualChange = onManualSsidChange,
-                        onCheckAgain = onCheckAgain,
-                        onResultAction = onResultAction,
-                        onClose = onEditorClose,
-                        onNext = { onStepChange(WifiEditStep.APPS) },
-                        modifier = cardModifier,
-                    )
-                    WifiEditStep.APPS -> AppSelectCard(
-                        title = "Blocked Apps",
-                        apps = pickerApps,
-                        selectedPackages = draft.selectedPackages,
-                        onToggleApp = { pkg ->
-                            val picked = draft.selectedPackages
-                            onDraftChange(draft.copy(selectedPackages = if (pkg in picked) picked - pkg else picked + pkg))
-                        },
-                        onClose = onEditorClose,
-                        leadingButton = { BackButton(onClick = { onStepChange(WifiEditStep.NETWORK) }) },
-                        actionButton = {
-                            NextButton(
-                                onClick = { onStepChange(WifiEditStep.NAME) },
-                                enabled = draft.selectedPackages.isNotEmpty(),
-                            )
-                        },
-                        modifier = cardModifier,
-                    )
-                    WifiEditStep.NAME -> WifiNameStepCard(
-                        name = draft.name,
-                        onNameChange = { onDraftChange(draft.copy(name = it)) },
-                        onBack = { onStepChange(WifiEditStep.APPS) },
-                        onConfirm = onEditorConfirm,
-                        modifier = cardModifier,
-                    )
-                    null -> viewingGroup?.let { group ->
-                        WifiDetailCard(group = group, onEdit = onEditViewingGroup, modifier = cardModifier)
-                    }
+        },
+        card = { cardModifier ->
+            when (editStep) {
+                WifiEditStep.NETWORK -> WifiNetworkStepCard(
+                    selectedSsid = draft.ssid,
+                    currentSsid = currentSsid,
+                    checkResult = checkResult,
+                    knownSsids = knownSsids,
+                    addedSsids = addedSsids,
+                    manualSsid = manualSsid,
+                    onSelect = onSelectSsid,
+                    onManualChange = onManualSsidChange,
+                    onCheckAgain = onCheckAgain,
+                    onResultAction = onResultAction,
+                    onClose = onEditorClose,
+                    onNext = { onStepChange(WifiEditStep.APPS) },
+                    modifier = cardModifier,
+                )
+                WifiEditStep.APPS -> AppSelectCard(
+                    title = "Blocked Apps",
+                    apps = pickerApps,
+                    selectedPackages = draft.selectedPackages,
+                    onToggleApp = { pkg -> onDraftChange(draft.copy(selectedPackages = draft.selectedPackages.toggle(pkg))) },
+                    onClose = onEditorClose,
+                    leadingButton = { BackButton(onClick = { onStepChange(WifiEditStep.NETWORK) }) },
+                    actionButton = {
+                        NextButton(
+                            onClick = { onStepChange(WifiEditStep.NAME) },
+                            enabled = draft.selectedPackages.isNotEmpty(),
+                        )
+                    },
+                    modifier = cardModifier,
+                )
+                WifiEditStep.NAME -> WifiNameStepCard(
+                    name = draft.name,
+                    onNameChange = { onDraftChange(draft.copy(name = it)) },
+                    onBack = { onStepChange(WifiEditStep.APPS) },
+                    onConfirm = onEditorConfirm,
+                    modifier = cardModifier,
+                )
+                null -> viewingGroup?.let { group ->
+                    WifiDetailCard(group = group, onEdit = onEditViewingGroup, modifier = cardModifier)
                 }
             }
+        },
+    ) {
+        groups.forEach { group ->
+            WifiNetworkCard(
+                name = group.name,
+                ssid = group.id,
+                appIcons = group.apps.map { it.icon },
+                enabled = group.enabled,
+                onEnabledChange = { onEnabledChange(group, it) },
+                onClick = { onGroupClick(group) },
+                onLongClick = { onGroupLongClick(group) },
+            )
         }
     }
 }

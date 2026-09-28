@@ -4,9 +4,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.focusapp.R
-import com.example.focusapp.ui.components.FocusBottomNavBar
-import com.example.focusapp.ui.components.FocusNavItem
 import com.example.focusapp.ui.theme.FocusAppTheme
+import com.example.focusapp.ui.components.bar.FocusBottomNavBar
+import com.example.focusapp.ui.components.bar.FocusNavItem
 
 /** The app's bottom-nav destinations, in Figma order. */
 enum class MainTab(val item: FocusNavItem) {

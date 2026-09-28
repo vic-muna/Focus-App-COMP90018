@@ -44,13 +44,13 @@ import com.example.focusapp.R
 import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.data.usagestats.hasUsageAccessPermission
 import com.example.focusapp.data.wifi.hasLocationPermissionForWifi
-import com.example.focusapp.ui.components.FocusSwitch
-import com.example.focusapp.ui.components.SettingsRow
-import com.example.focusapp.ui.components.SettingsSection
-import com.example.focusapp.ui.components.SettingsTopBar
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusSpacing
 import com.example.focusapp.ui.theme.FocusTheme
+import com.example.focusapp.ui.components.bar.SettingsRow
+import com.example.focusapp.ui.components.bar.SettingsSection
+import com.example.focusapp.ui.components.bar.SettingsTopBar
+import com.example.focusapp.ui.components.input.FocusSwitch
 
 /**
  * The permissions this app asks for. An app can't switch these on or off

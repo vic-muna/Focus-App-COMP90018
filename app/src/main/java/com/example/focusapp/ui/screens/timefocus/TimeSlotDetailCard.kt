@@ -22,16 +22,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.focusapp.ui.components.DayIndicators
-import com.example.focusapp.ui.components.EditButton
-import com.example.focusapp.ui.components.formatClock
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
 import com.example.focusapp.data.blocking.BlockedAppGroup
 import com.example.focusapp.ui.common.previewGroups
-import com.example.focusapp.ui.components.FocusCard
-import com.example.focusapp.ui.components.CardSectionTitle
-import com.example.focusapp.ui.components.sunkenPanel
+import com.example.focusapp.ui.components.button.EditButton
+import com.example.focusapp.ui.components.card.CardSectionTitle
+import com.example.focusapp.ui.components.card.FocusCard
+import com.example.focusapp.ui.components.card.sunkenPanel
 
 /** How many app icons the "Apps Group" row shows before just counting. */
 private const val MAX_PREVIEW_ICONS = 2

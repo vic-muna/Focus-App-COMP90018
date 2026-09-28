@@ -1,34 +1,21 @@
 package com.example.focusapp.ui.screens.timefocus
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.focusapp.ui.components.AddItemCard
-import com.example.focusapp.ui.components.DayIndicators
-import com.example.focusapp.ui.components.FocusSwitch
+import com.example.focusapp.ui.components.card.AddItemCard
+import com.example.focusapp.ui.components.card.SwitchListCard
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
 
-private val CardShape = RoundedCornerShape(14.dp)
-
-
-@OptIn(ExperimentalFoundationApi::class)
+/** One time slot in the Time Focus list: name, time, days and an on/off switch. */
 @Composable
 fun TimeSlotCard(
     name: String,
@@ -40,33 +27,23 @@ fun TimeSlotCard(
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
 ) {
-    val colors = FocusTheme.colors
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(CardShape)
-            .background(colors.surface)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(horizontal = 12.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    SwitchListCard(
+        enabled = enabled,
+        onEnabledChange = onEnabledChange,
+        modifier = modifier,
+        onClick = onClick,
+        onLongClick = onLongClick,
+        spacing = 8.dp,
     ) {
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = name,
-                style = FocusTheme.typography.body,
-                color = colors.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(text = timeLabel, style = FocusTheme.typography.tileTitle, color = colors.onSurface)
-            DayIndicators(activeDays = activeDays)
-        }
-        Spacer(Modifier.width(8.dp))
-        FocusSwitch(checked = enabled, onCheckedChange = onEnabledChange)
+        Text(
+            text = name,
+            style = FocusTheme.typography.body,
+            color = FocusTheme.colors.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(text = timeLabel, style = FocusTheme.typography.tileTitle, color = FocusTheme.colors.onSurface)
+        DayIndicators(activeDays = activeDays)
     }
 }
 

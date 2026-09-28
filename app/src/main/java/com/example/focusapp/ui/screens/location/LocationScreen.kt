@@ -23,11 +23,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -38,15 +36,6 @@ import com.example.focusapp.ui.common.fetchLastKnownLocation
 import com.example.focusapp.ui.common.friendlyErrorMessage
 import com.example.focusapp.ui.common.rememberLocationPermissionState
 import com.example.focusapp.ui.common.resolveApproxPlaceName
-import com.example.focusapp.ui.components.AppSelectCard
-import com.example.focusapp.ui.components.ConfirmButton
-import com.example.focusapp.ui.components.FlyCardOverlay
-import com.example.focusapp.ui.components.FocusConfirmDialog
-import com.example.focusapp.ui.components.consumeTaps
-import com.example.focusapp.ui.components.FocusRangeMarker
-import com.example.focusapp.ui.components.PullUpPanel
-import com.example.focusapp.ui.components.PullUpPanelState
-import com.example.focusapp.ui.components.rememberPullUpPanelState
 import com.example.focusapp.ui.navigation.MainTab
 import com.example.focusapp.ui.navigation.MainTabBar
 import com.example.focusapp.ui.theme.FocusAppTheme
@@ -57,6 +46,13 @@ import kotlinx.coroutines.withContext
 import com.example.focusapp.ui.theme.FocusSpacing
 import com.example.focusapp.data.blocking.AppItem
 import com.example.focusapp.ui.common.rememberInstalledApps
+import com.example.focusapp.ui.components.button.ConfirmButton
+import com.example.focusapp.ui.components.card.AppSelectCard
+import com.example.focusapp.ui.components.card.FlyCardOverlay
+import com.example.focusapp.ui.components.card.DeleteDialog
+import com.example.focusapp.ui.components.card.consumeTaps
+import com.example.focusapp.ui.common.pickedApps
+import com.example.focusapp.ui.common.toggle
 private const val DEFAULT_RADIUS_METERS = 100f
 
 /** How much of the location list stays visible above the bottom edge when swiped down. */
@@ -251,22 +247,12 @@ fun LocationScreen(
                     title = "Blocked Apps",
                     apps = installedApps,
                     selectedPackages = pickerSelection,
-                    onToggleApp = { pkg ->
-                        pickerSelection = if (pkg in pickerSelection) pickerSelection - pkg else pickerSelection + pkg
-                    },
+                    onToggleApp = { pkg -> pickerSelection = pickerSelection.toggle(pkg) },
                     onClose = { showAppPicker = false },
                     actionButton = {
                         ConfirmButton(
                             onClick = {
-                                val installed = installedApps.orEmpty()
-                                val picked = installed
-                                    .filter { it.packageName in pickerSelection }
-                                    .map { AppItem(packageName = it.packageName, name = it.label, isBlocked = true, icon = it.icon) }
-                                // Keep ticked apps the picker didn't list (e.g. no launcher icon).
-                                val kept = pickerDraft.blockedApps.filter { app ->
-                                    app.packageName in pickerSelection && installed.none { it.packageName == app.packageName }
-                                }
-                                draft = pickerDraft.copy(blockedApps = picked + kept)
+                                draft = pickerDraft.copy(blockedApps = pickedApps(installedApps, pickerSelection, pickerDraft.blockedApps))
                                 showAppPicker = false
                             },
                             contentDescription = "Save blocked apps",
@@ -278,12 +264,10 @@ fun LocationScreen(
         }
     }
     pendingDelete?.let { zone ->
-        FocusConfirmDialog(
-            title = "Delete \"${zone.name}\"?",
+        DeleteDialog(
+            name = zone.name,
             message = "This focus location will be removed from this phone.",
-            confirmLabel = "Delete",
-            confirmColor = FocusTheme.colors.rejection,
-            onConfirm = {
+            onDelete = {
                 pendingDelete = null
                 deleteZone(zone)
             },
@@ -315,7 +299,6 @@ private fun LocationContent(
 ) {
     val colors = FocusTheme.colors
     val density = LocalDensity.current
-    val haptics = LocalHapticFeedback.current
 
     // The card covers the bottom of the map; the pin centers on what's left above it.
     var addCardHeight by remember { mutableStateOf(0.dp) }
@@ -376,10 +359,7 @@ private fun LocationContent(
                         enabled = isZoneEnabled(zone),
                         onEnabledChange = { onZoneEnabledChange(zone, it) },
                         onClick = { onZoneClick(zone) },
-                        onLongClick = {
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onZoneLongClick(zone)
-                        },
+                        onLongClick = { onZoneLongClick(zone) },
                     )
                 }
             }
