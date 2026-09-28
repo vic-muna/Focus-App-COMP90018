@@ -51,6 +51,10 @@ data class FocusTypography(
     val caption: TextStyle,
     /** Label of a Settings row, e.g. "Focus Music". */
     val rowLabel: TextStyle,
+    /** A short message on a full-screen prompt (the blocking screen). */
+    val prompt: TextStyle,
+    /** Text on a filled pill button (the blocking screen's "Got it"). */
+    val confirmation: TextStyle,
 )
 
 val DefaultFocusTypography = FocusTypography(
@@ -122,6 +126,16 @@ val DefaultFocusTypography = FocusTypography(
     rowLabel = TextStyle(
         fontFamily = LineSeedFontFamily,
         fontWeight = FontWeight.Normal,
+        fontSize = 18.sp,
+    ),
+    prompt = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 15.sp,
+    ),
+    confirmation = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.ExtraBold,
         fontSize = 18.sp,
     ),
 )
