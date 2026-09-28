@@ -39,9 +39,14 @@ import com.example.focusapp.ui.components.button.FocusPillButton
 import com.example.focusapp.ui.components.card.FlyCardOverlay
 import com.example.focusapp.ui.components.input.FocusSearchField
 import com.example.focusapp.ui.components.card.consumeTaps
+import com.example.focusapp.data.blocking.AppItem
+import com.example.focusapp.ui.screens.home.QuickFocusAppsCard
+import androidx.compose.runtime.remember
+import com.example.focusapp.data.accessibility.AccessibilityBridge
+import com.example.focusapp.ui.common.AccessibilityPermissionDialog
 
 /** Which fly card is open on top of the friend list. */
-private enum class GroupCard { NONE, CREATE, JOIN }
+private enum class GroupCard { NONE, CREATE, JOIN, QUICK_FOCUS_APPS }
 
 /**
  * Party Mode's page. Reached from the group icon on Home (the other side
@@ -59,11 +64,17 @@ fun FriendsScreen(
     onStartFocus: () -> Unit,
     // TODO(ID system): load the user's friends from the cloud once IDs exist.
     friends: List<Friend> = emptyList(),
+    // The apps a party's focus session blocks (shared with Quick Focus), and how to save a new pick.
+    quickFocusApps: List<AppItem> = emptyList(),
+    onQuickFocusAppsChange: (List<AppItem>) -> Unit = {},
     viewModel: PartyModeViewModel = viewModel(),
 ) {
     val permissionState = rememberLocationPermissionState()
     val members by viewModel.members.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
+    // Blocking only works after the user turns on the accessibility service in Android's settings.
+    val isAccessibilityEnabled by AccessibilityBridge.isServiceConnected.collectAsState()
+    var showAccessibilityPermissionDialog by remember { mutableStateOf(false) }
 
     var query by rememberSaveable { mutableStateOf("") }
     var card by rememberSaveable { mutableStateOf(GroupCard.NONE) }
@@ -82,7 +93,9 @@ fun FriendsScreen(
     }
 
     // Back closes an open card first, then the page.
-    BackHandler(enabled = card != GroupCard.NONE, onBack = ::closeCard)
+    BackHandler(enabled = card != GroupCard.NONE) {
+        if (card == GroupCard.QUICK_FOCUS_APPS) card = GroupCard.CREATE else closeCard()
+    }
 
     FriendsContent(
         query = query,
@@ -102,7 +115,9 @@ fun FriendsScreen(
         },
         onJoinGroupClick = { card = GroupCard.JOIN },
         showGroupCard = card != GroupCard.NONE,
-        onGroupCardOutsideClick = ::closeCard,
+        onGroupCardOutsideClick = {
+            if (card == GroupCard.QUICK_FOCUS_APPS) card = GroupCard.CREATE else closeCard()
+        },
     ) {
         when (card) {
             GroupCard.CREATE -> CreateGroupCard(
@@ -111,8 +126,15 @@ fun FriendsScreen(
                 errorMessage = errorMessage,
                 onClose = ::closeCard,
                 onStart = {
-                    viewModel.setFocusing(true)
-                    onStartFocus()
+                    if (quickFocusApps.isEmpty()) {
+                        // Nothing to block yet: pick the apps first, then press start again.
+                        card = GroupCard.QUICK_FOCUS_APPS
+                    } else if (!isAccessibilityEnabled) {
+                        showAccessibilityPermissionDialog = true
+                    } else {
+                        viewModel.setFocusing(true)
+                        onStartFocus()
+                    }
                 },
                 modifier = Modifier.consumeTaps(),
             )
@@ -130,8 +152,21 @@ fun FriendsScreen(
                 },
                 modifier = Modifier.consumeTaps(),
             )
+            GroupCard.QUICK_FOCUS_APPS -> QuickFocusAppsCard(
+                savedApps = quickFocusApps,
+                onSave = { apps ->
+                    onQuickFocusAppsChange(apps)
+                    card = GroupCard.CREATE
+                },
+                onClose = { card = GroupCard.CREATE },
+                modifier = Modifier.consumeTaps(),
+            )
             GroupCard.NONE -> Unit
         }
+    }
+
+    if (showAccessibilityPermissionDialog) {
+        AccessibilityPermissionDialog(onDismiss = { showAccessibilityPermissionDialog = false })
     }
 }
 

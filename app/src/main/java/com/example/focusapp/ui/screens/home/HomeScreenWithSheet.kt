@@ -3,8 +3,6 @@ package com.example.focusapp.ui.screens.home
 import com.example.focusapp.data.wifi.WifiHistoryStorage
 import android.annotation.SuppressLint
 import android.content.Context
-import android.content.Intent
-import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -19,10 +17,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -55,6 +51,11 @@ import androidx.annotation.DrawableRes
 import com.example.focusapp.R
 import com.example.focusapp.data.blocking.BlockedAppGroup
 import com.example.focusapp.ui.common.previewGroups
+import androidx.activity.compose.BackHandler
+import com.example.focusapp.data.blocking.AppItem
+import com.example.focusapp.ui.components.card.FlyCardOverlay
+import com.example.focusapp.ui.components.card.consumeTaps
+import com.example.focusapp.ui.common.AccessibilityPermissionDialog
 
 
 /** How often Home re-checks for a schedule, location or Wi-Fi match. */
@@ -63,12 +64,18 @@ private const val AUTO_TRIGGER_CHECK_INTERVAL_MILLIS = 60_000L
 /** Each suggestion banner closes itself after this long. */
 private const val BANNER_AUTO_HIDE_MILLIS = 5_000L
 
+/** The Quick Focus hint closes itself after this long. */
+private const val HINT_AUTO_HIDE_MILLIS = 3_000L
+
 @Composable
 fun HomeScreenWithSheet(
     // Time Focus's schedule groups - only read here, for the schedule banner.
     groups: List<BlockedAppGroup>,
     // The Wi-Fi tab's networks that are switched on - only read here, for the Wi-Fi banner.
     wifiSsids: List<String> = emptyList(),
+    // The apps Quick Focus blocks, and how to save a new pick.
+    quickFocusApps: List<AppItem> = emptyList(),
+    onQuickFocusAppsChange: (List<AppItem>) -> Unit = {},
     // The picked background theme's Home art (see BackgroundThemes).
     @DrawableRes dashboardArt: Int = R.drawable.img_home_dashboard,
     onFocusSessionStart: (FocusSessionSource) -> Unit = {},
@@ -105,9 +112,29 @@ fun HomeScreenWithSheet(
         }
     }
 
-    fun onQuickFocusClick() {
-        startFocusSessionIfPermitted(FocusSessionSource.Manual)
+    // --- Quick Focus: tap = hint, hold 1 s = start, hold 3 s = pick the apps it blocks ---
+    var quickFocusHint by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(quickFocusHint) {
+        if (quickFocusHint != null) {
+            delay(HINT_AUTO_HIDE_MILLIS)
+            quickFocusHint = null
+        }
     }
+
+    var showQuickFocusPicker by remember { mutableStateOf(false) }
+
+    fun openQuickFocusPicker() {
+        quickFocusHint = null
+        showQuickFocusPicker = true
+    }
+
+    fun startQuickFocus() {
+        // Nothing picked yet: ask for the apps first.
+        if (quickFocusApps.isEmpty()) openQuickFocusPicker()
+        else startFocusSessionIfPermitted(FocusSessionSource.Manual)
+    }
+
+    BackHandler(enabled = showQuickFocusPicker) { showQuickFocusPicker = false }
 
     // --- Auto-suggestion: UI-simulated only, never navigates on its own -----------
     var savedZone by remember { mutableStateOf<FocusZone?>(null) }
@@ -178,7 +205,10 @@ fun HomeScreenWithSheet(
             onSettingsClick = onSettingsClick,
             onPartyClick = onPartyModeClick,
             onDashboardClick = onAvatarClick,
-            onQuickFocusClick = { onQuickFocusClick() },
+            onQuickFocusTap = { quickFocusHint = "Hold 1 sec to start focusing\nHold 3 sec to choose apps" },
+            onQuickFocusStart = ::startQuickFocus,
+            onQuickFocusSettings = ::openQuickFocusPicker,
+            quickFocusHint = quickFocusHint,
             onTabClick = { tab -> onTabClick(tab) }
         )
 
@@ -218,44 +248,24 @@ fun HomeScreenWithSheet(
             }
         }
 
+        if (showQuickFocusPicker) {
+            FlyCardOverlay(onOutsideClick = { showQuickFocusPicker = false }) {
+                QuickFocusAppsCard(
+                    savedApps = quickFocusApps,
+                    onSave = { apps ->
+                        onQuickFocusAppsChange(apps)
+                        showQuickFocusPicker = false
+                    },
+                    onClose = { showQuickFocusPicker = false },
+                    modifier = Modifier.consumeTaps(),
+                )
+            }
+        }
+
         if (showAccessibilityPermissionDialog) {
-            AccessibilityPermissionDialog(
-                onConfirm = {
-                    showAccessibilityPermissionDialog = false
-                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                },
-                onDismiss = { showAccessibilityPermissionDialog = false }
-            )
+            AccessibilityPermissionDialog(onDismiss = { showAccessibilityPermissionDialog = false })
         }
     }
-}
-
-/**
- * Explains why app blocking needs the accessibility permission, then
- * sends the user to Android's settings (it can't be a normal pop-up).
- */
-@Composable
-private fun AccessibilityPermissionDialog(
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Accessibility permission needed") },
-        text = {
-            Text(
-                "To block apps during a focus session, Focus needs the " +
-                        "Accessibility permission. Turn it on for Focus in the " +
-                        "Settings screen that opens next."
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = onConfirm) { Text("Open Settings") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
-    )
 }
 
 /**

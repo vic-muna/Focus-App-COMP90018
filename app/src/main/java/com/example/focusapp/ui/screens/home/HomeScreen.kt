@@ -29,6 +29,9 @@ import androidx.compose.ui.draw.clipToBounds
 import com.example.focusapp.ui.theme.FocusSpacing
 import androidx.annotation.DrawableRes
 import com.example.focusapp.ui.components.bar.SettingsTopBar
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.ui.text.style.TextAlign
 /**
  * img_home_dashboard.png is 960 x 903 px, but the artwork only covers a
  * 692 x 795 px area (the rest is background-colored margin), sitting ~19 px
@@ -52,7 +55,11 @@ fun HomeScreen(
     onSettingsClick: () -> Unit = {},
     onPartyClick: () -> Unit = {},
     onDashboardClick: () -> Unit = {},
-    onQuickFocusClick: () -> Unit = {},
+    onQuickFocusTap: () -> Unit = {},
+    onQuickFocusStart: () -> Unit = {},
+    onQuickFocusSettings: () -> Unit = {},
+    // A short message above Quick Focus (e.g. how to use it), or null.
+    quickFocusHint: String? = null,
     onTabClick: (MainTab) -> Unit = {},
 ) {
     Column(
@@ -61,7 +68,7 @@ fun HomeScreen(
             .background(FocusTheme.colors.background),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-                SettingsTopBar(onSettingsClick = onSettingsClick, onPartyClick = onPartyClick)
+        SettingsTopBar(onSettingsClick = onSettingsClick, onPartyClick = onPartyClick)
 
         GreetingHeader(
             userName = userName,
@@ -90,7 +97,21 @@ fun HomeScreen(
 
         Spacer(Modifier.height(40.dp))
 
-        QuickFocusButton(onClick = onQuickFocusClick)
+        Box(contentAlignment = Alignment.Center) {
+            QuickFocusButton(
+                onTap = onQuickFocusTap,
+                onHoldStart = onQuickFocusStart,
+                onHoldSettings = onQuickFocusSettings,
+            )
+            if (quickFocusHint != null) {
+                QuickFocusHint(
+                    text = quickFocusHint,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .offset(y = (-40).dp),
+                )
+            }
+        }
 
         Spacer(Modifier.weight(1f).heightIn(min = 24.dp))
 
@@ -100,10 +121,32 @@ fun HomeScreen(
     }
 }
 
+/** A small pill with a message, shown above the Quick Focus button. */
+@Composable
+private fun QuickFocusHint(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        style = FocusTheme.typography.caption,
+        color = FocusTheme.colors.onPrimaryAction,
+        textAlign = TextAlign.Center,
+        modifier = modifier
+            .background(FocusTheme.colors.primaryAction, RoundedCornerShape(50))
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    )
+}
+
 @Preview(widthDp = 393, heightDp = 852)
 @Composable
 private fun HomeScreenPreview() {
     FocusAppTheme {
         HomeScreen()
+    }
+}
+
+@Preview(widthDp = 393, heightDp = 852)
+@Composable
+private fun HomeScreenHintPreview() {
+    FocusAppTheme {
+        HomeScreen(quickFocusHint = "Hold 1 sec to start focusing\nHold 3 sec to choose apps")
     }
 }

@@ -48,6 +48,7 @@ import com.example.focusapp.ui.theme.BackgroundThemes
 import com.example.focusapp.ui.theme.FocusTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.example.focusapp.data.blocking.AppItem
 
 // ---------- Screen transitions ----------
 
@@ -111,6 +112,8 @@ fun FocusAppNavGraph() {
     val schedule = rememberSavedGroupList(remember { BlockedAppGroupStorage(context) })
     val location = rememberSavedGroupList(remember { BlockedAppGroupStorage.forLocationGroups(context) })
     val wifi = rememberSavedGroupList(remember { BlockedAppGroupStorage.forWifiNetworks(context) })
+    // Quick Focus keeps a single group: the apps it blocks.
+    val quickFocus = rememberSavedGroupList(remember { BlockedAppGroupStorage.forQuickFocus(context) })
 
     var activeFocusSession by remember { mutableStateOf<ActiveFocusSession?>(null) }
 
@@ -118,13 +121,19 @@ fun FocusAppNavGraph() {
     val themeStorage = remember { BackgroundThemeStorage(context) }
     var backgroundTheme by remember { mutableStateOf(BackgroundThemes.byId(themeStorage.getSelectedId())) }
 
+    fun saveQuickFocusApps(apps: List<AppItem>) {
+        quickFocus.groups = listOf(
+            BlockedAppGroup(id = "quick_focus", name = "Quick Focus", apps = apps, schedule = defaultTimeSlot())
+        )
+    }
+
     /** The apps a focus session blocks, depending on what started it. */
     fun blockedPackagesFor(source: FocusSessionSource): List<String> {
         val groups = when (source) {
             is FocusSessionSource.Location -> location.groups.filter { it.id == source.zoneId }
             is FocusSessionSource.Wifi -> wifi.groups.filter { it.id == source.ssid }
-            FocusSessionSource.Manual -> location.groups // Quick Focus blocks every location's apps.
-            FocusSessionSource.Party -> schedule.groups
+            // Quick Focus and Party Mode block the apps picked for Quick Focus.
+            FocusSessionSource.Manual, FocusSessionSource.Party -> quickFocus.groups
         }
         return groups.flatMap { group -> group.apps.map { it.packageName } }.distinct()
     }
@@ -185,6 +194,8 @@ fun FocusAppNavGraph() {
                     groups = schedule.groups,
                     dashboardArt = backgroundTheme.homeArt,
                     wifiSsids = wifi.groups.filter { it.enabled }.map { it.id },
+                    quickFocusApps = quickFocus.groups.firstOrNull()?.apps.orEmpty(),
+                    onQuickFocusAppsChange = ::saveQuickFocusApps,
                     onAvatarClick = { navController.navigate(Destinations.HISTORY) },
                     onFocusSessionStart = ::startFocusSession,
                     onScheduleBannerClick = { groupId -> navController.navigate(Destinations.groupUsageRoute(groupId)) },
@@ -232,6 +243,8 @@ fun FocusAppNavGraph() {
 
             composable(Destinations.FRIENDS, enterTransition = fadeEnter, exitTransition = fadeExit) {
                 FriendsScreen(
+                    quickFocusApps = quickFocus.groups.firstOrNull()?.apps.orEmpty(),
+                    onQuickFocusAppsChange = ::saveQuickFocusApps,
                     onClose = { navController.popBackStack() },
                     onStartFocus = { startFocusSession(FocusSessionSource.Party) }
                 )

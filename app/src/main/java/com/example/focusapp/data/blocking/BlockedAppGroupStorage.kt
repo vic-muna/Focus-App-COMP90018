@@ -11,6 +11,7 @@ import org.json.JSONObject
  *  - Time Focus: the default file
  *  - Location: [forLocationGroups]
  *  - Wi-Fi: [forWifiNetworks]
+ *  - Quick Focus: [forQuickFocus] (one group: the apps Quick Focus blocks)
  * App icons are not saved; they are loaded again from the package name.
  */
 class BlockedAppGroupStorage(
@@ -113,6 +114,10 @@ class BlockedAppGroupStorage(
         private const val WIFI_PREFS_NAME = "focus_wifi_networks"
 
         fun forWifiNetworks(context: Context) = BlockedAppGroupStorage(context, WIFI_PREFS_NAME)
+
+        private const val QUICK_FOCUS_PREFS_NAME = "focus_quick_focus"
+
+        fun forQuickFocus(context: Context) = BlockedAppGroupStorage(context, QUICK_FOCUS_PREFS_NAME)
 
         private const val KEY_GROUPS = "groups_json"
     }
