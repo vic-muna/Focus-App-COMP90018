@@ -1,12 +1,14 @@
 package com.example.focusapp.ui.screens.settings
 
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.provider.Settings
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -14,236 +16,201 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.focusapp.data.apps.getAppLabel
-import com.example.focusapp.data.repository.FocusRepositoryProvider
-import com.example.focusapp.data.usagestats.formatUsageDuration
+import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import com.example.focusapp.R
+import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.data.usagestats.hasUsageAccessPermission
-import com.example.focusapp.data.usagestats.queryUsageDurationsToday
-import com.example.focusapp.domain.model.FocusSession
-import com.example.focusapp.ui.theme.WireframeColors
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
+import com.example.focusapp.data.wifi.hasLocationPermissionForWifi
+import com.example.focusapp.ui.components.FocusSwitch
+import com.example.focusapp.ui.components.SettingsRow
+import com.example.focusapp.ui.components.SettingsSection
+import com.example.focusapp.ui.components.SettingsTopBar
+import com.example.focusapp.ui.theme.FocusAppTheme
+import com.example.focusapp.ui.theme.FocusSpacing
+import com.example.focusapp.ui.theme.FocusTheme
 
 /**
- * SettingsScreen
- * ----------------
- * The "Settings" tab. Still mostly a placeholder (see the TODO below), but
- * now also hosts a "Check App Usage Duration" button - a real,
- * on-demand call into the OS's [android.app.usage.UsageStatsManager] via
- * [queryUsageDurationsToday], showing today's real per-app usage totals.
- * Display-only for now: tapping it doesn't feed into blocking or anything
- * else, it just answers "how long have I used each app today" the same
- * way a phone's own Digital Wellbeing / Screen Time screen would.
- *
- * [David Shiau, 2026-09-20] Added the "Check App Usage Duration" button and
- * everything below it in this file - previously this screen had no
- * functional content at all.
- *
- * [David Shiau, 2026-09-23] Added the "Today's Focus Time" button - sums
- * FocusRepository.getSessionHistory() (now really persisted, see
- * LocalDataSource) for sessions that started today and shows the total.
- * No cloud sync yet (no backend exists), so this is local/today-only;
- * see FocusRepository.saveFocusSession's TODO for the future remote push.
- *
- * [David Shiau, 2026-09-26] The Wi-Fi-source controls ("Wi-Fi Source
- * Trigger" switch, "Check Wi-Fi Network", "Stored Wi-Fi Source List") that
- * used to live here moved to Home's Wi-Fi Source Detection sheet - see
- * ui/screens/home/WifiSourceSheet.kt.
- *
- * TODO: to be implemented later - actual settings content (notifications,
- * account, language, etc.) once that's designed.
+ * The permissions this app asks for. An app can't switch these on or off
+ * by itself - each row opens the matching system settings page, where the
+ * user flips it.
+ */
+private enum class AppPermission(val label: String) {
+    PRECISE_LOCATION("Precise Location"),
+    APP_BLOCKING("App Blocking"),
+    USAGE_ACCESS("Usage Access"),
+    NOTIFICATIONS("Notifications"),
+}
+
+/** The system settings page where [permission] is turned on or off. */
+private fun settingsIntentFor(context: Context, permission: AppPermission): Intent = when (permission) {
+    AppPermission.PRECISE_LOCATION ->
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+    AppPermission.APP_BLOCKING -> Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+    AppPermission.USAGE_ACCESS -> Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+    AppPermission.NOTIFICATIONS ->
+        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+}
+
+/**
+ * Figma: "Settings". Reached from Home's gear; the same spot shows an X
+ * that closes it ([onClose]).
+ *  - Music: Focus Music / Home Music switches (TODO: no music player yet -
+ *    they only remember their position while the screen is open)
+ *  - Permissions: whether each permission is on; tapping a row opens the
+ *    system page to change it, and the switches refresh on coming back
  */
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(onClose: () -> Unit) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val appBlockingOn by AccessibilityBridge.isServiceConnected.collectAsState()
+    var preciseLocationOn by remember { mutableStateOf(false) }
+    var usageAccessOn by remember { mutableStateOf(false) }
+    var notificationsOn by remember { mutableStateOf(false) }
 
-    // null = not checked yet this screen visit; empty = checked, nothing used today.
-    var usageResults by remember { mutableStateOf<List<Pair<String, Long>>?>(null) }
-    var isLoadingUsage by remember { mutableStateOf(false) }
-    var showUsagePermissionDialog by remember { mutableStateOf(false) }
-
-    // null = not checked yet this screen visit.
-    var todayFocusDurationMillis by remember { mutableStateOf<Long?>(null) }
-    var isLoadingFocusTime by remember { mutableStateOf(false) }
-
-    // [David Shiau, 2026-09-20] Triggers UsageStatsManager (via
-    // queryUsageDurationsToday) to fetch and display today's real per-app
-    // usage totals - gated on the Usage Access permission first.
-    fun checkAppUsageDuration() {
-        // Usage access has no runtime permission dialog - the only way to
-        // find out if it's granted is to ask AppOpsManager directly (see
-        // hasUsageAccessPermission's doc comment), so check first rather
-        // than querying and silently getting an empty map back.
-        if (!hasUsageAccessPermission(context)) {
-            showUsagePermissionDialog = true
-            return
+    // Re-read every time the screen comes back - the user may have just
+    // changed a permission on the system page a row opened.
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            preciseLocationOn = hasLocationPermissionForWifi(context)
+            usageAccessOn = hasUsageAccessPermission(context)
+            notificationsOn = NotificationManagerCompat.from(context).areNotificationsEnabled()
         }
-        isLoadingUsage = true
-        scope.launch {
-            val durationsByPackage = withContext(Dispatchers.Default) {
-                queryUsageDurationsToday(context)
+    }
+
+    // TODO(music): wire to the music player once the app has one (and persist these).
+    var focusMusicOn by rememberSaveable { mutableStateOf(false) }
+    var homeMusicOn by rememberSaveable { mutableStateOf(false) }
+
+    SettingsContent(
+        isPermissionOn = { permission ->
+            when (permission) {
+                AppPermission.PRECISE_LOCATION -> preciseLocationOn
+                AppPermission.APP_BLOCKING -> appBlockingOn
+                AppPermission.USAGE_ACCESS -> usageAccessOn
+                AppPermission.NOTIFICATIONS -> notificationsOn
             }
-            usageResults = durationsByPackage.entries
-                .sortedByDescending { it.value }
-                .map { (packageName, millis) -> getAppLabel(context, packageName) to millis }
-            isLoadingUsage = false
-        }
-    }
-
-    // [David Shiau, 2026-09-23] Sums today's completed/cancelled focus
-    // sessions (from FocusRepository.getSessionHistory()) into one total.
-    fun checkTodayFocusTime() {
-        isLoadingFocusTime = true
-        scope.launch {
-            val totalMillis = withContext(Dispatchers.IO) {
-                val sessions = FocusRepositoryProvider.get(context).getSessionHistory()
-                sumTodayFocusDurationMillis(sessions)
-            }
-            todayFocusDurationMillis = totalMillis
-            isLoadingFocusTime = false
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(WireframeColors.Background)
-            .verticalScroll(rememberScrollState())
-            .padding(24.dp)
-    ) {
-        Text(text = "Settings")
-        Text(
-            text = "No settings options yet - this screen is a placeholder.",
-            modifier = Modifier.padding(top = 8.dp)
-        )
-
-        Spacer(Modifier.height(24.dp))
-
-        Button(onClick = { checkAppUsageDuration() }) {
-            Text("Check App Usage Duration")
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        when {
-            isLoadingUsage -> CircularProgressIndicator()
-            usageResults != null -> UsageDurationResults(usageResults.orEmpty())
-        }
-
-        Spacer(Modifier.height(24.dp))
-
-        Button(onClick = { checkTodayFocusTime() }) {
-            Text("Today's Focus Time")
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        when {
-            isLoadingFocusTime -> CircularProgressIndicator()
-            todayFocusDurationMillis != null ->
-                Text(
-                    text = "Total focus time today: ${formatUsageDuration(todayFocusDurationMillis!!)}",
-                    color = WireframeColors.OnLight
-                )
-        }
-    }
-
-    if (showUsagePermissionDialog) {
-        UsageAccessPermissionDialog(
-            onConfirm = {
-                showUsagePermissionDialog = false
-                context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-            },
-            onDismiss = { showUsagePermissionDialog = false }
-        )
-    }
-}
-
-/** Today's per-app totals, most-used first - a plain list, since this is display-only. */
-@Composable
-private fun UsageDurationResults(results: List<Pair<String, Long>>) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(WireframeColors.Card, shape = RoundedCornerShape(16.dp))
-            .padding(16.dp)
-    ) {
-        Text(text = "Today's App Usage", color = WireframeColors.OnDark)
-        Spacer(Modifier.height(8.dp))
-
-        if (results.isEmpty()) {
-            Text(text = "No app usage recorded yet today.", color = WireframeColors.OnDark)
-        } else {
-            results.forEach { (label, millis) ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(text = label, color = WireframeColors.OnDark, modifier = Modifier.weight(1f))
-                    Text(text = formatUsageDuration(millis), color = WireframeColors.OnDark)
-                }
-            }
-        }
-    }
-}
-
-/** Explains why the Usage Access permission is needed before sending the user to grant it. */
-@Composable
-private fun UsageAccessPermissionDialog(
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Usage access needed") },
-        text = {
-            Text(
-                "To show today's app usage, Focus needs the Usage Access " +
-                    "permission. Find Focus in the list on the Settings " +
-                    "screen that opens next and turn it on."
-            )
         },
-        confirmButton = {
-            TextButton(onClick = onConfirm) { Text("Open Settings") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
+        onPermissionClick = { context.startActivity(settingsIntentFor(context, it)) },
+        focusMusicOn = focusMusicOn,
+        onFocusMusicChange = { focusMusicOn = it },
+        homeMusicOn = homeMusicOn,
+        onHomeMusicChange = { homeMusicOn = it },
+        onClose = onClose,
     )
 }
 
-/** Sums the duration of every session that started on today's calendar date (device-local). */
-private fun sumTodayFocusDurationMillis(sessions: List<FocusSession>): Long {
-    val today = LocalDate.now(ZoneId.systemDefault())
-    return sessions
-        .filter { session ->
-            Instant.ofEpochMilli(session.startTimeMillis)
-                .atZone(ZoneId.systemDefault())
-                .toLocalDate() == today
+/** Stateless layout of [SettingsScreen]. */
+@Composable
+private fun SettingsContent(
+    isPermissionOn: (AppPermission) -> Boolean,
+    onPermissionClick: (AppPermission) -> Unit,
+    focusMusicOn: Boolean,
+    onFocusMusicChange: (Boolean) -> Unit,
+    homeMusicOn: Boolean,
+    onHomeMusicChange: (Boolean) -> Unit,
+    onClose: () -> Unit,
+) {
+    val colors = FocusTheme.colors
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(colors.background),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 32.dp, end = 32.dp, top = FocusSpacing.ScreenTop, bottom = FocusSpacing.ScreenBottom),
+            verticalArrangement = Arrangement.spacedBy(32.dp),
+        ) {
+            // Same height as the X in the top-right corner, so the title lines up with it.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(42.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "Settings",
+                    style = FocusTheme.typography.primaryActionLabel,
+                    color = colors.onSurface,
+                )
+            }
+
+            // TODO(design): placeholder art - swap in the Settings banner once it's exported.
+            Image(
+                painter = painterResource(R.drawable.img_app_focus_header),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp)
+                    .clip(RoundedCornerShape(24.dp)),
+            )
+
+            SettingsSection(title = "Music", icon = Icons.Filled.MusicNote) {
+                SettingsRow(label = "Focus Music") {
+                    FocusSwitch(checked = focusMusicOn, onCheckedChange = onFocusMusicChange)
+                }
+                SettingsRow(label = "Home Music") {
+                    FocusSwitch(checked = homeMusicOn, onCheckedChange = onHomeMusicChange)
+                }
+            }
+
+            SettingsSection(title = "Permissions", icon = Icons.Filled.Security) {
+                AppPermission.entries.forEach { permission ->
+                    SettingsRow(label = permission.label, onClick = { onPermissionClick(permission) }) {
+                        // Shows the current state; changing it happens on the system page.
+                        FocusSwitch(
+                            checked = isPermissionOn(permission),
+                            onCheckedChange = { onPermissionClick(permission) },
+                        )
+                    }
+                }
+            }
         }
-        .sumOf { session ->
-            val end = session.endTimeMillis ?: session.startTimeMillis
-            (end - session.startTimeMillis).coerceAtLeast(0)
-        }
+
+        SettingsTopBar(onSettingsClick = onClose, isOpen = true)
+    }
+}
+
+@Preview(widthDp = 393, heightDp = 852)
+@Composable
+private fun SettingsContentPreview() {
+    FocusAppTheme {
+        SettingsContent(
+            isPermissionOn = { it == AppPermission.PRECISE_LOCATION || it == AppPermission.NOTIFICATIONS },
+            onPermissionClick = {},
+            focusMusicOn = false,
+            onFocusMusicChange = {},
+            homeMusicOn = true,
+            onHomeMusicChange = {},
+            onClose = {},
+        )
+    }
 }

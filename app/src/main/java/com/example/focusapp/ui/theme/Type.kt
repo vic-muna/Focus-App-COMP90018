@@ -49,6 +49,8 @@ data class FocusTypography(
     val body: TextStyle,
     /** Small supporting text (labels, coordinates). */
     val caption: TextStyle,
+    /** Label of a Settings row, e.g. "Focus Music". */
+    val rowLabel: TextStyle,
 )
 
 val DefaultFocusTypography = FocusTypography(
@@ -116,5 +118,10 @@ val DefaultFocusTypography = FocusTypography(
         fontFamily = LineSeedFontFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 12.sp,
+    ),
+    rowLabel = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.Normal,
+        fontSize = 18.sp,
     ),
 )

@@ -422,7 +422,7 @@ fun FocusAppNavGraph() {
                 route = Destinations.SETTINGS,
                 enterTransition = enterFromBottom,
                 exitTransition = exitToBottom
-            ) { SettingsScreen() }
+            ) { SettingsScreen(onClose = { navController.popBackStack() }) }
 
             composable(
                 route = Destinations.HISTORY,
