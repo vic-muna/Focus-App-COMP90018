@@ -57,7 +57,7 @@ private const val CANCEL_HOLD_STEP_MILLIS = 50L
 sealed class FocusSessionSource {
     data object Manual : FocusSessionSource()
     data object Party : FocusSessionSource()
-    data class Location(val zoneName: String) : FocusSessionSource()
+    data class Location(val zoneName: String, val zoneId: String) : FocusSessionSource()
     data class Wifi(val ssid: String) : FocusSessionSource()
 }
 

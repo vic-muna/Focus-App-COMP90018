@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,7 +23,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -29,8 +31,12 @@ import com.example.focusapp.R
 import com.example.focusapp.ui.components.FocusConfirmDialog
 import com.example.focusapp.ui.navigation.MainTab
 import com.example.focusapp.ui.navigation.MainTabBar
+import com.example.focusapp.ui.screens.home.AutoBlockingSheetContent
+import com.example.focusapp.ui.screens.home.BlockedAppGroup
 import com.example.focusapp.ui.screens.home.ClockTime
+import com.example.focusapp.ui.screens.home.LegacySheetContainerColor
 import com.example.focusapp.ui.screens.home.TimeSlot
+import com.example.focusapp.ui.screens.home.generateFakeTimeSlot
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
 
@@ -39,44 +45,75 @@ private val HeaderHeight = 210.dp
 /**
  * Figma: "Time Focuse" - the Schedule tab. A header illustration over the
  * list of time slots (each with an on/off switch) and an "add" card.
- * Hold a slot to delete it. Adding / editing opens a fly card (not built
- * yet - waiting on its design).
+ *
+ * Each slot is one of David's Scheduled Limits groups ([BlockedAppGroup]):
+ * its time, apps and daily limits live together, so there's no separate
+ * app-group page. Tap a slot to edit it, hold it to delete it, "+" adds one.
+ * Editing uses David's Scheduled Limits sheet until the fly card is designed.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimeFocusScreen(
+    groups: List<BlockedAppGroup>,
+    onGroupsChange: (List<BlockedAppGroup>) -> Unit,
     onTabClick: (MainTab) -> Unit,
 ) {
-    val context = LocalContext.current
-    val storage = remember { TimeSlotStorage(context) }
-    var slots by remember { mutableStateOf(storage.getSlots()) }
-    var pendingDelete by remember { mutableStateOf<FocusTimeSlot?>(null) }
+    var pendingDelete by remember { mutableStateOf<BlockedAppGroup?>(null) }
+    // The slot whose sheet is open, if any.
+    var editingGroupId by remember { mutableStateOf<String?>(null) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    fun update(newSlots: List<FocusTimeSlot>) {
-        slots = newSlots
-        storage.saveSlots(newSlots)
+    fun updateGroup(groupId: String, transform: (BlockedAppGroup) -> BlockedAppGroup) {
+        onGroupsChange(groups.map { if (it.id == groupId) transform(it) else it })
     }
 
     TimeFocusContent(
-        slots = slots,
-        onEnabledChange = { item, enabled ->
-            update(slots.map { if (it.id == item.id) it.copy(enabled = enabled) else it })
+        groups = groups,
+        onEnabledChange = { group, enabled -> updateGroup(group.id) { it.copy(enabled = enabled) } },
+        onGroupClick = { editingGroupId = it.id },
+        onGroupLongClick = { pendingDelete = it },
+        onAddClick = {
+            val newGroup = BlockedAppGroup(
+                id = "group_${System.currentTimeMillis()}",
+                name = "New Schedule",
+                apps = emptyList(),
+                schedule = generateFakeTimeSlot(),
+            )
+            onGroupsChange(groups + newGroup)
+            editingGroupId = newGroup.id
         },
-        // TODO: open the add/edit time-slot fly card once its design is in.
-        onSlotClick = {},
-        onSlotLongClick = { pendingDelete = it },
-        onAddClick = {},
         onTabClick = onTabClick,
     )
 
-    pendingDelete?.let { item ->
+    editingGroupId?.let { groupId ->
+        ModalBottomSheet(
+            onDismissRequest = { editingGroupId = null },
+            sheetState = sheetState,
+            containerColor = LegacySheetContainerColor,
+        ) {
+            AutoBlockingSheetContent(
+                groups = groups,
+                selectedGroupId = groupId,
+                onAppsChange = { id, apps -> updateGroup(id) { it.copy(apps = apps) } },
+                onScheduleChange = { id, schedule -> updateGroup(id) { it.copy(schedule = schedule) } },
+                onRenameGroup = { id, name -> updateGroup(id) { it.copy(name = name) } },
+                onMaxOpensChange = { id, maxOpens -> updateGroup(id) { it.copy(maxOpensPerApp = maxOpens) } },
+                onMaxDurationChange = { id, maxMinutes -> updateGroup(id) { it.copy(maxMinutesPerApp = maxMinutes) } },
+                // No group list page any more - the slot list behind the sheet is the list.
+                onBlockerClick = { editingGroupId = null },
+            )
+        }
+    }
+
+    pendingDelete?.let { group ->
         FocusConfirmDialog(
-            title = "Delete ${formatSlotRange(item.slot)}?",
-            message = "This time slot will be removed.",
+            title = "Delete \"${group.name}\"?",
+            message = "This time slot and its app limits will be removed.",
             confirmLabel = "Delete",
             confirmColor = FocusTheme.colors.rejection,
             onConfirm = {
                 pendingDelete = null
-                update(slots.filterNot { it.id == item.id })
+                onGroupsChange(groups.filterNot { it.id == group.id })
             },
             onDismiss = { pendingDelete = null },
         )
@@ -86,10 +123,10 @@ fun TimeFocusScreen(
 /** Stateless layout of [TimeFocusScreen]. */
 @Composable
 private fun TimeFocusContent(
-    slots: List<FocusTimeSlot>,
-    onEnabledChange: (FocusTimeSlot, Boolean) -> Unit,
-    onSlotClick: (FocusTimeSlot) -> Unit,
-    onSlotLongClick: (FocusTimeSlot) -> Unit,
+    groups: List<BlockedAppGroup>,
+    onEnabledChange: (BlockedAppGroup, Boolean) -> Unit,
+    onGroupClick: (BlockedAppGroup) -> Unit,
+    onGroupLongClick: (BlockedAppGroup) -> Unit,
     onAddClick: () -> Unit,
     onTabClick: (MainTab) -> Unit,
 ) {
@@ -120,16 +157,17 @@ private fun TimeFocusContent(
                 modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 32.dp, bottom = 120.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                slots.forEach { item ->
+                groups.forEach { group ->
                     TimeSlotCard(
-                        timeLabel = formatSlotRange(item.slot),
-                        activeDays = item.slot.activeDays,
-                        enabled = item.enabled,
-                        onEnabledChange = { onEnabledChange(item, it) },
-                        onClick = { onSlotClick(item) },
+                        name = group.name,
+                        timeLabel = formatSlotRange(group.schedule),
+                        activeDays = group.schedule.activeDays,
+                        enabled = group.enabled,
+                        onEnabledChange = { onEnabledChange(group, it) },
+                        onClick = { onGroupClick(group) },
                         onLongClick = {
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onSlotLongClick(item)
+                            onGroupLongClick(group)
                         },
                     )
                 }
@@ -158,13 +196,24 @@ private fun formatSlotRange(slot: TimeSlot): String {
 private fun TimeFocusContentPreview() {
     FocusAppTheme {
         TimeFocusContent(
-            slots = listOf(
-                FocusTimeSlot("1", TimeSlot(setOf("Mon", "Wed", "Fri"), ClockTime(6, 10), ClockTime(8, 0))),
-                FocusTimeSlot("2", TimeSlot(setOf("Sat", "Sun"), ClockTime(20, 10), ClockTime(23, 0)), enabled = false),
+            groups = listOf(
+                BlockedAppGroup(
+                    id = "1",
+                    name = "Morning",
+                    apps = emptyList(),
+                    schedule = TimeSlot(setOf("Mon", "Wed", "Fri"), ClockTime(6, 10), ClockTime(8, 0)),
+                ),
+                BlockedAppGroup(
+                    id = "2",
+                    name = "Weekend night",
+                    apps = emptyList(),
+                    schedule = TimeSlot(setOf("Sat", "Sun"), ClockTime(20, 10), ClockTime(23, 0)),
+                    enabled = false,
+                ),
             ),
             onEnabledChange = { _, _ -> },
-            onSlotClick = {},
-            onSlotLongClick = {},
+            onGroupClick = {},
+            onGroupLongClick = {},
             onAddClick = {},
             onTabClick = {},
         )

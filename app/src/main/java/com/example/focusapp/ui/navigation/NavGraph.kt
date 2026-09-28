@@ -42,6 +42,7 @@ import com.example.focusapp.ui.screens.home.HomeScreenWithSheet
 import com.example.focusapp.ui.screens.home.generateFakeGroups
 import com.example.focusapp.ui.screens.home.generateFakeTimeSlot
 import com.example.focusapp.ui.screens.location.LocationScreen
+import com.example.focusapp.ui.screens.timefocus.TimeFocusScreen
 import com.example.focusapp.ui.screens.map.MapScreen
 import com.example.focusapp.ui.screens.party.PartyModeScreen
 import com.example.focusapp.ui.screens.session.ActiveFocusSession
@@ -180,7 +181,8 @@ fun FocusAppNavGraph() {
             val savedSelectedId = withContext(Dispatchers.IO) { groupStorage.getSelectedGroupId() }
             selectedGroupId = savedSelectedId
                 ?.takeIf { id -> savedGroups.any { it.id == id } }
-                ?: savedGroups.first().id
+                ?: savedGroups.firstOrNull()?.id
+                        ?: ""
         }
         hasLoadedGroups = true
     }
@@ -219,7 +221,12 @@ fun FocusAppNavGraph() {
     // for now behaves exactly like accepting the location banner.
     fun restrictedPackagesFor(source: FocusSessionSource): List<String> {
         return when (source) {
-            FocusSessionSource.Manual, is FocusSessionSource.Location -> location.selectedPackages()
+            // Each location blocks its own list (group id = zone id); Quick Focus
+            // isn't tied to a place, so it blocks every location's apps.
+            is FocusSessionSource.Location ->
+                location.groups.find { it.id == source.zoneId }?.apps?.map { it.packageName }.orEmpty()
+            FocusSessionSource.Manual ->
+                location.groups.flatMap { group -> group.apps.map { it.packageName } }.distinct()
             is FocusSessionSource.Wifi -> wifi.selectedPackages()
             FocusSessionSource.Party ->
                 groups.flatMap { group -> group.apps.map { it.packageName } }.distinct()
@@ -252,9 +259,7 @@ fun FocusAppNavGraph() {
         navController.navigate(Destinations.FOCUS_SESSION)
     }
 
-    // Bottom-nav tabs: Home is the root; Location sits directly on top of it.
-    // Schedule (Scheduled Limits) and Wi-Fi source are still Home's bottom
-    // sheets - TimeFocusScreen is kept but not reachable.
+
     fun navigateToTab(tab: MainTab) {
         fun openHomeSheet(sheetType: String) {
             navController.getBackStackEntry(Destinations.HOME).savedStateHandle.apply {
@@ -269,7 +274,10 @@ fun FocusAppNavGraph() {
                 popUpTo(Destinations.HOME)
                 launchSingleTop = true
             }
-            MainTab.SCHEDULE -> openHomeSheet("blocked_apps")
+            MainTab.SCHEDULE -> navController.navigate(Destinations.TIME_FOCUS) {
+                popUpTo(Destinations.HOME)
+                launchSingleTop = true
+            }
             MainTab.WIFI_SOURCE -> openHomeSheet("wifi_source")
         }
     }
@@ -339,6 +347,7 @@ fun FocusAppNavGraph() {
                         navController.navigate(Destinations.EDIT_LOCATION_ZONE)
                     },
                     onLocationTabClick = { navigateToTab(MainTab.LOCATION) },
+                    onScheduleTabClick = { navigateToTab(MainTab.SCHEDULE) },
                     locationGroups = location.groups,
                     selectedLocationGroupId = location.selectedId,
                     onLocationGroupAppsChange = { groupId, apps -> location.updateGroup(groupId) { it.copy(apps = apps) } },
@@ -356,6 +365,7 @@ fun FocusAppNavGraph() {
                 )
             }
 
+
             composable(
                 route = Destinations.LOCATION,
                 enterTransition = partyModeEnter,
@@ -364,11 +374,26 @@ fun FocusAppNavGraph() {
                 LocationScreen(
                     onSettingsClick = { navController.navigate(Destinations.SETTINGS) },
                     onTabClick = ::navigateToTab,
-                    locationGroups = location.groups,
-                    selectedLocationGroupId = location.selectedId,
-                    onLocationGroupAppsChange = { groupId, apps -> location.updateGroup(groupId) { it.copy(apps = apps) } },
-                    onLocationGroupRename = { groupId, newName -> location.updateGroup(groupId) { it.copy(name = newName) } },
-                    onLocationGroupListClick = { navController.navigate(Destinations.LOCATION_GROUP_LIST) }
+                    blockedAppsFor = { zoneId -> location.groups.find { it.id == zoneId }?.apps.orEmpty() },
+                    onZoneBlockedAppsChange = { zone, apps ->
+                        if (location.groups.any { it.id == zone.id }) {
+                            location.updateGroup(zone.id) { it.copy(name = zone.name, apps = apps) }
+                        } else {
+                            location.groups = location.groups + defaultGroup(zone.id, zone.name).copy(apps = apps)
+                        }
+                    },
+                    onZoneDeleted = { zoneId -> location.groups = location.groups.filterNot { it.id == zoneId } }
+                )
+            }
+            composable(
+                route = Destinations.TIME_FOCUS,
+                enterTransition = partyModeEnter,
+                exitTransition = partyModeExit
+            ) {
+                TimeFocusScreen(
+                    groups = groups,
+                    onGroupsChange = { groups = it },
+                    onTabClick = ::navigateToTab
                 )
             }
 

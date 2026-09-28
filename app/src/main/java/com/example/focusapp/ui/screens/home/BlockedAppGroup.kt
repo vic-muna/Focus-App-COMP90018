@@ -12,7 +12,8 @@ data class BlockedAppGroup(
     val apps: List<AppItem>,
     val schedule: TimeSlot,
     val maxOpensPerApp: Int? = null,
-    val maxMinutesPerApp: Int? = null
+    val maxMinutesPerApp: Int? = null,
+    val enabled: Boolean = true
 )
 
 fun generateFakeGroups(): List<BlockedAppGroup> = listOf(

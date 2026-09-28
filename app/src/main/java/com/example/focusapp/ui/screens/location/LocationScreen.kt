@@ -11,10 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,9 +46,8 @@ import com.example.focusapp.ui.components.SettingsTopBar
 import com.example.focusapp.ui.components.rememberPullUpPanelState
 import com.example.focusapp.ui.navigation.MainTab
 import com.example.focusapp.ui.screens.home.AppItem
-import com.example.focusapp.ui.screens.home.BlockedAppGroup
-import com.example.focusapp.ui.screens.home.LegacySheetContainerColor
-import com.example.focusapp.ui.screens.home.LocationZoneSheetContent
+import com.example.focusapp.ui.screens.home.GroupAppPickerBottomSheet
+import com.example.focusapp.ui.screens.home.rememberInstalledApps
 import com.example.focusapp.ui.navigation.MainTabBar
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
@@ -79,6 +75,8 @@ private data class LocationDraft(
     val radiusMeters: Float = DEFAULT_RADIUS_METERS,
     val latitude: Double? = null,
     val longitude: Double? = null,
+
+    val blockedApps: List<AppItem> = emptyList(),
 )
 
 /**
@@ -87,19 +85,17 @@ private data class LocationDraft(
  * on it (or its top edge) lowers it - it never leaves the screen - to show
  * more map, swiping up brings it back. Long-pressing the map starts adding
  * a location; tapping a group edits it, holding a group deletes it.
- * The add/edit card's Schedule button opens the Location Zone app-group
- * sheet (which apps a location focus session blocks).
+ * The add/edit card's "Blocked app" button opens the app picker - the apps
+ * a focus session at that location blocks. Each location has its own list,
+ * stored as one of David's location groups under the location's id.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LocationScreen(
     onSettingsClick: () -> Unit,
     onTabClick: (MainTab) -> Unit,
-    locationGroups: List<BlockedAppGroup> = emptyList(),
-    selectedLocationGroupId: String = "",
-    onLocationGroupAppsChange: (groupId: String, apps: List<AppItem>) -> Unit = { _, _ -> },
-    onLocationGroupRename: (groupId: String, newName: String) -> Unit = { _, _ -> },
-    onLocationGroupListClick: () -> Unit = {},
+    blockedAppsFor: (zoneId: String) -> List<AppItem> = { emptyList() },
+    onZoneBlockedAppsChange: (zone: FocusZone, apps: List<AppItem>) -> Unit = { _, _ -> },
+    onZoneDeleted: (zoneId: String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -120,9 +116,8 @@ fun LocationScreen(
     // Set by holding a group card; deleting waits for the confirm dialog.
     var pendingDelete by remember { mutableStateOf<FocusZone?>(null) }
 
-    // TODO(design): still the old Location Zone sheet - no Figma frame for it yet.
-    var showGroupSheet by remember { mutableStateOf(false) }
-    val groupSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showAppPicker by remember { mutableStateOf(false) }
+    val installedApps = rememberInstalledApps(shouldLoad = showAppPicker)
 
     suspend fun reloadZones() {
         zones = withContext(Dispatchers.IO) {
@@ -172,6 +167,7 @@ fun LocationScreen(
             radiusMeters = zone.radiusMeters.coerceIn(LocationRadiusRange),
             latitude = zone.latitude,
             longitude = zone.longitude,
+            blockedApps = blockedAppsFor(zone.id),
         )
     }
 
@@ -182,6 +178,7 @@ fun LocationScreen(
                 withContext(Dispatchers.IO) { FocusRepositoryProvider.get(context).deleteFocusZone(zone.id) }
                 enabledZoneIds.remove(zone.id)
                 placeNames.remove(zone.id)
+                onZoneDeleted(zone.id)
                 reloadZones()
             } catch (e: Exception) {
                 listError = friendlyErrorMessage(e, "Deleting the location")
@@ -204,6 +201,7 @@ fun LocationScreen(
             try {
                 withContext(Dispatchers.IO) { FocusRepositoryProvider.get(context).saveFocusZone(zone) }
                 if (current.editingZoneId == null) enabledZoneIds[zone.id] = true
+                onZoneBlockedAppsChange(zone, current.blockedApps)
                 // The position may have moved - resolve its name again.
                 placeNames.remove(zone.id)
                 reloadZones()
@@ -232,30 +230,22 @@ fun LocationScreen(
         onDraftChange = { draft = it },
         onDraftDiscard = { draft = null },
         onDraftConfirm = ::saveDraft,
-        onScheduleClick = { showGroupSheet = true },
+        onBlockedAppsClick = { showAppPicker = true },
         onSettingsClick = onSettingsClick,
         onTabClick = onTabClick,
     )
 
-    if (showGroupSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showGroupSheet = false },
-            sheetState = groupSheetState,
-            containerColor = LegacySheetContainerColor,
-        ) {
-            LocationZoneSheetContent(
-                groups = locationGroups,
-                selectedGroupId = selectedLocationGroupId,
-                onAppsChange = onLocationGroupAppsChange,
-                onRenameGroup = onLocationGroupRename,
-                // The location itself is already being edited in the card behind the sheet.
-                onEditClick = { showGroupSheet = false },
-                onGroupListClick = {
-                    showGroupSheet = false
-                    onLocationGroupListClick()
-                },
-            )
-        }
+    // Edits the draft; the apps are saved with the location when it's confirmed.
+    val pickerDraft = draft
+    if (showAppPicker && pickerDraft != null) {
+        GroupAppPickerBottomSheet(
+            installedApps = installedApps,
+            selectedApps = pickerDraft.blockedApps,
+            onAppsChange = { apps -> draft = pickerDraft.copy(blockedApps = apps) },
+            onDismiss = { showAppPicker = false },
+            title = "Blocked Apps",
+            subtitle = "Select apps to block while you're at this location",
+        )
     }
 
     pendingDelete?.let { zone ->
@@ -291,7 +281,7 @@ private fun LocationContent(
     onDraftChange: (LocationDraft) -> Unit,
     onDraftDiscard: () -> Unit,
     onDraftConfirm: () -> Unit,
-    onScheduleClick: () -> Unit,
+    onBlockedAppsClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onTabClick: (MainTab) -> Unit,
 ) {
@@ -399,7 +389,7 @@ private fun LocationContent(
                     onNameChange = { onDraftChange(draft.copy(name = it)) },
                     radiusMeters = draft.radiusMeters,
                     onRadiusChange = { onDraftChange(draft.copy(radiusMeters = it)) },
-                    onScheduleClick = onScheduleClick,
+                    onBlockedAppsClick = onBlockedAppsClick,
                     onClose = onDraftDiscard,
                     onConfirm = onDraftConfirm,
                 )
@@ -428,7 +418,7 @@ private fun LocationContentListPreview() {
             onDraftChange = {},
             onDraftDiscard = {},
             onDraftConfirm = {},
-            onScheduleClick = {},
+            onBlockedAppsClick = {},
             onSettingsClick = {},
             onTabClick = {},
         )
@@ -455,7 +445,7 @@ private fun LocationContentAddPreview() {
             onDraftChange = {},
             onDraftDiscard = {},
             onDraftConfirm = {},
-            onScheduleClick = {},
+            onBlockedAppsClick = {},
             onSettingsClick = {},
             onTabClick = {},
         )

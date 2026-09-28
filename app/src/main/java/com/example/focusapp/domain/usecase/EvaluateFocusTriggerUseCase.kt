@@ -72,7 +72,7 @@ class EvaluateFocusTriggerUseCase {
         currentWifiSsid: String? = null,
         now: Calendar = Calendar.getInstance()
     ): List<FocusTriggerResult> {
-        val scheduleMatch = groups.firstOrNull { it.schedule.isActiveNow(now) }
+        val scheduleMatch = groups.firstOrNull { it.enabled && it.schedule.isActiveNow(now) }
             ?.let { FocusTriggerResult.ScheduleMatch(it.id, it.name) }
         val locationMatch = currentLatLng?.let { (lat, lng) ->
             currentZones.firstOrNull { it.containsLocation(lat, lng) }

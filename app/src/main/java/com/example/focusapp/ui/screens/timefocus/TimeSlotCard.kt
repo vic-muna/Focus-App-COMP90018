@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.focusapp.ui.components.DayIndicators
@@ -37,14 +38,11 @@ private val CardShape = RoundedCornerShape(14.dp)
 /** Height of the "add time slot" card (Figma: same footprint as a time-slot card). */
 private val AddCardHeight = 84.dp
 
-/**
- * Figma: one row of the "Time Focuse" list - the time range, the days it
- * repeats on, and an on/off switch. Tap = [onClick] (edit), hold =
- * [onLongClick] (delete); the switch handles its own taps.
- */
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TimeSlotCard(
+    name: String,
     timeLabel: String,
     activeDays: Set<String>,
     enabled: Boolean,
@@ -68,6 +66,13 @@ fun TimeSlotCard(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            Text(
+                text = name,
+                style = FocusTheme.typography.body,
+                color = colors.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             Text(text = timeLabel, style = FocusTheme.typography.tileTitle, color = colors.onSurface)
             DayIndicators(activeDays = activeDays)
         }
@@ -120,6 +125,7 @@ private fun TimeSlotCardPreview() {
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             TimeSlotCard(
+                name = "Study Group",
                 timeLabel = "06:10am-08:00am",
                 activeDays = setOf("Mon", "Tue", "Wed"),
                 enabled = true,

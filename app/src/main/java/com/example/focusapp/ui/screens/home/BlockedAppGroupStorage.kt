@@ -94,6 +94,7 @@ class BlockedAppGroupStorage(
         // Omitted (not stored as JSON null) when there's no limit.
         group.maxOpensPerApp?.let { put("maxOpensPerApp", it) }
         group.maxMinutesPerApp?.let { put("maxMinutesPerApp", it) }
+        put("enabled", group.enabled)
     }
 
     private fun groupFromJson(obj: JSONObject, loadIcons: Boolean): BlockedAppGroup {
@@ -124,7 +125,9 @@ class BlockedAppGroupStorage(
             // [David Shiau, 2026-09-26] Optional keys - groups saved before
             // these limits existed simply load with no limit.
             maxOpensPerApp = if (obj.has("maxOpensPerApp")) obj.getInt("maxOpensPerApp") else null,
-            maxMinutesPerApp = if (obj.has("maxMinutesPerApp")) obj.getInt("maxMinutesPerApp") else null
+            maxMinutesPerApp = if (obj.has("maxMinutesPerApp")) obj.getInt("maxMinutesPerApp") else null,
+            // Groups saved before the switch existed load as switched on.
+            enabled = obj.optBoolean("enabled", true)
         )
     }
 

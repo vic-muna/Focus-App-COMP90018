@@ -58,6 +58,7 @@ class EvaluateUsageLimitUseCase {
         val usageCache = mutableMapOf<Long, Map<String, AppWindowUsage>>()
 
         for (group in groups) {
+            if (!group.enabled) continue
             val maxOpens = group.maxOpensPerApp
             val maxMillis = group.maxMinutesPerApp?.let { it * 60_000L }
             if (maxOpens == null && maxMillis == null) continue

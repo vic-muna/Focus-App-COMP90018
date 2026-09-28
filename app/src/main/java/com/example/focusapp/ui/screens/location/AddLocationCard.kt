@@ -45,7 +45,7 @@ fun AddLocationCard(
     onNameChange: (String) -> Unit,
     radiusMeters: Float,
     onRadiusChange: (Float) -> Unit,
-    onScheduleClick: () -> Unit,
+    onBlockedAppsClick: () -> Unit,
     onClose: () -> Unit,
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier,
@@ -122,10 +122,10 @@ fun AddLocationCard(
                 .height(56.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(colors.surfaceSunken)
-                .clickable(role = Role.Button, onClick = onScheduleClick),
+                .clickable(role = Role.Button, onClick = onBlockedAppsClick),
             contentAlignment = Alignment.Center,
         ) {
-            Text(text = "Schedule", style = typography.inputLarge, color = colors.onSurfaceMuted)
+            Text(text = "Blocked app", style = typography.inputLarge, color = colors.onSurfaceMuted)
         }
     }
 }
@@ -149,7 +149,7 @@ private fun AddLocationCardPreview() {
             onNameChange = {},
             radiusMeters = 100f,
             onRadiusChange = {},
-            onScheduleClick = {},
+            onBlockedAppsClick = {},
             onClose = {},
             onConfirm = {},
         )

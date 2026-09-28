@@ -88,6 +88,7 @@ fun HomeScreenWithSheet(
     onSettingsClick: () -> Unit = {},
     onEditLocationZoneClick: () -> Unit = {},
     onLocationTabClick: () -> Unit = {},
+    onScheduleTabClick: () -> Unit = {},
     // [David Shiau, 2026-09-26] Location Zone's own app groups - separate
     // from `groups` above (Scheduled Limits).
     locationGroups: List<BlockedAppGroup> = emptyList(),
@@ -125,7 +126,7 @@ fun HomeScreenWithSheet(
         when (tab) {
             MainTab.HOME -> Unit
             MainTab.LOCATION -> onLocationTabClick()
-            MainTab.SCHEDULE -> openSheet(SheetType.BLOCKED_APPS, tab)
+            MainTab.SCHEDULE -> onScheduleTabClick()
             MainTab.WIFI_SOURCE -> openSheet(SheetType.WIFI_SOURCE, tab)
         }
     }
@@ -299,7 +300,7 @@ fun HomeScreenWithSheet(
                                     return@AutoFocusSuggestionBanner
                                 }
                                 is FocusTriggerResult.LocationMatch ->
-                                    FocusSessionSource.Location(suggestion.zoneName)
+                                    FocusSessionSource.Location(suggestion.zoneName, suggestion.zoneId)
                                 is FocusTriggerResult.WifiMatch ->
                                     FocusSessionSource.Wifi(suggestion.ssid)
                                 FocusTriggerResult.NoTrigger -> return@AutoFocusSuggestionBanner
