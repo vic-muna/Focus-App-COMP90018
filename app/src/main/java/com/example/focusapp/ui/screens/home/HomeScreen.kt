@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.ui.draw.clipToBounds
 import com.example.focusapp.ui.theme.FocusSpacing
+import androidx.annotation.DrawableRes
 /**
  * img_home_dashboard.png is 960 x 903 px, but the artwork only covers a
  * 692 x 795 px area (the rest is background-colored margin), sitting ~19 px
@@ -47,6 +48,8 @@ private val DashboardArtOffsetY = DashboardArtWidth * (-19.5f / 692f)
 fun HomeScreen(
     modifier: Modifier = Modifier,
     userName: String = "User",
+    // The picked background theme's Home art (see BackgroundThemes).
+    @DrawableRes dashboardArt: Int = R.drawable.img_home_dashboard,
     selectedTab: MainTab = MainTab.HOME,
     onSettingsClick: () -> Unit = {},
     onDashboardClick: () -> Unit = {},
@@ -76,7 +79,7 @@ fun HomeScreen(
             contentAlignment = Alignment.Center,
         ) {
             Image(
-                painter = painterResource(R.drawable.img_home_dashboard),
+                painter = painterResource(dashboardArt),
                 contentDescription = "Focus history",
                 contentScale = ContentScale.FillBounds,
                 modifier = Modifier

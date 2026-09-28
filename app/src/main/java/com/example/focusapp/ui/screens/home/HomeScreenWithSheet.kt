@@ -52,6 +52,9 @@ import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import androidx.annotation.DrawableRes
+import com.example.focusapp.R
+
 
 /** How often the auto-suggestion check re-evaluates while Home is on screen - schedule
  *  boundaries only need minute-granularity, so there's no need for anything tighter. */
@@ -66,6 +69,8 @@ fun HomeScreenWithSheet(
     groups: List<BlockedAppGroup>,
     // The Wi-Fi tab's networks that are switched on - only read here, for the Wi-Fi banner.
     wifiSsids: List<String> = emptyList(),
+    // The picked background theme's Home art (see BackgroundThemes).
+    @DrawableRes dashboardArt: Int = R.drawable.img_home_dashboard,
     onFocusSessionStart: (FocusSessionSource) -> Unit = {},
     onScheduleBannerClick: (groupId: String) -> Unit = {},
     onAvatarClick: () -> Unit = {},
@@ -181,6 +186,7 @@ fun HomeScreenWithSheet(
         // The new Figma Home has no Party Mode entry, so onPartyModeClick is
         // currently unused here - kept so NavGraph's wiring doesn't change.
         HomeScreen(
+            dashboardArt = dashboardArt,
             selectedTab = MainTab.HOME,
             onSettingsClick = onSettingsClick,
             onDashboardClick = onAvatarClick,

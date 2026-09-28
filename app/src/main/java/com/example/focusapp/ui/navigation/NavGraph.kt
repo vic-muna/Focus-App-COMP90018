@@ -51,6 +51,9 @@ import com.example.focusapp.ui.screens.settings.SettingsScreen
 import com.example.focusapp.ui.theme.WireframeColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.example.focusapp.data.preferences.BackgroundThemeStorage
+import com.example.focusapp.ui.screens.history.ThemePickerScreen
+import com.example.focusapp.ui.theme.BackgroundThemes
 
 // Any navigation into or out of Home is a dissolve (cross-fade) - both the
 // leaving and the arriving screen fade, in place, over the same duration.
@@ -134,6 +137,10 @@ fun FocusAppNavGraph() {
 
     var groups by remember { mutableStateOf(generateFakeGroups()) }
     var activeFocusSession by remember { mutableStateOf<ActiveFocusSession?>(null) }
+
+    // The picked background theme - shown on the dashboard, Home and Focus Mode.
+    val themeStorage = remember { BackgroundThemeStorage(context) }
+    var backgroundTheme by remember { mutableStateOf(BackgroundThemes.byId(themeStorage.getSelectedId())) }
 
     // [David Shiau, 2026-09-23] Persists `groups` (see
     // BlockedAppGroupStorage's doc comment for why they weren't persisted
@@ -260,6 +267,7 @@ fun FocusAppNavGraph() {
             ) {
                 HomeScreenWithSheet(
                     groups = groups,
+                    dashboardArt = backgroundTheme.homeArt,
                     // The networks whose switch is on.
                     wifiSsids = wifi.groups.filter { it.enabled }.map { it.id },
                     // [HANDOFF -> Kai-Jiun Chan | README task: "Reward/Progress UI"]
@@ -361,6 +369,7 @@ fun FocusAppNavGraph() {
                 if (session != null) {
                     FocusSessionScreen(
                         session = session,
+                        backgroundArt = backgroundTheme.focusArt,
                         onEndSessionClick = {
                             // [David Shiau, 2026-09-20] Lifts blocking once the session is over.
                             AccessibilityBridge.clearRestrictedPackages()
@@ -428,7 +437,28 @@ fun FocusAppNavGraph() {
                 route = Destinations.HISTORY,
                 enterTransition = enterFromBottom,
                 exitTransition = exitToBottom
-            ) { HistoryScreen() }
+            ) {
+                HistoryScreen(
+                    theme = backgroundTheme,
+                    onChangeThemeClick = { navController.navigate(Destinations.THEME_PICKER) }
+                )
+            }
+
+            composable(
+                route = Destinations.THEME_PICKER,
+                enterTransition = enterFromBottom,
+                exitTransition = exitToBottom
+            ) {
+                ThemePickerScreen(
+                    selectedId = backgroundTheme.id,
+                    onSelect = { theme ->
+                        backgroundTheme = theme
+                        themeStorage.saveSelectedId(theme.id)
+                        navController.popBackStack()
+                    },
+                    onClose = { navController.popBackStack() }
+                )
+            }
 
             composable(
                 route = Destinations.EDIT_APP_GROUP,

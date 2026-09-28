@@ -45,6 +45,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.annotation.DrawableRes
 
 // Matches the hint bubble's "Hold for 5 seconds" copy - change both together.
 private const val CANCEL_HOLD_DURATION_MILLIS = 5_000L
@@ -89,7 +90,9 @@ data class ActiveFocusSession(
 @Composable
 fun FocusSessionScreen(
     session: ActiveFocusSession,
-    onEndSessionClick: () -> Unit
+    onEndSessionClick: () -> Unit,
+    // The picked background theme's Focus Mode art (see BackgroundThemes).
+    @DrawableRes backgroundArt: Int = R.drawable.img_focus_background,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -200,7 +203,7 @@ fun FocusSessionScreen(
             }
     ) {
         Image(
-            painter = painterResource(R.drawable.img_focus_background),
+                        painter = painterResource(backgroundArt),
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()

@@ -43,6 +43,9 @@ object Destinations {
     // tile on the Home screen (the block above Quick Focus - see HomeScreen.kt).
     const val HISTORY = "history"
 
+    // Background theme picker - opened from the ID card on HISTORY (the dashboard).
+    const val THEME_PICKER = "theme_picker"
+
     // The Wi-Fi tab - see ui.screens.wififocus.WifiFocusScreen.
     const val WIFI = "wifi"
 
