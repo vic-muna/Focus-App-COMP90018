@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.mutableStateOf
+import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.data.apps.getAppLabel
 import com.example.focusapp.ui.screens.blocked.BlockedScreen
 import com.example.focusapp.ui.theme.FocusAppTheme
@@ -15,8 +16,10 @@ import com.example.focusapp.ui.theme.FocusAppTheme
  * on top of a blocked app. It is a separate Activity because the service can't
  * show anything on screen by itself.
  *
- * It runs in its own task (see the manifest), and both "Got it" and Back go to
- * the phone's home screen - just closing it could show the blocked app again.
+ * It runs in its own task (see the manifest). "Got it" and Back never just close it
+ * (that could show the blocked app again):
+ *  - during a focus session: back to Focus's timer screen
+ *  - otherwise (a daily limit was reached): to the phone's home screen
  */
 class BlockedActivity : ComponentActivity() {
 
@@ -33,11 +36,11 @@ class BlockedActivity : ComponentActivity() {
         setContent {
             FocusAppTheme {
                 // Back does the same as "Got it".
-                BackHandler { goHomeAndFinish() }
+                BackHandler { leave() }
                 BlockedScreen(
                     appLabel = blockedAppLabelState.value,
                     reason = blockReasonState.value,
-                    onGotItClick = { goHomeAndFinish() }
+                    onGotItClick = { leave() }
                 )
             }
         }
@@ -56,13 +59,21 @@ class BlockedActivity : ComponentActivity() {
         blockReasonState.value = intent.getStringExtra(EXTRA_BLOCK_REASON)
     }
 
-    /** Goes to the phone's home screen, then closes this screen. */
-    private fun goHomeAndFinish() {
-        val homeIntent = Intent(Intent.ACTION_MAIN).apply {
-            addCategory(Intent.CATEGORY_HOME)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+    /** Leaves this screen: back to the focus timer if a session is running, else to the phone's home screen. */
+    private fun leave() {
+        val isFocusing = AccessibilityBridge.restrictedPackages.value.isNotEmpty()
+        val nextScreen = if (isFocusing) {
+            // Brings the open Focus app (still on its timer screen) back to the front.
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+            }
+        } else {
+            Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_HOME)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
         }
-        startActivity(homeIntent)
+        startActivity(nextScreen)
         finish()
     }
 

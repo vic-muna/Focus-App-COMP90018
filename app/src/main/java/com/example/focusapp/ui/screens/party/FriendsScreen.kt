@@ -126,15 +126,9 @@ fun FriendsScreen(
                 errorMessage = errorMessage,
                 onClose = ::closeCard,
                 onStart = {
-                    if (quickFocusApps.isEmpty()) {
-                        // Nothing to block yet: pick the apps first, then press start again.
-                        card = GroupCard.QUICK_FOCUS_APPS
-                    } else if (!isAccessibilityEnabled) {
-                        showAccessibilityPermissionDialog = true
-                    } else {
-                        viewModel.setFocusing(true)
-                        onStartFocus()
-                    }
+                    // Permission first, then pick the apps to block (same card as Quick Focus).
+                    if (isAccessibilityEnabled) card = GroupCard.QUICK_FOCUS_APPS
+                    else showAccessibilityPermissionDialog = true
                 },
                 modifier = Modifier.consumeTaps(),
             )
@@ -154,9 +148,11 @@ fun FriendsScreen(
             )
             GroupCard.QUICK_FOCUS_APPS -> QuickFocusAppsCard(
                 savedApps = quickFocusApps,
-                onSave = { apps ->
+                onStart = { apps ->
                     onQuickFocusAppsChange(apps)
-                    card = GroupCard.CREATE
+                    card = GroupCard.CREATE // Coming back after focusing shows the group card again.
+                    viewModel.setFocusing(true)
+                    onStartFocus()
                 },
                 onClose = { card = GroupCard.CREATE },
                 modifier = Modifier.consumeTaps(),

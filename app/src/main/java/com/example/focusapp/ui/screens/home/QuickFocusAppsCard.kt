@@ -18,14 +18,13 @@ import com.example.focusapp.ui.components.card.AppSelectCard
 import com.example.focusapp.ui.theme.FocusAppTheme
 
 /**
- * The fly card for picking the apps Quick Focus (and Party Mode) block.
- * Starts with [savedApps] ticked; the check calls [onSave] with the new pick.
- * Used on Home and in Party Mode.
+ * Shown every time Quick Focus (or a Party Mode group) starts: pick the apps to block.
+ * The last pick ([savedApps]) starts ticked; the check calls [onStart] with the new pick.
  */
 @Composable
 fun QuickFocusAppsCard(
     savedApps: List<AppItem>,
-    onSave: (List<AppItem>) -> Unit,
+    onStart: (List<AppItem>) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -40,8 +39,8 @@ fun QuickFocusAppsCard(
         onClose = onClose,
         actionButton = {
             ConfirmButton(
-                onClick = { onSave(pickedApps(installedApps, selection, savedApps)) },
-                contentDescription = "Save Quick Focus apps",
+                onClick = { onStart(pickedApps(installedApps, selection, savedApps)) },
+                contentDescription = "Start focusing",
                 enabled = selection.isNotEmpty(),
             )
         },
@@ -54,6 +53,6 @@ fun QuickFocusAppsCard(
 private fun QuickFocusAppsCardPreview() {
     FocusAppTheme {
         // Shows "Loading apps…" in the preview: installed apps are only read on a phone.
-        QuickFocusAppsCard(savedApps = emptyList(), onSave = {}, onClose = {}, modifier = Modifier.padding(16.dp))
+        QuickFocusAppsCard(savedApps = emptyList(), onStart = {}, onClose = {}, modifier = Modifier.padding(16.dp))
     }
 }

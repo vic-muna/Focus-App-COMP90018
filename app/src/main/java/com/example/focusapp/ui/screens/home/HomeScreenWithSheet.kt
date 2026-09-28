@@ -64,9 +64,6 @@ private const val AUTO_TRIGGER_CHECK_INTERVAL_MILLIS = 60_000L
 /** Each suggestion banner closes itself after this long. */
 private const val BANNER_AUTO_HIDE_MILLIS = 5_000L
 
-/** The Quick Focus hint closes itself after this long. */
-private const val HINT_AUTO_HIDE_MILLIS = 3_000L
-
 @Composable
 fun HomeScreenWithSheet(
     // Time Focus's schedule groups - only read here, for the schedule banner.
@@ -112,26 +109,13 @@ fun HomeScreenWithSheet(
         }
     }
 
-    // --- Quick Focus: tap = hint, hold 1 s = start, hold 3 s = pick the apps it blocks ---
-    var quickFocusHint by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(quickFocusHint) {
-        if (quickFocusHint != null) {
-            delay(HINT_AUTO_HIDE_MILLIS)
-            quickFocusHint = null
-        }
-    }
-
+    // --- Quick Focus: every time, pick the apps to block (last pick is pre-ticked), then start ---
     var showQuickFocusPicker by remember { mutableStateOf(false) }
 
-    fun openQuickFocusPicker() {
-        quickFocusHint = null
-        showQuickFocusPicker = true
-    }
-
-    fun startQuickFocus() {
-        // Nothing picked yet: ask for the apps first.
-        if (quickFocusApps.isEmpty()) openQuickFocusPicker()
-        else startFocusSessionIfPermitted(FocusSessionSource.Manual)
+    fun onQuickFocusClick() {
+        // Ask for the permission first, so the apps aren't picked for nothing.
+        if (isAccessibilityEnabled) showQuickFocusPicker = true
+        else showAccessibilityPermissionDialog = true
     }
 
     BackHandler(enabled = showQuickFocusPicker) { showQuickFocusPicker = false }
@@ -205,10 +189,7 @@ fun HomeScreenWithSheet(
             onSettingsClick = onSettingsClick,
             onPartyClick = onPartyModeClick,
             onDashboardClick = onAvatarClick,
-            onQuickFocusTap = { quickFocusHint = "Hold 1 sec to start focusing\nHold 3 sec to choose apps" },
-            onQuickFocusStart = ::startQuickFocus,
-            onQuickFocusSettings = ::openQuickFocusPicker,
-            quickFocusHint = quickFocusHint,
+            onQuickFocusClick = ::onQuickFocusClick,
             onTabClick = { tab -> onTabClick(tab) }
         )
 
@@ -252,9 +233,10 @@ fun HomeScreenWithSheet(
             FlyCardOverlay(onOutsideClick = { showQuickFocusPicker = false }) {
                 QuickFocusAppsCard(
                     savedApps = quickFocusApps,
-                    onSave = { apps ->
-                        onQuickFocusAppsChange(apps)
+                    onStart = { apps ->
                         showQuickFocusPicker = false
+                        onQuickFocusAppsChange(apps)
+                        onFocusSessionStart(FocusSessionSource.Manual)
                     },
                     onClose = { showQuickFocusPicker = false },
                     modifier = Modifier.consumeTaps(),
