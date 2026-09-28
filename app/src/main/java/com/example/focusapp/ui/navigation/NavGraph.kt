@@ -37,7 +37,6 @@ import com.example.focusapp.ui.screens.home.BlockedAppGroup
 import com.example.focusapp.ui.screens.home.BlockedAppGroupStorage
 import com.example.focusapp.ui.screens.home.GroupUsageScreen
 import com.example.focusapp.ui.screens.home.HomeScreenWithSheet
-import com.example.focusapp.ui.screens.home.generateFakeGroups
 import com.example.focusapp.ui.screens.home.generateFakeTimeSlot
 import com.example.focusapp.ui.screens.location.LocationScreen
 import com.example.focusapp.ui.screens.timefocus.TimeFocusScreen
@@ -135,7 +134,7 @@ fun FocusAppNavGraph() {
     val navController = rememberNavController()
     val context = LocalContext.current
 
-    var groups by remember { mutableStateOf(generateFakeGroups()) }
+    var groups by remember { mutableStateOf(emptyList<BlockedAppGroup>()) }
     var activeFocusSession by remember { mutableStateOf<ActiveFocusSession?>(null) }
 
     // The picked background theme - shown on the dashboard, Home and Focus Mode.
