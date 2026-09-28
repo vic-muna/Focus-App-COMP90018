@@ -13,19 +13,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * ErrorBanner
- * -------------
- * Shared "something went wrong" banner - same pink pill originally written
- * as PartyModeScreen's private PartyErrorBanner, pulled out here so every
- * screen that can fail a save (AddAppGroupScreen, EditLocationZoneScreen,
- * FocusSessionScreen, FriendListScreen, PartyModeScreen) shows failures the
- * same way instead of the app just crashing on an uncaught exception.
- *
- * Deliberately just a static Text, not a dismiss button/timeout - callers
- * own when the message disappears (usually: clearing their own error state
- * on the next attempt, or when the screen is left). See any of the call
- * sites above for the pattern: catch the exception where the suspend call
- * is made, store the message in a bit of state, show it via this composable.
+ * A pink "something went wrong" message. The screen decides when it goes
+ * away (usually by clearing its error on the next try).
  */
 @Composable
 fun ErrorBanner(message: String, modifier: Modifier = Modifier) {

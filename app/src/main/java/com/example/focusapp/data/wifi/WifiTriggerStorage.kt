@@ -4,17 +4,8 @@ import android.content.Context
 import org.json.JSONArray
 
 /**
- * WifiTriggerStorage
- * ---------------------
- * Real persistence (SharedPreferences + JSON, same approach used elsewhere
- * - see LocalDataSource/BlockedAppGroupStorage) for the Wi-Fi-source
- * trigger: whether it's turned on, and which SSIDs the user has tagged as
- * "start a focus session when connected to this network".
- *
- * Phase 2 of the planned Wi-Fi-source trigger (see WifiProvider.kt for
- * phase 1, just reading the current SSID). No auto-detection of *which*
- * organization a network belongs to - see the design discussion this was
- * built from - the user tags networks themselves, same as a Focus Zone.
+ * David's older Wi-Fi setting (on/off plus tagged network names).
+ * Now only read, so [WifiHistoryStorage] can still show those networks.
  */
 class WifiTriggerStorage(context: Context) {
 

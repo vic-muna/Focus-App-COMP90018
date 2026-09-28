@@ -18,12 +18,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * WifiProvider
- * --------------
- * Phase 1 of the planned Wi-Fi-source trigger (see the location-zone
- * geofencing trigger for the eventual shape this is expected to follow):
- * just answering "what Wi-Fi network is the device connected to right now".
- * No blocking/trigger logic lives here yet.
+ * Reads which Wi-Fi network the phone is connected to.
  */
 
 /** Outcome of [checkCurrentWifi] - says WHY there's no network name, not just that there isn't one. */
@@ -43,7 +38,7 @@ sealed class WifiCheckResult {
 
 /**
  * Whether the app holds the permission needed to read a real SSID.
- * [David Shiau, 2026-09-26] FINE location specifically: since Android 10
+ * FINE location specifically: since Android 10
  * the SSID needs ACCESS_FINE_LOCATION, and COARSE alone (what the user gets
  * by picking "Approximate" in the Android 12+ permission dialog) returns
  * the "<unknown ssid>" placeholder. This used to accept coarse too, which
@@ -54,32 +49,17 @@ fun hasLocationPermissionForWifi(context: Context): Boolean =
         PackageManager.PERMISSION_GRANTED
 
 /**
- * getCurrentWifiSsid
- * ---------------------
- * The SSID (network name) of the Wi-Fi network the device is connected to,
- * or null for any reason it can't be read - see [checkCurrentWifi] for the
- * reason.
+ * The connected Wi-Fi's name, or null if it can't be read (see [checkCurrentWifi] for why).
  */
 suspend fun getCurrentWifiSsid(context: Context): String? =
     (checkCurrentWifi(context) as? WifiCheckResult.Connected)?.ssid
 
 /**
- * checkCurrentWifi
- * ---------------------
- * [David Shiau, 2026-09-26] Reads the current Wi-Fi network name. Android
- * returns the literal placeholder "<unknown ssid>" (not an error) whenever
- * it withholds the name, for any of these reasons - each is checked
- * separately so the caller can say which one it was:
- *  1. No precise (fine) location permission - see [hasLocationPermissionForWifi].
- *  2. The device's Location setting is off.
- *  3. On Android 12+ (API 31+), `getNetworkCapabilities(activeNetwork)`
- *     ALWAYS redacts the SSID, even with permission. The name is only
- *     included when read from a NetworkCallback registered with
- *     FLAG_INCLUDE_LOCATION_INFO. This was the original bug: this function
- *     used to read getNetworkCapabilities directly, so on Android 12+ it
- *     never found a name.
- * The old WifiManager.connectionInfo (deprecated in API 31, still working)
- * is kept as a fallback on every API level.
+ * Reads the connected Wi-Fi's name. Android hides the name when:
+ *  1. there's no precise location permission ([hasLocationPermissionForWifi])
+ *  2. the phone's Location setting is off
+ * On Android 12+ the name is only given to a NetworkCallback with FLAG_INCLUDE_LOCATION_INFO;
+ * the older WifiManager is tried as a backup.
  */
 suspend fun checkCurrentWifi(context: Context): WifiCheckResult {
     val connectivityManager =

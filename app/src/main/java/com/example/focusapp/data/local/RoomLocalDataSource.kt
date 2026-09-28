@@ -9,23 +9,8 @@ import com.example.focusapp.domain.model.FocusZone
 import com.example.focusapp.domain.model.Friend
 
 /**
- * RoomLocalDataSource
- * ----------------------
- * Real Room-backed [LocalDataSource] - replaces the earlier in-memory
- * stub, so data now survives app restarts (issue #41 schema, #42 CRUD).
- * Table/column definitions live in data/local/entity/, DAOs in
- * data/local/dao/; this class just maps domain models <-> entities and
- * keeps the exact same public API FocusRepositoryImpl already depends on,
- * plus the additions needed for cloud sync (#43 offline caching / #48
- * local-to-cloud sync): getUnsyncedSessions()/markSessionSynced(id), and
- * their zone/app-group equivalents further down.
- *
- * (This class used to be named `LocalDataSource` directly. That name is
- * now the interface - see LocalDataSource.kt for why.)
- *
- * Needs a Context to open the database - construct with
- * RoomLocalDataSource(context), e.g. via FocusRepositoryProvider (see
- * data/repository/FocusRepositoryProvider.kt).
+ * The real [LocalDataSource], backed by Room.
+ * It turns domain models into database rows (entity/) and back, using the DAOs (dao/).
  */
 class RoomLocalDataSource(context: Context) : LocalDataSource {
 

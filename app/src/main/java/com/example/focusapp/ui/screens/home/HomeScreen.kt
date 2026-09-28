@@ -1,127 +1,110 @@
 package com.example.focusapp.ui.screens.home
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.focusapp.R
+import com.example.focusapp.ui.navigation.MainTab
+import com.example.focusapp.ui.navigation.MainTabBar
+import com.example.focusapp.ui.theme.FocusAppTheme
+import com.example.focusapp.ui.theme.FocusTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.ui.draw.clipToBounds
+import com.example.focusapp.ui.theme.FocusSpacing
+import androidx.annotation.DrawableRes
+import com.example.focusapp.ui.components.bar.SettingsTopBar
+/**
+ * img_home_dashboard.png is 960 x 903 px, but the artwork only covers a
+ * 692 x 795 px area (the rest is background-colored margin), sitting ~19 px
+ * below center. The image is scaled so the artwork itself is
+ * [DashboardArtWidth] wide, and the margin is clipped away.
+ */
+private val DashboardArtWidth = 285.dp
+private val DashboardArtHeight = DashboardArtWidth * (795f / 692f)
+private val DashboardImageWidth = DashboardArtWidth * (960f / 692f)
+private val DashboardImageHeight = DashboardArtWidth * (903f / 692f)
+private val DashboardArtOffsetY = DashboardArtWidth * (-19.5f / 692f)
 
+/** Figma: "HomePage" frame (node 2:4). Layout only - behavior is hoisted to [HomeScreenWithSheet]. */
 @Composable
 fun HomeScreen(
     modifier: Modifier = Modifier,
-    onAvatarClick: () -> Unit = {},
+    userName: String = "User",
+    // The picked background theme's Home art (see BackgroundThemes).
+    @DrawableRes dashboardArt: Int = R.drawable.img_home_dashboard,
+    selectedTab: MainTab = MainTab.HOME,
+    onSettingsClick: () -> Unit = {},
+    onPartyClick: () -> Unit = {},
+    onDashboardClick: () -> Unit = {},
     onQuickFocusClick: () -> Unit = {},
-    onPartyModeClick: () -> Unit = {},
-    onBlockedAppCardClick: () -> Unit = {},
-    onLocationCardClick: () -> Unit = {},
-    onWifiCardClick: () -> Unit = {},
-    onSettingsClick: () -> Unit = {}
+    onTabClick: (MainTab) -> Unit = {},
 ) {
     Column(
-        modifier = modifier.fillMaxSize().padding(30.dp),
-        verticalArrangement = Arrangement.SpaceBetween,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // 上方:頭像區(不變)
-        Box(
-            modifier = Modifier.size(250.dp)
-                .offset(0.dp,50.dp)
-                .background(Color.LightGray)
-                .clickable { onAvatarClick() }
-        ) {
-            Text("History", modifier = Modifier.align(Alignment.Center))
-        }
-
-        // 中間:Quick Focus(不變)
-        Box(
-            modifier = Modifier.size(160.dp)
-                .offset(0.dp,50.dp)
-                .background(Color(0xFFE3E9FF), CircleShape)
-                .clickable { onQuickFocusClick() }
-        ) {
-            Text("Quick Focus", modifier = Modifier.align(Alignment.Center))
-        }
-
-        // 底部:Map + Carousel(Blocked Apps / Location Zone)+ Settings
-        // 底部:用 Box 疊層做出卡片蓋過圖示的效果
-        Box(
-            modifier = Modifier.fillMaxWidth().height(180.dp)
-        ) {
-            // 背景層:Map + Settings,貼在左右下角
-            Row(
-                modifier = Modifier.fillMaxSize(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column(
-                    modifier = Modifier.align(Alignment.Bottom),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier.size(48.dp)
-                            .background(Color(0xFFE0E0E0))
-                            .clickable { onPartyModeClick() }
-                    )
-                    Text("Party")
-                }
-
-                Column(
-                    modifier = Modifier.align(Alignment.Bottom),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier.size(48.dp)
-                            .background(Color(0xFFE0E0E0))
-                            .clickable { onSettingsClick() }
-                    )
-                    Text("Settings")
-                }
-            }
-
-            // 前景層:卡片疊在上面,三張卡片並排同一列,不用滑動切換
-            // [David Shiau, 2026-09-26] Three cards now (the 3 main functions),
-            // so the row spans the full width instead of 75% - still clear of
-            // the Party/Settings icons, which sit below the cards' 100dp.
-            Row(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .height(100.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                HomeFeatureCard("Scheduled Limits", Modifier.weight(1f), onBlockedAppCardClick)
-                HomeFeatureCard("Location Zone", Modifier.weight(1f), onLocationCardClick)
-                HomeFeatureCard("Wi-Fi Source Detection", Modifier.weight(1f), onWifiCardClick)
-            }
-        }
-    }
-}
-
-@Composable
-private fun HomeFeatureCard(label: String, modifier: Modifier, onClick: () -> Unit) {
-    Box(
         modifier = modifier
-            .clip(RoundedCornerShape(24.dp))
-            .fillMaxHeight()
-            .background(Color(0xFFF5F5F5))
-            .clickable(onClick = onClick)
-            .padding(8.dp)
+            .fillMaxSize()
+            .background(FocusTheme.colors.background),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Center-aligned so it stays centered when it wraps onto two lines.
-        Text(label, textAlign = TextAlign.Center, modifier = Modifier.align(Alignment.Center))
+        SettingsTopBar(onSettingsClick = onSettingsClick, onPartyClick = onPartyClick)
+
+        GreetingHeader(
+            userName = userName,
+            subtitle = "Let's speed up your production",
+            modifier = Modifier.padding(top = 12.dp),
+        )
+
+        Box(
+            modifier = Modifier
+                .padding(top = 28.dp)
+                .size(width = DashboardArtWidth, height = DashboardArtHeight)
+                .clipToBounds()
+                .clickable(onClick = onDashboardClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                painter = painterResource(dashboardArt),
+                contentDescription = "Focus history",
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier
+                    // requiredSize lets the image overflow the box; clipToBounds trims the margin.
+                    .requiredSize(width = DashboardImageWidth, height = DashboardImageHeight)
+                    .offset(y = DashboardArtOffsetY),
+            )
+        }
+
+        Spacer(Modifier.height(40.dp))
+
+        QuickFocusButton(onClick = onQuickFocusClick)
+
+        Spacer(Modifier.weight(1f).heightIn(min = 24.dp))
+
+        MainTabBar(selectedTab = selectedTab, onTabClick = onTabClick)
+
+        Spacer(Modifier.height(FocusSpacing.ScreenBottom))
     }
 }
 
-@Preview(showBackground = true)
+@Preview(widthDp = 393, heightDp = 852)
 @Composable
-fun HomeScreenPreview() {
-    HomeScreen()
+private fun HomeScreenPreview() {
+    FocusAppTheme {
+        HomeScreen()
+    }
 }
+

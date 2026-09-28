@@ -8,38 +8,28 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import com.example.focusapp.ui.navigation.FocusAppNavGraph
-import com.google.android.gms.location.FusedLocationProviderClient
-/**
- * MainActivity
- * -------------
- * The single Activity entry point for the whole app. Every screen is a
- * Composable function, and switching between them is handled entirely by
- * [FocusAppNavGraph] (Jetpack Navigation Compose) - this class does not
- * need to change when new screens are added.
- *
- * This class currently contains NO business logic. It only builds the
- * Compose UI tree. Sensors, background services, permission requests, etc.
- * will be wired up separately, inside the relevant screen/ViewModel/data
- * source files, as those features are implemented.
- */
+import com.example.focusapp.ui.theme.FocusAppTheme
+import android.content.Intent
+import androidx.compose.runtime.mutableStateOf
+import com.example.focusapp.data.notification.TimeFocusNotification
+
+/** The app's only Activity. It shows [FocusAppNavGraph], which switches between the screens. */
 class MainActivity : ComponentActivity() {
 
-    // [Claude, 2026-09-21] POST_NOTIFICATIONS is a runtime (not just
-    // manifest-declared) permission on API 33+ - without this request the
-    // OS silently drops FocusTimerService's notification, it doesn't
-    // crash or error. Fire-and-forget: does not gate or otherwise affect
-    // setContent below, since the rest of the app doesn't depend on the
-    // result either way.
+    // Android 13+ needs permission to show the focus timer notification.
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
+    // The time slot to open, when the app was opened from a Time Focus notification.
+    private val timeSlotToOpen = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        timeSlotToOpen.value = intent.getStringExtra(TimeFocusNotification.EXTRA_OPEN_TIME_SLOT)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
@@ -49,16 +39,21 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            // MaterialTheme with no custom arguments = default Material3
-            // colors/typography. No branding/visual design has been done
-            // yet - that is intentional at this stage of the project.
-            MaterialTheme {
+            // Gives every screen FocusTheme.colors and FocusTheme.typography.
+            FocusAppTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    // Root navigation graph - decides which screen is shown
-                    // and owns the bottom navigation bar.
-                    FocusAppNavGraph()
+                    FocusAppNavGraph(
+                        timeSlotToOpen = timeSlotToOpen.value,
+                        onTimeSlotOpened = { timeSlotToOpen.value = null },
+                    )
                 }
             }
         }
+    }
+
+    /** Called instead of onCreate when a notification is tapped while the app is already open. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        intent.getStringExtra(TimeFocusNotification.EXTRA_OPEN_TIME_SLOT)?.let { timeSlotToOpen.value = it }
     }
 }

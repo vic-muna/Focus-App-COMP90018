@@ -1,0 +1,20 @@
+<!-- Figma: Line icon / Clock_fill. White so callers tint it with a theme color. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="34.595dp"
+    android:height="34.5dp"
+    android:viewportWidth="34.595"
+    android:viewportHeight="34.5">
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M7.87355 3.52411C6.82609 3.80401 5.87096 4.35394 5.10417 5.11862C4.33737 5.88331 3.78593 6.83581 3.50527 7.8804" />
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M26.7215 3.52411C27.769 3.80401 28.7241 4.35394 29.4909 5.11862C30.2577 5.88331 30.8091 6.83581 31.0898 7.8804" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M17.2979 4.92236C24.1719 4.92254 29.7441 10.4802 29.7441 17.3354C29.7441 24.1907 24.1719 29.7484 17.2979 29.7485C10.4236 29.7485 4.85059 24.1908 4.85059 17.3354C4.85062 10.4801 10.4236 4.92236 17.2979 4.92236ZM17.2979 10.1294C16.7456 10.1294 16.2979 10.5771 16.2979 11.1294V17.0854C16.298 17.7757 16.8576 18.3354 17.5479 18.3354H21.9658C22.5177 18.3351 22.9657 17.8874 22.9658 17.3354C22.9657 16.7835 22.5177 16.3358 21.9658 16.3354H18.2979V11.1294C18.2979 10.5772 17.85 10.1296 17.2979 10.1294Z" />
+</vector>

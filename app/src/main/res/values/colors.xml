@@ -2,4 +2,7 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <!-- Time Focus notification: white text on the theme's colour. -->
+    <color name="notification_text">#FFFFFFFF</color>
+    <color name="notification_text_muted">#CCFFFFFF</color>
 </resources>

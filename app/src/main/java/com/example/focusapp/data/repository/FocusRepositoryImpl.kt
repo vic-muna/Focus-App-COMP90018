@@ -39,19 +39,10 @@ private const val EARTH_RADIUS_METERS = 6_371_000.0
 private const val FIREBASE_PUSH_TIMEOUT_MILLIS = 15_000L
 
 /**
- * FocusRepositoryImpl
- * ----------------------
- * Concrete implementation of [FocusRepository]. Zones/App Groups and
- * Sessions are all offline-first the same way: always written to Room
- * immediately, then pushed to Firebase opportunistically - none of the
- * save*() methods below fail just because the phone is offline. Study
- * Party calls pass straight through to RemoteDataSource since that
- * feature is inherently live/online-only.
- *
- * saveFocusZone/saveAppGroup run their input through [FocusValidation]
- * first and throw [IllegalArgumentException] on bad data (blank name,
- * non-positive radius, etc.) *before* touching localDataSource - so a
- * rejected save never reaches Room at all. See FocusRepositoryImplTest.
+ * The real [FocusRepository].
+ * Saving always writes to the phone (Room) first, then uploads to Firebase
+ * when it can - so saving works offline. Party Mode goes straight to Firebase.
+ * Zones and app groups are checked by [FocusValidation] before saving.
  */
 class FocusRepositoryImpl(
     private val localDataSource: LocalDataSource,
@@ -82,6 +73,12 @@ class FocusRepositoryImpl(
 
     override suspend fun getFocusZone(): FocusZone? =
         localDataSource.getFocusZone()
+
+    // Deletes on this phone only; the Firebase copy stays.
+    // TODO: add a RemoteDataSource delete and call it here, like saveFocusZone() does.
+    override suspend fun deleteFocusZone(zoneId: String) {
+        localDataSource.deleteFocusZone(zoneId)
+    }
 
     override suspend fun saveFocusZone(zone: FocusZone) {
         FocusValidation.validateFocusZone(zone)

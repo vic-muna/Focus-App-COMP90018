@@ -16,21 +16,8 @@ import com.example.focusapp.data.local.entity.FriendEntity
 import com.example.focusapp.data.local.entity.PackageListConverter
 
 /**
- * FocusAppDatabase
- * -------------------
- * The Room database for issue #41 (schema design).
- *
- * version 2: added the `friends` table (see FriendEntity).
- * version 3: added `synced` columns to `focus_zones`/`app_groups` (cloud
- * sync for Focus Zone / App Group - mirrors what `focus_sessions.synced`
- * already did). Both bumps paired with fallbackToDestructiveMigration(dropAllTables = true)
- * below rather than a real Migration, since this hasn't shipped anywhere yet (every install
- * is a dev/emulator build) - the trade-off is that anyone pulling this
- * change keeps their existing FocusZone/AppGroup/FocusSession data only if
- * Room can open the old file; if not, it just wipes local data on next
- * launch (no server data is affected). Switch to a real Migration once
- * this matters (e.g. once there's a release build people don't want to
- * lose local data from).
+ * The Room database (tables on the phone).
+ * When the version goes up, old local data is wiped (fallbackToDestructiveMigration).
  */
 @Database(
     entities = [FocusZoneEntity::class, AppGroupEntity::class, FocusSessionEntity::class, FriendEntity::class],

@@ -1,0 +1,141 @@
+package com.example.focusapp.ui.theme
+
+import androidx.compose.runtime.Immutable
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import com.example.focusapp.R
+
+/**
+ * "LINE Seed JP", the Figma design's typeface (res/font). Only these four
+ * weights are bundled - any other FontWeight a style asks for (e.g. Medium)
+ * is drawn with the closest one.
+ */
+val LineSeedFontFamily: FontFamily = FontFamily(
+    Font(R.font.line_seed_jp_thin, FontWeight.Thin),
+    Font(R.font.line_seed_jp_regular, FontWeight.Normal),
+    Font(R.font.line_seed_jp_bold, FontWeight.Bold),
+    Font(R.font.line_seed_jp_extrabold, FontWeight.ExtraBold),
+)
+
+/** Named text styles from the Figma design. Colors are applied by callers from [FocusColors]. */
+@Immutable
+data class FocusTypography(
+    /** Home greeting first line, e.g. "Hi! User". */
+    val greetingTitle: TextStyle,
+    /** Home greeting second line. */
+    val greetingBody: TextStyle,
+    /** Large label inside the Quick Focus button. */
+    val primaryActionLabel: TextStyle,
+    /** Focus Mode's elapsed-time readout. */
+    val timer: TextStyle,
+    /** A big standalone number in a summary, e.g. a time slot's daily limit. */
+    val statValue: TextStyle,
+    /** Tooltip / hint bubble copy. */
+    val hint: TextStyle,
+    /** Card heading, e.g. a location group's name. */
+    val cardTitle: TextStyle,
+    /** Heading on a list card or grid tile, e.g. a time slot's "06:10am-08:00am". */
+    val tileTitle: TextStyle,
+    /** Tiny label, e.g. the weekday letter inside a small day circle. */
+    val microLabel: TextStyle,
+    /** Label on a compact list row, e.g. an app name in the app picker. */
+    val listLabel: TextStyle,
+    /** Large text inside inputs and secondary buttons ("Enter Group Name", "Schedule"). */
+    val inputLarge: TextStyle,
+    /** Banner / body copy. */
+    val body: TextStyle,
+    /** Small supporting text (labels, coordinates). */
+    val caption: TextStyle,
+    /** Label of a Settings row, e.g. "Focus Music". */
+    val rowLabel: TextStyle,
+    /** A short message on a full-screen prompt (the blocking screen). */
+    val prompt: TextStyle,
+    /** Text on a filled pill button (the blocking screen's "Got it"). */
+    val confirmation: TextStyle,
+)
+
+val DefaultFocusTypography = FocusTypography(
+    greetingTitle = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 14.sp,
+    ),
+    greetingBody = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.Normal,
+        fontSize = 14.sp,
+    ),
+    primaryActionLabel = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 24.sp,
+    ),
+    timer = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 36.sp,
+    ),
+    statValue = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 28.sp,
+    ),
+    hint = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 12.sp,
+    ),
+    cardTitle = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 22.sp,
+    ),
+    tileTitle = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 20.sp,
+    ),
+    microLabel = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 9.sp,
+    ),
+    listLabel = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 12.sp,
+    ),
+    inputLarge = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 20.sp,
+    ),
+    body = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.Normal,
+        fontSize = 14.sp,
+    ),
+    caption = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.Normal,
+        fontSize = 12.sp,
+    ),
+    rowLabel = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.Normal,
+        fontSize = 18.sp,
+    ),
+    prompt = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 15.sp,
+    ),
+    confirmation = TextStyle(
+        fontFamily = LineSeedFontFamily,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 18.sp,
+    ),
+)

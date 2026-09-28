@@ -5,62 +5,28 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.data.apps.getAppLabel
-import com.example.focusapp.ui.theme.WireframeColors
+import com.example.focusapp.ui.screens.blocked.BlockedScreen
+import com.example.focusapp.ui.theme.FocusAppTheme
 
 /**
- * BlockedActivity
- * -----------------
- * The "you can't use this app right now" screen. [com.example.focusapp.data.accessibility.FocusAccessibilityService]
- * launches this instead of silently bouncing the user to the home screen
- * (the old `GLOBAL_ACTION_HOME` behaviour) whenever a restricted app
- * comes to the foreground.
+ * The "you can't use this app right now" screen, opened by FocusAccessibilityService
+ * on top of a blocked app. It is a separate Activity because the service can't
+ * show anything on screen by itself.
  *
- * WHY A WHOLE SEPARATE ACTIVITY, NOT A TOAST/SNACKBAR: a Toast or Snackbar
- * can only be shown from inside a currently-visible Activity of the app
- * that requests it - FocusAccessibilityService isn't an Activity, and by
- * the time it runs, Focus itself may not be on screen at all (the user
- * could be deep inside Instagram). Launching an Activity is the one thing
- * that can put content on screen no matter what else was open - it's the
- * same mechanism a phone call or alarm uses to interrupt whatever you're doing.
- *
- * HOW THIS AVOIDS BOUNCING THE USER RIGHT BACK INTO THE BLOCKED APP: this
- * screen is launched into its OWN task (see AndroidManifest.xml's
- * `launchMode="singleTask"` + `taskAffinity=""` on this Activity), kept
- * separate from the blocked app's task. Both the "Got it" button and the
- * system Back gesture ([BackHandler] below) explicitly navigate Home
- * rather than just calling `finish()` - if they only called finish(),
- * Android's default back-stack behaviour could reveal the blocked app's
- * task underneath, defeating the whole point of this screen.
+ * It runs in its own task (see the manifest). "Got it" and Back never just close it
+ * (that could show the blocked app again):
+ *  - during a focus session: back to Focus's timer screen
+ *  - otherwise (a daily limit was reached): to the phone's home screen
  */
 class BlockedActivity : ComponentActivity() {
 
-    // A plain Compose `State`, not `remember`ed - it's created once per
-    // Activity instance (as a property, not inside a Composable) so that
-    // [onNewIntent] can update it even while this screen is already on
-    // screen (see that override below for why that case can happen).
+    // Kept outside Compose so onNewIntent can update it while the screen is showing.
     private val blockedAppLabelState = mutableStateOf("This app")
 
-    // [David Shiau, 2026-09-26] Why it was blocked, for a Scheduled Limits
-    // block (e.g. "You've reached your limit of 3 times ..."); null for a
-    // focus-session block, which keeps the original message.
+    // Why it was blocked (e.g. "You've reached your limit of 3 times ..."), or null for the default message.
     private val blockReasonState = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -68,26 +34,19 @@ class BlockedActivity : ComponentActivity() {
         updateBlockedLabelFrom(intent)
 
         setContent {
-            MaterialTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    BlockedScreen(
-                        appLabel = blockedAppLabelState.value,
-                        reason = blockReasonState.value,
-                        onGotItClick = { goHomeAndFinish() }
-                    )
-                }
+            FocusAppTheme {
+                // Back does the same as "Got it".
+                BackHandler { leave() }
+                BlockedScreen(
+                    appLabel = blockedAppLabelState.value,
+                    reason = blockReasonState.value,
+                    onGotItClick = { leave() }
+                )
             }
         }
     }
 
-    /**
-     * Because this Activity is `launchMode="singleTask"`, Android reuses
-     * the existing instance (calling THIS, not [onCreate] again) if the
-     * user manages to trigger another restricted app while this screen is
-     * already showing. Without this override, the message would keep
-     * showing whichever app was blocked FIRST, even after a second,
-     * different app gets blocked.
-     */
+    /** Called instead of onCreate when another app gets blocked while this screen is already open. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -100,17 +59,21 @@ class BlockedActivity : ComponentActivity() {
         blockReasonState.value = intent.getStringExtra(EXTRA_BLOCK_REASON)
     }
 
-    /**
-     * Explicitly navigates to the home screen, THEN finishes this
-     * Activity - see the class doc comment for why "just finish()" isn't
-     * safe enough here.
-     */
-    private fun goHomeAndFinish() {
-        val homeIntent = Intent(Intent.ACTION_MAIN).apply {
-            addCategory(Intent.CATEGORY_HOME)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+    /** Leaves this screen: back to the focus timer if a session is running, else to the phone's home screen. */
+    private fun leave() {
+        val isFocusing = AccessibilityBridge.restrictedPackages.value.isNotEmpty()
+        val nextScreen = if (isFocusing) {
+            // Brings the open Focus app (still on its timer screen) back to the front.
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+            }
+        } else {
+            Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_HOME)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
         }
-        startActivity(homeIntent)
+        startActivity(nextScreen)
         finish()
     }
 
@@ -120,54 +83,5 @@ class BlockedActivity : ComponentActivity() {
 
         /** Optional Intent extra: a human-readable reason, shown instead of the default message. */
         const val EXTRA_BLOCK_REASON = "block_reason"
-    }
-}
-
-/**
- * BlockedScreen
- * ---------------
- * The actual UI: an icon, the blocked app's real name, a short
- * explanation, and a "Got it" pill button - styled with the same
- * [WireframeColors] as the rest of the app for visual consistency.
- */
-@Composable
-private fun BlockedScreen(appLabel: String, reason: String?, onGotItClick: () -> Unit) {
-    // Handles the system Back button/gesture the same way as the "Got it"
-    // button - see BlockedActivity's class doc comment for why this can't
-    // just be left to the default Back behaviour.
-    BackHandler(onBack = onGotItClick)
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(WireframeColors.Background)
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(text = "🚫", fontSize = 64.sp)
-
-        Text(
-            text = "$appLabel is blocked",
-            color = WireframeColors.OnLight,
-            fontSize = 22.sp,
-            modifier = Modifier.padding(top = 20.dp, bottom = 8.dp)
-        )
-
-        Text(
-            text = reason ?: "This app is in your Focus restricted list right now.",
-            textAlign = TextAlign.Center,
-            color = WireframeColors.OnLight,
-            modifier = Modifier.padding(bottom = 32.dp)
-        )
-
-        Text(
-            text = "Got it",
-            color = WireframeColors.OnDark,
-            modifier = Modifier
-                .background(WireframeColors.Card, shape = RoundedCornerShape(50))
-                .clickable(onClick = onGotItClick)
-                .padding(horizontal = 32.dp, vertical = 14.dp)
-        )
     }
 }

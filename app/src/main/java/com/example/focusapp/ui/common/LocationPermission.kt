@@ -23,7 +23,7 @@ class LocationPermissionState internal constructor(initialGranted: Boolean) {
         internal set
 
     /**
-     * [David Shiau, 2026-09-26] Bumped every time the permission dialog
+     * Bumped every time the permission dialog
      * returns, even if [hasPermission] didn't change (e.g. upgrading
      * "Approximate" to "Precise" leaves it true) - key a LaunchedEffect on
      * this to react to "the user just answered the dialog".

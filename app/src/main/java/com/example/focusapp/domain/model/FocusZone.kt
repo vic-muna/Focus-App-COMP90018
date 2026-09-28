@@ -3,14 +3,8 @@ package com.example.focusapp.domain.model
 import android.location.Location
 
 /**
- * FocusZone
- * -----------
- * A user-defined location where Focus Mode should automatically activate
- * (e.g. "Library"). Corresponds to the "Add Location" / "Set Radius" /
- * "Location Match" nodes in the process-flow diagram. Persisted via
- * RoomLocalDataSource (data/local/RoomLocalDataSource.kt), validated by
- * domain/validation/FocusValidation.kt before it ever reaches storage,
- * and synced to Firebase - see FocusRepositoryImpl.saveFocusZone().
+ * A saved location (e.g. "Library") with a radius, checked by [FocusValidation]
+ * before saving, and backed up to Firebase.
  */
 data class FocusZone(
     val id: String,

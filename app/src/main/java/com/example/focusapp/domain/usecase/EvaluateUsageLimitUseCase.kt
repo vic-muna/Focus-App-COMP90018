@@ -1,11 +1,11 @@
 package com.example.focusapp.domain.usecase
 
 import com.example.focusapp.data.usagestats.AppWindowUsage
-import com.example.focusapp.ui.screens.home.BlockedAppGroup
-import com.example.focusapp.ui.screens.home.formatLimitMinutes
-import com.example.focusapp.ui.screens.home.formatOpenTimes
-import com.example.focusapp.ui.screens.home.windowOn
 import java.util.Calendar
+import com.example.focusapp.data.blocking.BlockedAppGroup
+import com.example.focusapp.data.blocking.formatLimitMinutes
+import com.example.focusapp.data.blocking.formatOpenTimes
+import com.example.focusapp.data.blocking.windowOn
 
 /** One app that is on screen right now and over one of its group's limits. */
 data class UsageLimitViolation(
@@ -25,20 +25,11 @@ data class UsageLimitCheckResult(
 )
 
 /**
- * EvaluateUsageLimitUseCase
- * ----------------------------
- * [David Shiau, 2026-09-26] Phase 3 of the daily open-times/duration limit:
- * decides which on-screen apps must be blocked right now. For every group
- * with a limit set whose schedule window is open, each of its apps is
- * checked ON ITS OWN (Facebook gets 3 opens, Instagram gets 3 opens) using
- * only its usage INSIDE the window:
- *  - Max Open Times N: opens 1..N are allowed; the (N+1)th is blocked.
- *  - Max Duration M: blocked once M minutes have been used.
- * Only apps currently on screen are returned - an app that's over its limit
- * but not open has nothing to block until it's opened again.
- *
- * Pure logic, no Context: usage comes from [usageInWindow], so this is unit
- * testable and FocusAccessibilityService supplies the real UsageStats query.
+ * Decides which open apps must be blocked for going over a daily limit.
+ * Each app in a group is checked on its own, only counting use inside today's scheduled time:
+ *  - Max Open Times N: opens 1..N are fine, open N+1 is blocked.
+ *  - Max Minutes M: blocked after M minutes.
+ * Usage is passed in ([usageInWindow]), so this can be unit tested.
  */
 class EvaluateUsageLimitUseCase {
 
@@ -58,6 +49,7 @@ class EvaluateUsageLimitUseCase {
         val usageCache = mutableMapOf<Long, Map<String, AppWindowUsage>>()
 
         for (group in groups) {
+            if (!group.enabled) continue
             val maxOpens = group.maxOpensPerApp
             val maxMillis = group.maxMinutesPerApp?.let { it * 60_000L }
             if (maxOpens == null && maxMillis == null) continue

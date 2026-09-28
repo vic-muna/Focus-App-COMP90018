@@ -16,34 +16,16 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 
 /**
- * FirebaseRemoteDataSource
- * ---------------------------
- * Firebase Realtime Database implementation of [RemoteDataSource].
+ * The Firebase Realtime Database version of [RemoteDataSource].
+ * Signs in anonymously, just to get an id for this phone. Needs app/google-services.json.
  *
- * Uses Firebase Anonymous Auth purely to get a stable per-install uid -
- * there's no login screen anywhere in the app yet and this doesn't need
- * one. If the team later adds real accounts, swap the sign-in call inside
- * getUid(); nothing else here needs to change since every other method
- * just reads auth.currentUser.
- *
- * NEEDS (not something code alone can provide - see chat for details):
- *  - A real google-services.json from an actual Firebase project, placed
- *    in app/. This class will crash at runtime without it.
- *  - INTERNET (and ideally ACCESS_NETWORK_STATE) permission uncommented
- *    in AndroidManifest.xml.
- *
- * Realtime Database layout used below - confirm these path names with
- * whoever builds the invite / friend-list UI before relying on them
- * elsewhere:
- *   users/{uid}/sessions/{sessionId}       <- FocusSession, mirrors the Room row
- *   users/{uid}/zone                       <- FocusZone, the user's one saved zone
- *   users/{uid}/appGroups/{groupId}        <- AppGroup, mirrors the Room row
- *   users/{uid}/incomingInvites/{partyId}  <- { "from": fromUid } - fan-out mirror of the row
- *                                              below, written/removed alongside it, purely so a
- *                                              recipient can observe "invites addressed to me"
- *                                              without needing to already know every partyId.
- *   parties/{partyId}/invites/{uid}        <- { "from": uid, "status": "pending" | "accepted" | "declined" }
- *   parties/{partyId}/members/{uid}        <- PartyMemberStatus
+ * Where the data lives in the database:
+ *   users/{uid}/sessions/{sessionId}       focus sessions
+ *   users/{uid}/zone                       the saved location
+ *   users/{uid}/appGroups/{groupId}        app groups
+ *   users/{uid}/incomingInvites/{partyId}  invites sent to this user
+ *   parties/{partyId}/invites/{uid}        invite status (pending / accepted / declined)
+ *   parties/{partyId}/members/{uid}        each member's PartyMemberStatus
  */
 class FirebaseRemoteDataSource(
     private val db: FirebaseDatabase = FirebaseDatabase.getInstance(),
