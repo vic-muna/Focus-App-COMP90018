@@ -42,11 +42,10 @@ import com.example.focusapp.ui.components.AppSelectCard
 import com.example.focusapp.ui.components.ConfirmButton
 import com.example.focusapp.ui.components.FlyCardOverlay
 import com.example.focusapp.ui.components.FocusConfirmDialog
+import com.example.focusapp.ui.components.consumeTaps
 import com.example.focusapp.ui.components.FocusRangeMarker
 import com.example.focusapp.ui.components.PullUpPanel
 import com.example.focusapp.ui.components.PullUpPanelState
-import com.example.focusapp.ui.components.SettingsTopBar
-import com.example.focusapp.ui.components.consumeTaps
 import com.example.focusapp.ui.components.rememberPullUpPanelState
 import com.example.focusapp.ui.navigation.MainTab
 import com.example.focusapp.ui.screens.home.AppItem
@@ -57,14 +56,12 @@ import com.example.focusapp.ui.theme.FocusTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
+import com.example.focusapp.ui.theme.FocusSpacing
 private const val DEFAULT_RADIUS_METERS = 100f
 
 /** How much of the location list stays visible above the bottom edge when swiped down. */
 private val ListPeekHeight = 200.dp
 
-/** Gap between the add-location card and the bottom of the screen. */
-private val AddCardBottomMargin = 72.dp
 
 /**
  * A location being added, or a saved one being edited ([editingZoneId] set).
@@ -94,7 +91,6 @@ private data class LocationDraft(
  */
 @Composable
 fun LocationScreen(
-    onSettingsClick: () -> Unit,
     onTabClick: (MainTab) -> Unit,
     blockedAppsFor: (zoneId: String) -> List<AppItem> = { emptyList() },
     onZoneBlockedAppsChange: (zone: FocusZone, apps: List<AppItem>) -> Unit = { _, _ -> },
@@ -244,7 +240,6 @@ fun LocationScreen(
                 pickerSelection = draft?.blockedApps.orEmpty().map { it.packageName }.toSet()
                 showAppPicker = true
             },
-        onSettingsClick = onSettingsClick,
         onTabClick = onTabClick,
     )
 
@@ -316,7 +311,6 @@ private fun LocationContent(
     onDraftDiscard: () -> Unit,
     onDraftConfirm: () -> Unit,
     onBlockedAppsClick: () -> Unit,
-    onSettingsClick: () -> Unit,
     onTabClick: (MainTab) -> Unit,
 ) {
     val colors = FocusTheme.colors
@@ -325,7 +319,7 @@ private fun LocationContent(
 
     // The card covers the bottom of the map; the pin centers on what's left above it.
     var addCardHeight by remember { mutableStateOf(0.dp) }
-    val hiddenBottom = if (draft != null) addCardHeight + AddCardBottomMargin else 0.dp
+    val hiddenBottom = if (draft != null) addCardHeight + FocusSpacing.ScreenBottom else 0.dp
 
     Box(modifier = Modifier.fillMaxSize()) {
         MapPlaceholder(
@@ -344,8 +338,6 @@ private fun LocationContent(
                 )
             }
         }
-
-        SettingsTopBar(onSettingsClick = onSettingsClick)
 
         // Hidden while adding a location, so the card and the centered pin have the map to themselves.
         if (draft == null) PullUpPanel(
@@ -399,13 +391,13 @@ private fun LocationContent(
                 onTabClick = onTabClick,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 32.dp),
+                    .padding(bottom = FocusSpacing.ScreenBottom),
             )
         } else {
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(start = 32.dp, end = 32.dp, bottom = AddCardBottomMargin)
+                    .padding(start = 32.dp, end = 32.dp, bottom = FocusSpacing.ScreenBottom)
                     .onSizeChanged { addCardHeight = with(density) { it.height.toDp() } },
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -454,7 +446,6 @@ private fun LocationContentListPreview() {
             onDraftDiscard = {},
             onDraftConfirm = {},
             onBlockedAppsClick = {},
-            onSettingsClick = {},
             onTabClick = {},
         )
     }
@@ -481,7 +472,6 @@ private fun LocationContentAddPreview() {
             onDraftDiscard = {},
             onDraftConfirm = {},
             onBlockedAppsClick = {},
-            onSettingsClick = {},
             onTabClick = {},
         )
     }

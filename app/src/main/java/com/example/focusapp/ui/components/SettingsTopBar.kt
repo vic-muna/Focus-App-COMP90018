@@ -12,7 +12,7 @@ import androidx.compose.ui.unit.dp
 import com.example.focusapp.R
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
-
+import com.example.focusapp.ui.theme.FocusSpacing
 /** The settings gear pinned to the top-right corner, shared by every top-level screen. */
 @Composable
 fun SettingsTopBar(
@@ -22,8 +22,7 @@ fun SettingsTopBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = 12.dp, end = 21.dp),
-        contentAlignment = Alignment.TopEnd,
+            .padding(top = FocusSpacing.ScreenTop - 4.dp, end = 21.dp),        contentAlignment = Alignment.TopEnd,
     ) {
         FocusIconButton(
             iconRes = R.drawable.ic_setting_fill,

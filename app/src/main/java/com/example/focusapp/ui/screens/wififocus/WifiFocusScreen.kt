@@ -46,8 +46,9 @@ import com.example.focusapp.ui.components.AppSelectCard
 import com.example.focusapp.ui.components.BackButton
 import com.example.focusapp.ui.components.FlyCardOverlay
 import com.example.focusapp.ui.components.FocusConfirmDialog
-import com.example.focusapp.ui.components.NextButton
 import com.example.focusapp.ui.components.consumeTaps
+import com.example.focusapp.ui.components.NextButton
+import com.example.focusapp.ui.theme.FocusSpacing
 import com.example.focusapp.ui.navigation.MainTab
 import com.example.focusapp.ui.navigation.MainTabBar
 import com.example.focusapp.ui.screens.home.AppItem
@@ -389,7 +390,7 @@ private fun WifiFocusContent(
             onTabClick = onTabClick,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 32.dp),
+                .padding(bottom = FocusSpacing.ScreenBottom),
         )
 
         if (editStep != null || viewingGroup != null) {

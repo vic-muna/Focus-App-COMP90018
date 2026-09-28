@@ -288,7 +288,6 @@ fun FocusAppNavGraph() {
                 exitTransition = partyModeExit
             ) {
                 LocationScreen(
-                    onSettingsClick = { navController.navigate(Destinations.SETTINGS) },
                     onTabClick = ::navigateToTab,
                     blockedAppsFor = { zoneId -> location.groups.find { it.id == zoneId }?.apps.orEmpty() },
                     onZoneBlockedAppsChange = { zone, apps ->

@@ -47,6 +47,7 @@ import com.example.focusapp.ui.theme.FocusTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
+import com.example.focusapp.ui.theme.FocusSpacing
 
 private val HeaderHeight = 210.dp
 
@@ -313,7 +314,7 @@ private fun TimeFocusContent(
             onTabClick = onTabClick,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 32.dp),
+                .padding(bottom = FocusSpacing.ScreenBottom),
         )
 
         if (editStep != null || viewingGroup != null) {
