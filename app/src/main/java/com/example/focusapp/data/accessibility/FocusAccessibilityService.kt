@@ -15,6 +15,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.example.focusapp.data.blocking.BlockedAppGroup
+import com.example.focusapp.data.blocking.windowOn
+import com.example.focusapp.data.notification.TimeFocusNotification
 
 /**
  * The app blocker. Android runs it in the background after the user turns
@@ -34,6 +37,10 @@ class FocusAccessibilityService : AccessibilityService() {
     private val groupStorage by lazy { BlockedAppGroupStorage(this) }
     private val evaluateUsageLimit = EvaluateUsageLimitUseCase()
 
+    // For the Time Focus notification: the apps with a limit, and the last one of them opened.
+    @Volatile private var limitedPackages: Set<String> = emptySet()
+    @Volatile private var lastOpenedPackage: String? = null
+
     /** The user turned the service on. */
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -44,6 +51,7 @@ class FocusAccessibilityService : AccessibilityService() {
     /** The user switched apps; [event]'s packageName is the app now on screen. */
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val packageName = event?.packageName?.toString() ?: return
+        if (packageName in limitedPackages) lastOpenedPackage = packageName
 
         if (packageName in AccessibilityBridge.restrictedPackages.value) {
             launchBlockedScreen(packageName, AccessibilityBridge.restrictionReason)
@@ -85,12 +93,34 @@ class FocusAccessibilityService : AccessibilityService() {
             groups = groups,
             usageInWindow = { start, end -> queryAppUsageInWindow(this, start, end) }
         )
+        updateTimeFocusNotifications(groups)
+
         val sessionBlocked = AccessibilityBridge.restrictedPackages.value
         result.violations
             .filter { it.packageName != packageName }        // never block Focus itself
             .filter { it.packageName !in sessionBlocked }    // the session's block (and reason) wins
             .forEach { violation -> launchBlockedScreen(violation.packageName, violation.reason) }
         return result.nextCheckInMillis
+    }
+
+    /** Shows a status-bar card for every Time Focus slot that is on right now, and removes the others. */
+    private fun updateTimeFocusNotifications(groups: List<BlockedAppGroup>) {
+        val now = System.currentTimeMillis()
+        limitedPackages = groups
+            .filter { it.maxOpensPerApp != null || it.maxMinutesPerApp != null }
+            .flatMap { group -> group.apps.map { it.packageName } }
+            .toSet()
+        for (group in groups) {
+            val hasLimits = group.maxOpensPerApp != null || group.maxMinutesPerApp != null
+            val window = group.schedule.windowOn()
+            val isOn = group.enabled && hasLimits && window != null && now >= window.startMillis && now < window.endMillis
+            if (isOn && window != null) {
+                val usage = queryAppUsageInWindow(this, window.startMillis, now)
+                TimeFocusNotification.show(this, group, usage, lastOpenedPackage, window.endMillis)
+            } else {
+                TimeFocusNotification.cancel(this, group.id)
+            }
+        }
     }
 
     /**

@@ -224,6 +224,10 @@ A full record of prompts and outputs is available upon request.
 
 ## 09172026 Update: Files That Need Change
 
+> **Outdated (28/09/2026):** several files in this table were removed or
+> moved, and the `[HANDOFF -> ...]` comments were replaced by short TODOs.
+> See the 28/09/2026 update at the end of this file.
+
 A review pass was done against the Group Member Tasks table above. The
 following files already exist in `app/src/main/java/com/example/focusapp/`
 and now have inline `[HANDOFF -> Name | README task: "..."]` comments marking
@@ -346,3 +350,73 @@ Also still pending on the Location screen: the map itself is a placeholder
 (`ui/screens/location/MapPlaceholder.kt`) until the team picks a map SDK
 (Google Maps vs OpenStreetMap), and a zone's on/off switch is UI-only
 (`FocusZone` has no "enabled" field).
+
+## 28/09/2026 Update (Jia-Ying Lee)
+
+Branches: `Dev/Alison-----UI-&-Workflow----Version-2-with-Schedule` (new UI on
+top of David's 26/09 logic) and `Dev/Alison-----Cleanup` (clean-up and the
+Quick Focus changes below). David's logic is kept; only the UI and wiring changed.
+
+### New screens and flows
+- **Bottom nav:** Home · Location · Time Focus (clock) · Wi-Fi.
+- **Time Focus tab:** one card per schedule group, each with an on/off switch.
+  Tap = summary card, pencil = edit, hold = delete. Adding/editing is a
+  three-step fly card: apps → days + time → daily limits (Max Open Times /
+  Max Minutes) + name. Starts empty on a fresh install (no fake groups).
+- **Location tab:** each location has its own blocked apps (picked with the
+  same app card). Still one saved location at a time (see 26/09 note above).
+- **Wi-Fi tab:** one entry per network (id = SSID) with its own blocked apps
+  and switch. Adding: network (connected now / seen before / typed) → apps → name.
+- **Quick Focus:** tap → accessibility permission check → pick the apps to
+  block (last pick is pre-ticked and remembered) → the check starts focusing.
+- **Party Mode:** group icon at Home's top-left → friend list with search
+  (friend IDs are a TODO) → **Create group** / **Join group** fly cards using
+  David's Firebase party logic (the 6-letter code is the party id). The host's
+  start uses the same permission check and app card as Quick Focus.
+- **Time Focus banner:** the old "today's app usage" page was removed. Tapping
+  the banner opens a fly card asking for Usage access if it's off (the daily
+  limits need it), otherwise it opens the Time Focus tab.
+- **Time Focus notification:** while a time slot with limits is on, a
+  status-bar card (in the theme's colour) shows the slot's name and
+  time, the icons of its apps, and the last opened app with its opens/minutes
+  left. It updates on every app switch, disappears when the slot ends, and a
+  tap opens that slot's summary card.
+- **Blocked screen:** shows David's block reason. **Got it** / Back returns to
+  the focus timer during a session, or to the phone's home screen for a
+  daily-limit block.
+- **Dashboard** (tap Home's picture): theme ID card, weekly chart, history,
+  background theme picker, and an X to close.
+- **Settings:** permission rows open the matching Android settings page.
+
+### What each focus session blocks
+| Started by | Blocks |
+|---|---|
+| Quick Focus, Party Mode | the apps picked in the Quick Focus card |
+| Location banner | that location's apps |
+| Wi-Fi banner | that network's apps |
+| Time Focus | no session; apps over their daily limit are blocked during the time slot |
+
+### Code clean-up (for readability)
+- **Removed** (no entry point any more): the old Home sheets, Apps / Map /
+  Rewards / old Focus Mode / debug screens, the old `PartyModeScreen` and
+  `FriendListScreen`, `WireframeColors`, and unused test-panel code in
+  `AccessibilityBridge`. Room, Firebase and `WifiTriggerStorage` are kept.
+- **Moved:** `BlockedAppGroup`, `BlockedAppGroupStorage`, `TimeSlot`, `AppItem`
+  → `data/blocking/`.
+- **Shared components** in `ui/components/`, grouped by type:
+  - `button/`: X / check / next / back / edit buttons, pill and icon buttons
+  - `card/`: `FocusCard` (card frame, title, labels, sunken panel),
+    `SwitchListCard`, `AppSelectCard`, `FlyCardOverlay`, `DiscardDialog` /
+    `DeleteDialog`
+  - `input/`: text field, search field, switch, checkbox
+  - `bar/`: bottom nav, top bars, settings list, scrollbar
+  - `layout/`: `GroupListLayout` (the Time Focus / Wi-Fi page skeleton)
+- Widgets used by one screen only now live in that screen's folder.
+- Comments were rewritten to be short and plain; every composable keeps an
+  `@Preview`.
+
+### Still open
+- Friend ID system (search and friend list are placeholders).
+- Multiple saved locations and a real map (see the 26/09 note).
+- `data/sensor/GeofenceDataSource.kt` is not called by anything yet.
+- A break ("tea break") during a focus session is not built yet.

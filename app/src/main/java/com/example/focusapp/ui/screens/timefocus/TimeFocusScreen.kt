@@ -31,6 +31,8 @@ import com.example.focusapp.ui.components.layout.GroupListLayout
 import com.example.focusapp.ui.navigation.MainTab
 import com.example.focusapp.ui.theme.FocusAppTheme
 import kotlin.math.abs
+import androidx.annotation.DrawableRes
+import androidx.compose.runtime.LaunchedEffect
 
 private val HeaderHeight = 210.dp
 
@@ -84,6 +86,11 @@ fun TimeFocusScreen(
     groups: List<BlockedAppGroup>,
     onGroupsChange: (List<BlockedAppGroup>) -> Unit,
     onTabClick: (MainTab) -> Unit,
+    // The picked theme's Time Focus picture (see BackgroundThemes).
+    @DrawableRes headerArt: Int = R.drawable.img_app_focus_header,
+    // A slot to open right away (tapped in its notification); [onGroupShown] clears it.
+    groupToShow: String? = null,
+    onGroupShown: () -> Unit = {},
 ) {
     // The slot whose summary card is open, if any.
     var viewingGroupId by remember { mutableStateOf<String?>(null) }
@@ -96,6 +103,13 @@ fun TimeFocusScreen(
     val installedApps = rememberInstalledApps(shouldLoad = editStep != null)
     var confirmDiscard by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<BlockedAppGroup?>(null) }
+
+    LaunchedEffect(groupToShow) {
+        if (groupToShow != null) {
+            viewingGroupId = groupToShow
+            onGroupShown()
+        }
+    }
 
     fun updateGroup(groupId: String, transform: (BlockedAppGroup) -> BlockedAppGroup) {
         onGroupsChange(groups.map { if (it.id == groupId) transform(it) else it })
@@ -149,6 +163,7 @@ fun TimeFocusScreen(
 
     TimeFocusContent(
         groups = groups,
+        headerArt = headerArt,
         onEnabledChange = { group, enabled -> updateGroup(group.id) { it.copy(enabled = enabled) } },
         onGroupClick = { viewingGroupId = it.id },
         onGroupLongClick = { pendingDelete = it },
@@ -201,6 +216,7 @@ fun TimeFocusScreen(
 @Composable
 private fun TimeFocusContent(
     groups: List<BlockedAppGroup>,
+    @DrawableRes headerArt: Int,
     onEnabledChange: (BlockedAppGroup, Boolean) -> Unit,
     onGroupClick: (BlockedAppGroup) -> Unit,
     onGroupLongClick: (BlockedAppGroup) -> Unit,
@@ -226,7 +242,7 @@ private fun TimeFocusContent(
         onOutsideCardClick = onOutsideCardClick,
         header = {
             Image(
-                painter = painterResource(R.drawable.img_app_focus_header),
+                painter = painterResource(headerArt),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 alignment = Alignment.TopCenter,
@@ -323,6 +339,7 @@ private fun PreviewContent(
     FocusAppTheme {
         TimeFocusContent(
             groups = previewGroups,
+            headerArt = R.drawable.img_app_focus_header,
             onEnabledChange = { _, _ -> },
             onGroupClick = {},
             onGroupLongClick = {},

@@ -14,9 +14,4 @@ object Destinations {
     const val HISTORY = "history"               // Dashboard (avatar)
     const val THEME_PICKER = "theme_picker"     // From the dashboard's ID card
     const val FOCUS_SESSION = "focus_session"   // The running focus timer
-
-    // Today's usage of one Time Focus group (from Home's schedule banner)
-    const val GROUP_USAGE = "group_usage/{groupId}"
-
-    fun groupUsageRoute(groupId: String) = "group_usage/$groupId"
 }

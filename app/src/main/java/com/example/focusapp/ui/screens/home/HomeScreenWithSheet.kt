@@ -56,6 +56,9 @@ import com.example.focusapp.data.blocking.AppItem
 import com.example.focusapp.ui.components.card.FlyCardOverlay
 import com.example.focusapp.ui.components.card.consumeTaps
 import com.example.focusapp.ui.common.AccessibilityPermissionDialog
+import android.content.Intent
+import android.provider.Settings
+import com.example.focusapp.data.usagestats.hasUsageAccessPermission
 
 
 /** How often Home re-checks for a schedule, location or Wi-Fi match. */
@@ -76,7 +79,6 @@ fun HomeScreenWithSheet(
     // The picked background theme's Home art (see BackgroundThemes).
     @DrawableRes dashboardArt: Int = R.drawable.img_home_dashboard,
     onFocusSessionStart: (FocusSessionSource) -> Unit = {},
-    onScheduleBannerClick: (groupId: String) -> Unit = {},
     onAvatarClick: () -> Unit = {},
     onPartyModeClick: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
@@ -111,6 +113,8 @@ fun HomeScreenWithSheet(
 
     // --- Quick Focus: every time, pick the apps to block (last pick is pre-ticked), then start ---
     var showQuickFocusPicker by remember { mutableStateOf(false) }
+    // The time slot whose "Usage access needed" card is open, or null.
+    var usageAccessGroupName by remember { mutableStateOf<String?>(null) }
 
     fun onQuickFocusClick() {
         // Ask for the permission first, so the apps aren't picked for nothing.
@@ -118,7 +122,10 @@ fun HomeScreenWithSheet(
         else showAccessibilityPermissionDialog = true
     }
 
-    BackHandler(enabled = showQuickFocusPicker) { showQuickFocusPicker = false }
+    BackHandler(enabled = showQuickFocusPicker || usageAccessGroupName != null) {
+        showQuickFocusPicker = false
+        usageAccessGroupName = null
+    }
 
     // --- Auto-suggestion: UI-simulated only, never navigates on its own -----------
     var savedZone by remember { mutableStateOf<FocusZone?>(null) }
@@ -209,9 +216,14 @@ fun HomeScreenWithSheet(
                             result = suggestion,
                             onAccept = {
                                 val source = when (suggestion) {
-                                    // A schedule match opens that group's usage page (no focus session).
+                                    // A time slot doesn't start a session. Its limits need App Blocking
+                                    // and Usage access: ask for whichever is off, else open the Time Focus tab.
                                     is FocusTriggerResult.ScheduleMatch -> {
-                                        onScheduleBannerClick(suggestion.groupId)
+                                        when {
+                                            !isAccessibilityEnabled -> showAccessibilityPermissionDialog = true
+                                            !hasUsageAccessPermission(context) -> usageAccessGroupName = suggestion.groupName
+                                            else -> onScheduleTabClick()
+                                        }
                                         return@AutoFocusSuggestionBanner
                                     }
                                     is FocusTriggerResult.LocationMatch ->
@@ -244,6 +256,20 @@ fun HomeScreenWithSheet(
             }
         }
 
+        usageAccessGroupName?.let { groupName ->
+            FlyCardOverlay(onOutsideClick = { usageAccessGroupName = null }) {
+                UsageAccessCard(
+                    groupName = groupName,
+                    onOpenSettings = {
+                        usageAccessGroupName = null
+                        context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                    },
+                    onClose = { usageAccessGroupName = null },
+                    modifier = Modifier.consumeTaps(),
+                )
+            }
+        }
+
         if (showAccessibilityPermissionDialog) {
             AccessibilityPermissionDialog(onDismiss = { showAccessibilityPermissionDialog = false })
         }
@@ -252,7 +278,7 @@ fun HomeScreenWithSheet(
 
 /**
  * A banner for a detected trigger: "start" begins a focus session
- * (location/Wi-Fi) or opens the group's usage page (schedule).
+ * (location/Wi-Fi) or opens the Time Focus tab (schedule).
  */
 @Composable
 private fun AutoFocusSuggestionBanner(
@@ -262,7 +288,7 @@ private fun AutoFocusSuggestionBanner(
 ) {
     val colors = FocusTheme.colors
     val message = when (result) {
-        is FocusTriggerResult.ScheduleMatch -> "You're in your ${result.groupName} schedule - tap to see today's app usage"
+        is FocusTriggerResult.ScheduleMatch -> "Your ${result.groupName} time slot is on - apps over their limit will be blocked"
         is FocusTriggerResult.LocationMatch -> "You've arrived at ${result.zoneName} - start a focus session?"
         is FocusTriggerResult.WifiMatch -> "You're connecting to ${result.ssid} Wi-Fi - start a focus session?"
         FocusTriggerResult.NoTrigger -> return

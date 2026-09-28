@@ -21,11 +21,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavBackStackEntry
-import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
 import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.data.blocking.BlockedAppGroup
 import com.example.focusapp.data.blocking.BlockedAppGroupStorage
@@ -34,7 +32,6 @@ import com.example.focusapp.data.notification.FocusTimerService
 import com.example.focusapp.data.preferences.BackgroundThemeStorage
 import com.example.focusapp.ui.screens.history.HistoryScreen
 import com.example.focusapp.ui.screens.history.ThemePickerScreen
-import com.example.focusapp.ui.screens.home.GroupUsageScreen
 import com.example.focusapp.ui.screens.home.HomeScreenWithSheet
 import com.example.focusapp.ui.screens.location.LocationScreen
 import com.example.focusapp.ui.screens.party.FriendsScreen
@@ -103,8 +100,15 @@ private fun rememberSavedGroupList(storage: BlockedAppGroupStorage): SavedGroupL
 
 // ---------- The app's navigation ----------
 
+/**
+ * The whole app's navigation.
+ * [timeSlotToOpen]: a time slot to show (from a Time Focus notification); [onTimeSlotOpened] clears it.
+ */
 @Composable
-fun FocusAppNavGraph() {
+fun FocusAppNavGraph(
+    timeSlotToOpen: String? = null,
+    onTimeSlotOpened: () -> Unit = {},
+) {
     val navController = rememberNavController()
     val context = LocalContext.current
 
@@ -180,6 +184,9 @@ fun FocusAppNavGraph() {
         }
     }
 
+    // A slot to show on the Time Focus tab (from a Time Focus notification).
+    var timeSlotToShow by remember { mutableStateOf<String?>(null) }
+
     Scaffold(containerColor = FocusTheme.colors.background) { innerPadding ->
         NavHost(
             navController = navController,
@@ -198,7 +205,6 @@ fun FocusAppNavGraph() {
                     onQuickFocusAppsChange = ::saveQuickFocusApps,
                     onAvatarClick = { navController.navigate(Destinations.HISTORY) },
                     onFocusSessionStart = ::startFocusSession,
-                    onScheduleBannerClick = { groupId -> navController.navigate(Destinations.groupUsageRoute(groupId)) },
                     onPartyModeClick = { navController.navigate(Destinations.FRIENDS) },
                     onSettingsClick = { navController.navigate(Destinations.SETTINGS) },
                     onLocationTabClick = { navigateToTab(MainTab.LOCATION) },
@@ -228,6 +234,9 @@ fun FocusAppNavGraph() {
             composable(Destinations.TIME_FOCUS, enterTransition = fadeEnter, exitTransition = fadeExit) {
                 TimeFocusScreen(
                     groups = schedule.groups,
+                    headerArt = backgroundTheme.timeFocusArt,
+                    groupToShow = timeSlotToShow,
+                    onGroupShown = { timeSlotToShow = null },
                     onGroupsChange = { schedule.groups = it },
                     onTabClick = ::navigateToTab
                 )
@@ -262,20 +271,6 @@ fun FocusAppNavGraph() {
                 }
             }
 
-            composable(
-                route = Destinations.GROUP_USAGE,
-                arguments = listOf(navArgument("groupId") { type = NavType.StringType }),
-                enterTransition = slideUpEnter,
-                exitTransition = slideDownExit
-            ) { backStackEntry ->
-                val groupId = backStackEntry.arguments?.getString("groupId")
-                // Remember once, so the screen can still fade out if the group gets deleted.
-                val group = remember { schedule.groups.find { it.id == groupId } }
-                if (group != null) {
-                    GroupUsageScreen(group = group, onBackClick = { navController.popBackStack() })
-                }
-            }
-
             composable(Destinations.SETTINGS, enterTransition = slideUpEnter, exitTransition = slideDownExit) {
                 SettingsScreen(onClose = { navController.popBackStack() })
             }
@@ -298,6 +293,16 @@ fun FocusAppNavGraph() {
                     },
                     onClose = { navController.popBackStack() }
                 )
+            }
+        }
+
+        // Opened from a Time Focus notification: go to the Time Focus tab, which then shows the slot.
+        // Placed after NavHost so its screens exist before navigating.
+        LaunchedEffect(timeSlotToOpen) {
+            if (timeSlotToOpen != null) {
+                timeSlotToShow = timeSlotToOpen
+                onTimeSlotOpened()
+                navigateToTab(MainTab.SCHEDULE)
             }
         }
     }

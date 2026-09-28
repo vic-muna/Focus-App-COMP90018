@@ -126,19 +126,6 @@ fun queryAppUsageInWindow(
     }
 }
 
-/** "1h 23m" / "45m 10s" / "12s". */
-fun formatUsageDuration(millis: Long): String {
-    val totalSeconds = millis / 1000
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    val seconds = totalSeconds % 60
-    return when {
-        hours > 0 -> "${hours}h ${minutes}m"
-        minutes > 0 -> "${minutes}m ${seconds}s"
-        else -> "${seconds}s"
-    }
-}
-
 /** Today's midnight, in epoch milliseconds. */
 private fun startOfTodayMillis(): Long = Calendar.getInstance().apply {
     set(Calendar.HOUR_OF_DAY, 0)
