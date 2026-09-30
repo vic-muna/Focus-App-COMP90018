@@ -32,7 +32,7 @@ fun addFocusZoneGeofence(context: Context, lat: Double, lng: Double, radius: Flo
     val localDataSource = RoomLocalDataSource(context)
     val newZone = FocusZone(
         id = newLocationId,
-        name = "New Focus Zone", // You can update your function to accept a name parameter later
+        name = "New Focus Zone", // Update function to accept a name parameter later
         latitude = lat,
         longitude = lng,
         radiusMeters = radius
