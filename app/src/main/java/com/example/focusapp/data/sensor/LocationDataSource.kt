@@ -1,5 +1,6 @@
 package com.example.focusapp.data.sensor
 
+import android.annotation.SuppressLint
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -48,12 +49,19 @@ private val locationCallback = object : LocationCallback() {
 }
 // --- 4. FUNCTIONS ---
 
+private fun hasLocationPermission(context: Context): Boolean {
+    val fineGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    val coarseGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    return fineGranted || coarseGranted
+}
+
 /**
  * Starts continuous GPS tracking.
- * Note: Ensure ACCESS_FINE_LOCATION is granted in the UI before calling this.
+ * Note: Ensure ACCESS_FINE_LOCATION or ACCESS_COARSE_LOCATION is granted before calling this.
  */
+@SuppressLint("MissingPermission")
 fun startGPSUpdates(context: Context) {
-    if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+    if (hasLocationPermission(context)) {
         Log.d(TAG, "Permission confirmed. Starting location updates...")
 
         val client = LocationServices.getFusedLocationProviderClient(context)
@@ -64,13 +72,14 @@ fun startGPSUpdates(context: Context) {
         // Start listening on the main looper thread using the default request
         client.requestLocationUpdates(defaultLocationRequest, locationCallback, Looper.getMainLooper())
     } else {
-        Log.e(TAG, "Cannot start GPS: Missing ACCESS_FINE_LOCATION permission.")
+        Log.e(TAG, "Cannot start GPS: Missing location permission.")
     }
 }
 
 /**
  * Updates the priority and interval of an actively running GPS tracker on the fly.
  */
+@SuppressLint("MissingPermission")
 fun setGpsPriority(context: Context, isHigh: Boolean) {
     val priority = if (isHigh) Priority.PRIORITY_HIGH_ACCURACY else Priority.PRIORITY_BALANCED_POWER_ACCURACY
     val interval = if (isHigh) FAST_UPDATE_INTERVAL_SECONDS else DEFAULT_UPDATE_INTERVAL_SECONDS
@@ -79,7 +88,7 @@ fun setGpsPriority(context: Context, isHigh: Boolean) {
         .setMinUpdateIntervalMillis(interval * 1000)
         .build()
 
-    if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+    if (hasLocationPermission(context)) {
         val client = LocationServices.getFusedLocationProviderClient(context)
 
         // Passing the same 'locationCallback' seamlessly updates the active session
@@ -87,7 +96,7 @@ fun setGpsPriority(context: Context, isHigh: Boolean) {
 
         Log.d(TAG, "Tracker updated. High Priority: $isHigh, Interval: ${interval}s")
     } else {
-        Log.e(TAG, "Cannot update priority: Missing ACCESS_FINE_LOCATION permission.")
+        Log.e(TAG, "Cannot update priority: Missing location permission.")
     }
 }
 

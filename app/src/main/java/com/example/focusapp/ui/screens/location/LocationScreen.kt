@@ -13,7 +13,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -29,41 +31,44 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.focusapp.data.blocking.AppItem
 import com.example.focusapp.data.repository.FocusRepositoryProvider
+import com.example.focusapp.data.sensor.currentLocationFlow
+import com.example.focusapp.data.sensor.registerGeofenceForZone
+import com.example.focusapp.data.sensor.removeFocusZoneGeofence
+import com.example.focusapp.data.sensor.startGPSUpdates
+import com.example.focusapp.data.sensor.stopGPSUpdates
 import com.example.focusapp.domain.model.FocusZone
 import com.example.focusapp.ui.common.ErrorBanner
 import com.example.focusapp.ui.common.fetchLastKnownLocation
 import com.example.focusapp.ui.common.friendlyErrorMessage
+import com.example.focusapp.ui.common.pickedApps
+import com.example.focusapp.ui.common.rememberInstalledApps
 import com.example.focusapp.ui.common.rememberLocationPermissionState
 import com.example.focusapp.ui.common.resolveApproxPlaceName
+import com.example.focusapp.ui.common.toggle
+import com.example.focusapp.ui.components.button.ConfirmButton
+import com.example.focusapp.ui.components.card.AppSelectCard
+import com.example.focusapp.ui.components.card.DeleteDialog
+import com.example.focusapp.ui.components.card.FlyCardOverlay
+import com.example.focusapp.ui.components.card.consumeTaps
 import com.example.focusapp.ui.navigation.MainTab
 import com.example.focusapp.ui.navigation.MainTabBar
 import com.example.focusapp.ui.theme.FocusAppTheme
+import com.example.focusapp.ui.theme.FocusSpacing
 import com.example.focusapp.ui.theme.FocusTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.example.focusapp.ui.theme.FocusSpacing
-import com.example.focusapp.data.blocking.AppItem
-import com.example.focusapp.ui.common.rememberInstalledApps
-import com.example.focusapp.ui.components.button.ConfirmButton
-import com.example.focusapp.ui.components.card.AppSelectCard
-import com.example.focusapp.ui.components.card.FlyCardOverlay
-import com.example.focusapp.ui.components.card.DeleteDialog
-import com.example.focusapp.ui.components.card.consumeTaps
-import com.example.focusapp.ui.common.pickedApps
-import com.example.focusapp.ui.common.toggle
+
 private const val DEFAULT_RADIUS_METERS = 100f
 
 /** How much of the location list stays visible above the bottom edge when swiped down. */
 private val ListPeekHeight = 200.dp
 
-
 /**
  * A location being added, or a saved one being edited ([editingZoneId] set).
- * Its position is the map's visible center - the pin stays put and the map
- * moves under it - so [latitude]/[longitude] follow the map center, and are
- * null until it's known.
+ * Its position is determined by tapping on the interactive map or from GPS/last known location.
  */
 private data class LocationDraft(
     val editingZoneId: String? = null,
@@ -71,19 +76,13 @@ private data class LocationDraft(
     val radiusMeters: Float = DEFAULT_RADIUS_METERS,
     val latitude: Double? = null,
     val longitude: Double? = null,
-
     val blockedApps: List<AppItem> = emptyList(),
 )
 
 /**
- * Figma: "Map Only" / "Location Focuse" / "Add new location".
- * Opens with the location group list partly covering the map; swiping down
- * on it (or its top edge) lowers it - it never leaves the screen - to show
- * more map, swiping up brings it back. Long-pressing the map starts adding
- * a location; tapping a group edits it, holding a group deletes it.
- * The add/edit card's "Blocked app" button opens the app picker - the apps
- * a focus session at that location blocks. Each location has its own list,
- * stored as one of David's location groups under the location's id.
+ * Figma: "Map Only" / "Location Focus" / "Add new location".
+ * Displays an interactable map background showing user's current location and focus locations.
+ * Users can tap anywhere on the map to set a pin marker and extract the latitude/longitude.
  */
 @Composable
 fun LocationScreen(
@@ -98,28 +97,35 @@ fun LocationScreen(
     val panelState = rememberPullUpPanelState(initiallyExpanded = true)
     val permissionState = rememberLocationPermissionState()
 
+    val currentLocation by currentLocationFlow.collectAsState()
+
+    DisposableEffect(permissionState.hasPermission) {
+        if (permissionState.hasPermission) {
+            startGPSUpdates(context)
+        }
+        onDispose {
+            stopGPSUpdates(context)
+        }
+    }
+
     var zones by remember { mutableStateOf<List<FocusZone>>(emptyList()) }
-    // Local-only for now: FocusZone has no "enabled" field in the data layer yet.
     val enabledZoneIds = remember { mutableStateMapOf<String, Boolean>() }
 
     var draft by remember { mutableStateOf<LocationDraft?>(null) }
     var saveError by remember { mutableStateOf<String?>(null) }
     var listError by remember { mutableStateOf<String?>(null) }
-    // Reverse-geocoded "Approx. ..." names, keyed by zone id (best-effort, may stay missing).
     val placeNames = remember { mutableStateMapOf<String, String>() }
     var draftPlaceName by remember { mutableStateOf<String?>(null) }
 
-    // Set by holding a group card; deleting waits for the confirm dialog.
     var pendingDelete by remember { mutableStateOf<FocusZone?>(null) }
 
     var showAppPicker by remember { mutableStateOf(false) }
     val installedApps = rememberInstalledApps(shouldLoad = showAppPicker)
-    // The picker's ticks - only copied into the draft when its check is tapped.
     var pickerSelection by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     suspend fun reloadZones() {
         zones = withContext(Dispatchers.IO) {
-            listOfNotNull(FocusRepositoryProvider.get(context).getFocusZone())
+            FocusRepositoryProvider.get(context).getFocusZones()
         }
         onZonesLoaded(zones.map { it.id }.toSet())
     }
@@ -127,8 +133,15 @@ fun LocationScreen(
     LaunchedEffect(Unit) { reloadZones() }
 
     LaunchedEffect(zones) {
-        zones.filter { it.id !in placeNames }.forEach { zone ->
-            resolveApproxPlaceName(context, zone.latitude, zone.longitude)?.let { placeNames[zone.id] = it }
+        zones.forEach { zone ->
+            launch(Dispatchers.IO) {
+                val name = resolveApproxPlaceName(context, zone.latitude, zone.longitude)
+                if (name != null) {
+                    withContext(Dispatchers.Main) {
+                        placeNames[zone.id] = name
+                    }
+                }
+            }
         }
     }
 
@@ -138,26 +151,34 @@ fun LocationScreen(
         draftPlaceName = if (lat != null && lng != null) resolveApproxPlaceName(context, lat, lng) else null
     }
 
-    // There's no real map yet, so a new location's "map center" is the
-    // device's current position. With a real map this becomes the camera
-    // target, updated whenever the user stops dragging the map.
     val needsPosition = draft != null && draft?.latitude == null
-    LaunchedEffect(needsPosition, permissionState.hasPermission) {
-        if (needsPosition && permissionState.hasPermission) {
-            fetchLastKnownLocation(context) { lat, lng ->
-                draft = draft?.let { if (it.latitude == null) it.copy(latitude = lat, longitude = lng) else it }
+    LaunchedEffect(needsPosition, permissionState.hasPermission, currentLocation) {
+        if (needsPosition) {
+            if (currentLocation != null) {
+                draft = draft?.let { if (it.latitude == null) it.copy(latitude = currentLocation!!.first, longitude = currentLocation!!.second) else it }
+            } else if (permissionState.hasPermission) {
+                fetchLastKnownLocation(context) { lat, lng ->
+                    draft = draft?.let { if (it.latitude == null) it.copy(latitude = lat, longitude = lng) else it }
+                }
             }
         }
     }
 
-    // With a real map, also move the camera so [position] lands under the centered pin.
     fun startDraft(@Suppress("UNUSED_PARAMETER") position: Offset) {
         saveError = null
-        draft = LocationDraft()
+        draft = LocationDraft(
+            latitude = currentLocation?.first,
+            longitude = currentLocation?.second,
+        )
         if (!permissionState.hasPermission) permissionState.request()
     }
 
-    // With a real map, also move the camera so the zone lands under the centered pin.
+    fun onMapClickLocation(lat: Double, lng: Double) {
+        saveError = null
+        draft = draft?.copy(latitude = lat, longitude = lng) ?: LocationDraft(latitude = lat, longitude = lng)
+        if (!permissionState.hasPermission) permissionState.request()
+    }
+
     fun startEditing(zone: FocusZone) {
         saveError = null
         draft = LocationDraft(
@@ -175,6 +196,7 @@ fun LocationScreen(
         scope.launch {
             try {
                 withContext(Dispatchers.IO) { FocusRepositoryProvider.get(context).deleteFocusZone(zone.id) }
+                removeFocusZoneGeofence(context, zone.id)
                 enabledZoneIds.remove(zone.id)
                 placeNames.remove(zone.id)
                 onZoneDeleted(zone.id)
@@ -201,7 +223,7 @@ fun LocationScreen(
                 withContext(Dispatchers.IO) { FocusRepositoryProvider.get(context).saveFocusZone(zone) }
                 if (current.editingZoneId == null) enabledZoneIds[zone.id] = true
                 onZoneBlockedAppsChange(zone, current.blockedApps)
-                // The position may have moved - resolve its name again.
+                registerGeofenceForZone(context, zone)
                 placeNames.remove(zone.id)
                 reloadZones()
                 draft = null
@@ -212,35 +234,42 @@ fun LocationScreen(
     }
 
     BackHandler(enabled = draft != null) { draft = null }
-    // Registered after the one above, so while the picker is open, back closes only the picker.
     BackHandler(enabled = showAppPicker) { showAppPicker = false }
 
     Box(modifier = Modifier.fillMaxSize()) {
         LocationContent(
-        zones = zones,
-        isZoneEnabled = { zone -> enabledZoneIds[zone.id] ?: true },
-        onZoneEnabledChange = { zone, enabled -> enabledZoneIds[zone.id] = enabled },
-        placeNameFor = { zone -> placeNames[zone.id] },
-        onZoneClick = ::startEditing,
-        onZoneLongClick = { pendingDelete = it },
-        listError = listError,
-        draft = draft,
-        draftPlaceName = draftPlaceName,
-        saveError = saveError,
-        panelState = panelState,
-        onMapLongPress = ::startDraft,
-        onDraftChange = { draft = it },
-        onDraftDiscard = { draft = null },
-        onDraftConfirm = ::saveDraft,
+            zones = zones,
+            isZoneEnabled = { zone -> enabledZoneIds[zone.id] ?: true },
+            onZoneEnabledChange = { zone, enabled ->
+                enabledZoneIds[zone.id] = enabled
+                if (enabled) {
+                    registerGeofenceForZone(context, zone)
+                } else {
+                    removeFocusZoneGeofence(context, zone.id)
+                }
+            },
+            placeNameFor = { zone -> placeNames[zone.id] },
+            onZoneClick = ::startEditing,
+            onZoneLongClick = { pendingDelete = it },
+            listError = listError,
+            draft = draft,
+            draftPlaceName = draftPlaceName,
+            saveError = saveError,
+            panelState = panelState,
+            currentLocation = currentLocation,
+            onMapLongPress = ::startDraft,
+            onMapClickLocation = ::onMapClickLocation,
+            onDraftChange = { draft = it },
+            onDraftDiscard = { draft = null },
+            onDraftConfirm = ::saveDraft,
             onBlockedAppsClick = {
                 pickerSelection = draft?.blockedApps.orEmpty().map { it.packageName }.toSet()
                 showAppPicker = true
             },
-        onTabClick = onTabClick,
-    )
+            onTabClick = onTabClick,
+        )
 
-    // Edits the draft; the apps are saved with the location when it's confirmed.
-    val pickerDraft = draft
+        val pickerDraft = draft
         if (showAppPicker && pickerDraft != null) {
             FlyCardOverlay(onOutsideClick = { showAppPicker = false }) {
                 AppSelectCard(
@@ -290,7 +319,9 @@ private fun LocationContent(
     draftPlaceName: String?,
     saveError: String?,
     panelState: PullUpPanelState,
+    currentLocation: Pair<Double, Double>?,
     onMapLongPress: (Offset) -> Unit,
+    onMapClickLocation: (latitude: Double, longitude: Double) -> Unit,
     onDraftChange: (LocationDraft) -> Unit,
     onDraftDiscard: () -> Unit,
     onDraftConfirm: () -> Unit,
@@ -300,16 +331,27 @@ private fun LocationContent(
     val colors = FocusTheme.colors
     val density = LocalDensity.current
 
-    // The card covers the bottom of the map; the pin centers on what's left above it.
     var addCardHeight by remember { mutableStateOf(0.dp) }
     val hiddenBottom = if (draft != null) addCardHeight + FocusSpacing.ScreenBottom else 0.dp
+
+    val pinLocation = if (draft?.latitude != null && draft.longitude != null) {
+        Pair(draft.latitude, draft.longitude)
+    } else null
 
     Box(modifier = Modifier.fillMaxSize()) {
         MapPlaceholder(
             onLongPress = onMapLongPress,
             contentPadding = PaddingValues(bottom = hiddenBottom),
+            currentLocation = currentLocation,
+            pinLocation = pinLocation,
+            pinRadiusMeters = draft?.radiusMeters ?: DEFAULT_RADIUS_METERS,
+            zones = zones,
+            onLocationClick = onMapClickLocation,
+            onZoneClick = { zoneId ->
+                zones.find { it.id == zoneId }?.let { onZoneClick(it) }
+            },
         ) {
-            if (draft != null) {
+            if (draft != null && draft.latitude == null) {
                 val ringDiameter by animateDpAsState(
                     targetValue = (draft.radiusMeters * 2 * PLACEHOLDER_DP_PER_METER).dp,
                     label = "zoneRingDiameter",
@@ -322,7 +364,6 @@ private fun LocationContent(
             }
         }
 
-        // Hidden while adding a location, so the card and the centered pin have the map to themselves.
         if (draft == null) PullUpPanel(
             state = panelState,
             peekHeight = ListPeekHeight,
@@ -332,14 +373,13 @@ private fun LocationContent(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    // No top padding: the panel's 24 dp drag strip already sits above the list.
                     .padding(start = 32.dp, end = 32.dp, bottom = 120.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 listError?.let { ErrorBanner(message = it) }
                 if (zones.isEmpty()) {
                     Text(
-                        text = "No focus locations yet.\nLong-press the map to add one.",
+                        text = "No focus locations yet.\nTap or long-press the map to add one.",
                         style = FocusTheme.typography.body,
                         color = colors.onSurfaceMuted,
                         textAlign = TextAlign.Center,
@@ -350,10 +390,9 @@ private fun LocationContent(
                 }
                 zones.forEach { zone ->
                     LocationGroupCard(
-                        name = zone.name,
-                        // Falls back to the radius until (or if never) a place name resolves.
-                        subtitle = placeNameFor(zone)?.let { "Approx. $it" }
-                            ?: "Effective range: ${zone.radiusMeters.toInt()} m",
+                        name = zone.name.ifBlank { "Focus Zone" },
+                        approxLocation = placeNameFor(zone),
+                        radiusMeters = zone.radiusMeters,
                         latitude = zone.latitude,
                         longitude = zone.longitude,
                         enabled = isZoneEnabled(zone),
@@ -421,7 +460,9 @@ private fun LocationContentListPreview() {
             draftPlaceName = null,
             saveError = null,
             panelState = rememberPullUpPanelState(initiallyExpanded = true),
+            currentLocation = Pair(-37.8136, 144.9631),
             onMapLongPress = {},
+            onMapClickLocation = { _, _ -> },
             onDraftChange = {},
             onDraftDiscard = {},
             onDraftConfirm = {},
@@ -447,7 +488,9 @@ private fun LocationContentAddPreview() {
             draftPlaceName = "Library at the Dock",
             saveError = null,
             panelState = rememberPullUpPanelState(),
+            currentLocation = Pair(-37.8136, 144.9631),
             onMapLongPress = {},
+            onMapClickLocation = { _, _ -> },
             onDraftChange = {},
             onDraftDiscard = {},
             onDraftConfirm = {},

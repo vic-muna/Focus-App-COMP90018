@@ -12,11 +12,12 @@ import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
 import java.util.Locale
 
-/** One saved location in the list: name, place, coordinates and an on/off switch. */
+/** One saved location in the list: name, approximate location text, range, coordinates and an on/off switch. */
 @Composable
 fun LocationGroupCard(
     name: String,
-    subtitle: String,
+    approxLocation: String?,
+    radiusMeters: Float,
     latitude: Double,
     longitude: Double,
     enabled: Boolean,
@@ -27,6 +28,10 @@ fun LocationGroupCard(
 ) {
     val colors = FocusTheme.colors
     val typography = FocusTheme.typography
+
+    val placeName = approxLocation?.takeIf { it.isNotBlank() } ?: "location"
+    val formattedPlace = if (placeName.startsWith("Approx.", ignoreCase = true)) placeName else "Approx. $placeName"
+    val subtitleText = "$formattedPlace (Range: ${radiusMeters.toInt()}m)"
 
     SwitchListCard(
         enabled = enabled,
@@ -46,16 +51,16 @@ fun LocationGroupCard(
             modifier = Modifier.padding(bottom = 2.dp),
         )
         Text(
-            text = subtitle,
+            text = subtitleText,
             style = typography.caption,
             color = colors.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
         Text(
-            text = String.format(Locale.US, "Latitude: %.1f | Longitude: %.1f", latitude, longitude),
+            text = String.format(Locale.US, "Latitude: %.4f | Longitude: %.4f", latitude, longitude),
             style = typography.caption,
-            color = colors.onSurface,
+            color = colors.onSurfaceMuted,
         )
     }
 }
@@ -66,9 +71,10 @@ private fun LocationGroupCardPreview() {
     FocusAppTheme {
         LocationGroupCard(
             name = "Group001",
-            subtitle = "Approx. FBE Library",
-            latitude = 40.7,
-            longitude = -74.1,
+            approxLocation = "FBE Library",
+            radiusMeters = 100f,
+            latitude = 40.7128,
+            longitude = -74.0060,
             enabled = true,
             onEnabledChange = {},
         )

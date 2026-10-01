@@ -14,7 +14,10 @@ import kotlinx.coroutines.flow.Flow
  */
 interface FocusRepository {
 
-    /** Reads the user's single saved focus zone, or null if none has been set yet. */
+    /** Reads all saved focus zones. */
+    suspend fun getFocusZones(): List<FocusZone>
+
+    /** Reads the user's first saved focus zone, or null if none has been set yet. */
     suspend fun getFocusZone(): FocusZone?
 
     /** Persists the user's one focus zone, overwriting any previously saved value, then
