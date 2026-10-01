@@ -6,7 +6,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.mutableStateOf
-import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.data.apps.getAppLabel
 import com.example.focusapp.ui.screens.blocked.BlockedScreen
 import com.example.focusapp.ui.theme.FocusAppTheme
@@ -59,21 +58,13 @@ class BlockedActivity : ComponentActivity() {
         blockReasonState.value = intent.getStringExtra(EXTRA_BLOCK_REASON)
     }
 
-    /** Leaves this screen: back to the focus timer if a session is running, else to the phone's home screen. */
+    /** Leaves this screen: closes the interruption screen and redirects the user to the phone's home screen. */
     private fun leave() {
-        val isFocusing = AccessibilityBridge.restrictedPackages.value.isNotEmpty()
-        val nextScreen = if (isFocusing) {
-            // Brings the open Focus app (still on its timer screen) back to the front.
-            Intent(this, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
-            }
-        } else {
-            Intent(Intent.ACTION_MAIN).apply {
-                addCategory(Intent.CATEGORY_HOME)
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            }
+        val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_HOME)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
-        startActivity(nextScreen)
+        startActivity(homeIntent)
         finish()
     }
 

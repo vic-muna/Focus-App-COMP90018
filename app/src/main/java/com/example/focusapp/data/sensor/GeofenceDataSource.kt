@@ -1,56 +1,34 @@
 package com.example.focusapp.data.sensor
 
+import android.Manifest
 import android.app.PendingIntent
-import java.util.UUID //this in temporary.
 import android.content.Context
 import android.content.Intent
-import android.os.Build
-import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Geofence
-import com.google.android.gms.location.GeofencingRequest
-import com.google.android.gms.common.api.ApiException
-import com.google.android.gms.location.GeofenceStatusCodes
+import com.example.focusapp.data.accessibility.AccessibilityBridge
+import com.example.focusapp.data.blocking.BlockedAppGroupStorage
 import com.example.focusapp.data.local.RoomLocalDataSource
 import com.example.focusapp.domain.model.FocusZone
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.location.Geofence
+import com.google.android.gms.location.GeofenceStatusCodes
+import com.google.android.gms.location.GeofencingRequest
+import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 private const val TAG = "GeofenceTracker"
 
-fun addFocusZoneGeofence(context: Context, lat: Double, lng: Double, radius: Float) {
-    // 1. Initialize the client using the context you passed in
+fun registerGeofenceForZone(context: Context, zone: FocusZone) {
     val geofencingClient = LocationServices.getGeofencingClient(context)
 
-    // 2. Build the Geofence object
-    val newLocationId = UUID.randomUUID().toString() // TODO: Once the Focus Locations get saved in the database of the phone, the id should maybe be adjusted
-
-    val localDataSource = RoomLocalDataSource(context)
-    val newZone = FocusZone(
-        id = newLocationId,
-        name = "New Focus Zone", // Update function to accept a name parameter later
-        latitude = lat,
-        longitude = lng,
-        radiusMeters = radius
-    )
-
-    CoroutineScope(Dispatchers.IO).launch {
-        val saveSuccessful = localDataSource.addFocusZone(newZone)
-
-        if (!saveSuccessful) {
-            Log.e(TAG, "Aborting OS registration because local save failed.")
-            // You can optionally surface this error back to the UI here
-            return@launch
-        }
-    }
-
     val geofence = Geofence.Builder()
-        .setRequestId(newLocationId)
-        .setCircularRegion(lat, lng, radius)
+        .setRequestId(zone.id)
+        .setCircularRegion(zone.latitude, zone.longitude, zone.radiusMeters)
         .setExpirationDuration(Geofence.NEVER_EXPIRE)
         .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER or Geofence.GEOFENCE_TRANSITION_EXIT)
         .build()
@@ -60,26 +38,45 @@ fun addFocusZoneGeofence(context: Context, lat: Double, lng: Double, radius: Flo
         .addGeofence(geofence)
         .build()
 
-    // 3. Create the PendingIntent to wake up GeofenceBroadcastReceiver
     val pendingIntent = getGeofencePendingIntent(context)
 
-    // 4. Hand the Geofence and Intent to the geofencingClient
-    if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+    val hasFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    val hasCoarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
+    if (hasFine || hasCoarse) {
         geofencingClient.addGeofences(geofencingRequest, pendingIntent)
             .addOnSuccessListener {
-                Log.d(TAG, "Successfully registered Focus Zone: $lat, $lng, $radius, $newLocationId")
+                Log.d(TAG, "Successfully registered geofence for Focus Zone '${zone.name}' (${zone.id}): ${zone.latitude}, ${zone.longitude}, radius ${zone.radiusMeters}m")
             }
             .addOnFailureListener { exception ->
-                Log.e(TAG, "Failed to register Focus Zone: ${exception.message}")
+                Log.e(TAG, "Failed to register geofence for Focus Zone ${zone.id}: ${exception.message}")
             }
-
     } else {
-        Log.e(TAG, "Cannot add geofence: Missing fine location permission.")
+        Log.e(TAG, "Cannot add geofence: Missing location permission.")
     }
 }
 
-public fun getGeofencePendingIntent(context: Context): PendingIntent {
+fun addFocusZoneGeofence(context: Context, lat: Double, lng: Double, radius: Float) {
+    val localDataSource = RoomLocalDataSource(context)
+    val newZone = FocusZone(
+        id = "zone_${System.currentTimeMillis()}",
+        name = "New Focus Zone",
+        latitude = lat,
+        longitude = lng,
+        radiusMeters = radius
+    )
+
+    CoroutineScope(Dispatchers.IO).launch {
+        val saveSuccessful = localDataSource.addFocusZone(newZone)
+        if (saveSuccessful) {
+            registerGeofenceForZone(context, newZone)
+        } else {
+            Log.e(TAG, "Aborting OS geofence registration because local save failed.")
+        }
+    }
+}
+
+fun getGeofencePendingIntent(context: Context): PendingIntent {
     val intent = Intent(context, GeofenceBroadcastReceiver::class.java)
     val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
@@ -89,29 +86,22 @@ public fun getGeofencePendingIntent(context: Context): PendingIntent {
 
     return PendingIntent.getBroadcast(
         context,
-        0, // Request code (0 is standard here)
+        0,
         intent,
         flags
     )
 }
 
+/**
+ * Completely deletes a geofence and removes its app locks and database/storage records.
+ */
 fun removeFocusZoneGeofence(context: Context, id: String) {
     val geofencingClient = LocationServices.getGeofencingClient(context)
 
-    val localDataSource = RoomLocalDataSource(context)
-
-
-    // Remove the specific geofence by passing its ID in a list
+    // 1. Remove registered geofence from Android OS
     geofencingClient.removeGeofences(listOf(id))
         .addOnSuccessListener {
-            Log.d(TAG, "Successfully removed Focus Zone: $id")
-            CoroutineScope(Dispatchers.IO).launch {
-                val deleteSuccessful = localDataSource.deleteFocusZone(id)
-
-                if (!deleteSuccessful) {
-                    Log.e(TAG, "Warning: OS removal succeeded, but local deletion failed.")
-                }
-            }
+            Log.d(TAG, "Successfully removed OS geofence: $id")
         }
         .addOnFailureListener { exception ->
             if (exception is ApiException) {
@@ -124,7 +114,24 @@ fun removeFocusZoneGeofence(context: Context, id: String) {
                     }
                 }
             } else {
-                Log.e(TAG, "Failed to remove Focus Zone $id: ${exception.message}")
+                Log.e(TAG, "Failed to remove OS geofence $id: ${exception.message}")
             }
         }
+
+    // 2. Clear any active app restrictions from AccessibilityBridge immediately
+    AccessibilityBridge.clearRestrictedPackages()
+
+    // 3. Remove zone and its blocked app configuration from database and SharedPreferences
+    CoroutineScope(Dispatchers.IO).launch {
+        val localDataSource = RoomLocalDataSource(context)
+        localDataSource.deleteFocusZone(id)
+
+        val locationStorage = BlockedAppGroupStorage.forLocationGroups(context)
+        val existingGroups = locationStorage.getGroupsWithoutIcons()
+        if (existingGroups != null) {
+            val updatedGroups = existingGroups.filterNot { it.id == id }
+            locationStorage.saveGroups(updatedGroups)
+            Log.d(TAG, "Successfully deleted location group and app locks for zone: $id")
+        }
+    }
 }

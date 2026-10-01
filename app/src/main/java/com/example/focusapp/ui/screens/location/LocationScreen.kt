@@ -34,6 +34,8 @@ import androidx.compose.ui.unit.dp
 import com.example.focusapp.data.blocking.AppItem
 import com.example.focusapp.data.repository.FocusRepositoryProvider
 import com.example.focusapp.data.sensor.currentLocationFlow
+import com.example.focusapp.data.sensor.registerGeofenceForZone
+import com.example.focusapp.data.sensor.removeFocusZoneGeofence
 import com.example.focusapp.data.sensor.startGPSUpdates
 import com.example.focusapp.data.sensor.stopGPSUpdates
 import com.example.focusapp.domain.model.FocusZone
@@ -187,6 +189,7 @@ fun LocationScreen(
         scope.launch {
             try {
                 withContext(Dispatchers.IO) { FocusRepositoryProvider.get(context).deleteFocusZone(zone.id) }
+                removeFocusZoneGeofence(context, zone.id)
                 enabledZoneIds.remove(zone.id)
                 placeNames.remove(zone.id)
                 onZoneDeleted(zone.id)
@@ -213,6 +216,7 @@ fun LocationScreen(
                 withContext(Dispatchers.IO) { FocusRepositoryProvider.get(context).saveFocusZone(zone) }
                 if (current.editingZoneId == null) enabledZoneIds[zone.id] = true
                 onZoneBlockedAppsChange(zone, current.blockedApps)
+                registerGeofenceForZone(context, zone)
                 placeNames.remove(zone.id)
                 reloadZones()
                 draft = null
@@ -229,7 +233,14 @@ fun LocationScreen(
         LocationContent(
             zones = zones,
             isZoneEnabled = { zone -> enabledZoneIds[zone.id] ?: true },
-            onZoneEnabledChange = { zone, enabled -> enabledZoneIds[zone.id] = enabled },
+            onZoneEnabledChange = { zone, enabled ->
+                enabledZoneIds[zone.id] = enabled
+                if (enabled) {
+                    registerGeofenceForZone(context, zone)
+                } else {
+                    removeFocusZoneGeofence(context, zone.id)
+                }
+            },
             placeNameFor = { zone -> placeNames[zone.id] },
             onZoneClick = ::startEditing,
             onZoneLongClick = { pendingDelete = it },
