@@ -54,7 +54,8 @@ class FocusAccessibilityService : AccessibilityService() {
         if (packageName in limitedPackages) lastOpenedPackage = packageName
 
         if (packageName in AccessibilityBridge.restrictedPackages.value) {
-            launchBlockedScreen(packageName, AccessibilityBridge.restrictionReason)
+            val reason = AccessibilityBridge.getReasonFor(packageName) ?: AccessibilityBridge.restrictionReason
+            launchBlockedScreen(packageName, reason)
             return
         }
 

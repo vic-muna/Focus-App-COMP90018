@@ -67,18 +67,22 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
         val locationGroups = BlockedAppGroupStorage.forLocationGroups(context).getGroupsWithoutIcons() ?: emptyList()
         val matchingGroups = locationGroups.filter { it.id in activeIds && it.enabled }
 
-        val blockedPackages = matchingGroups
-            .flatMap { group -> group.apps.filter { it.isBlocked }.map { it.packageName } }
-            .toSet()
+        val packageToReasonMap = mutableMapOf<String, String>()
+        matchingGroups.forEach { group ->
+            val zoneName = group.name.ifBlank { "Location Focus Zone" }
+            val reason = "Blocked while inside '$zoneName'"
+            group.apps.filter { it.isBlocked }.forEach { app ->
+                if (app.packageName !in packageToReasonMap) {
+                    packageToReasonMap[app.packageName] = reason
+                }
+            }
+        }
 
-        val groupNames = matchingGroups.map { it.name }.filter { it.isNotBlank() }.joinToString(", ")
-        val reason = if (groupNames.isNotBlank()) "Blocked while inside '$groupNames'" else "Blocked while inside Location Focus Zone"
-
-        if (blockedPackages.isNotEmpty()) {
-            Log.d(TAG, "Activating location block for active zones $activeIds ('$groupNames'). Blocking ${blockedPackages.size} apps: $blockedPackages")
-            AccessibilityBridge.setRestrictedPackages(blockedPackages, reason)
+        if (packageToReasonMap.isNotEmpty()) {
+            Log.d(TAG, "Activating location block for active zones $activeIds. App mapping: $packageToReasonMap")
+            AccessibilityBridge.setRestrictedPackages(packageToReasonMap)
         } else {
-            Log.d(TAG, "Active geofence zones $activeIds ('$groupNames') have no blocked apps configured.")
+            Log.d(TAG, "Active geofence zones $activeIds have no blocked apps configured.")
             AccessibilityBridge.clearRestrictedPackages()
         }
     }
