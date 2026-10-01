@@ -125,7 +125,7 @@ fun LocationScreen(
 
     suspend fun reloadZones() {
         zones = withContext(Dispatchers.IO) {
-            listOfNotNull(FocusRepositoryProvider.get(context).getFocusZone())
+            FocusRepositoryProvider.get(context).getFocusZones()
         }
         onZonesLoaded(zones.map { it.id }.toSet())
     }
@@ -340,6 +340,9 @@ private fun LocationContent(
             pinRadiusMeters = draft?.radiusMeters ?: DEFAULT_RADIUS_METERS,
             zones = zones,
             onLocationClick = onMapClickLocation,
+            onZoneClick = { zoneId ->
+                zones.find { it.id == zoneId }?.let { onZoneClick(it) }
+            },
         ) {
             if (draft != null && draft.latitude == null) {
                 val ringDiameter by animateDpAsState(

@@ -8,7 +8,6 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
-import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.data.blocking.BlockedAppGroupStorage
 import com.example.focusapp.data.local.RoomLocalDataSource
 import com.example.focusapp.domain.model.FocusZone
@@ -118,8 +117,8 @@ fun removeFocusZoneGeofence(context: Context, id: String) {
             }
         }
 
-    // 2. Clear any active app restrictions from AccessibilityBridge immediately
-    AccessibilityBridge.clearRestrictedPackages()
+    // 2. Clear removed zone from active state and recalculate active restrictions
+    GeofenceBroadcastReceiver.onGeofenceRemoved(context, id)
 
     // 3. Remove zone and its blocked app configuration from database and SharedPreferences
     CoroutineScope(Dispatchers.IO).launch {

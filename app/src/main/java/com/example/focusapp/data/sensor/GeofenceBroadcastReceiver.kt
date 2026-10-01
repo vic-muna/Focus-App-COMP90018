@@ -21,17 +21,19 @@ import kotlinx.coroutines.launch
 
 private const val TAG = "GeofenceReceiver"
 
+private object ActiveGeofenceState {
+    val activeZoneIds = mutableSetOf<String>()
+}
+
 class GeofenceBroadcastReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        // 1. Intercept the reboot event
         if (intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == "android.intent.action.QUICKBOOT_POWERON") {
             Log.d(TAG, "Device booted! Restoring Focus Zones...")
             restoreGeofences(context)
             return
         }
 
-        // 2. Handle the standard geofence transitions
         val geofencingEvent = GeofencingEvent.fromIntent(intent)
 
         if (geofencingEvent == null || geofencingEvent.hasError()) {
@@ -45,35 +47,40 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
 
         if (geofenceTransition == Geofence.GEOFENCE_TRANSITION_ENTER) {
             Log.d(TAG, "User ENTERED focus zone(s): $triggeredZoneIds")
-            handleGeofenceEnter(context, triggeredZoneIds)
+            ActiveGeofenceState.activeZoneIds.addAll(triggeredZoneIds)
+            updateActiveGeofenceRestrictions(context)
         } else if (geofenceTransition == Geofence.GEOFENCE_TRANSITION_EXIT) {
             Log.d(TAG, "User EXITED focus zone(s): $triggeredZoneIds")
-            handleGeofenceExit()
+            ActiveGeofenceState.activeZoneIds.removeAll(triggeredZoneIds)
+            updateActiveGeofenceRestrictions(context)
         }
     }
 
-    private fun handleGeofenceEnter(context: Context, triggeredZoneIds: Set<String>) {
+    fun updateActiveGeofenceRestrictions(context: Context) {
+        val activeIds = ActiveGeofenceState.activeZoneIds
+        if (activeIds.isEmpty()) {
+            Log.d(TAG, "No active geofence zones remaining. Clearing all restrictions.")
+            AccessibilityBridge.clearRestrictedPackages()
+            return
+        }
+
         val locationGroups = BlockedAppGroupStorage.forLocationGroups(context).getGroupsWithoutIcons() ?: emptyList()
-        val matchingGroups = locationGroups.filter { it.id in triggeredZoneIds && it.enabled }
+        val matchingGroups = locationGroups.filter { it.id in activeIds && it.enabled }
 
         val blockedPackages = matchingGroups
             .flatMap { group -> group.apps.filter { it.isBlocked }.map { it.packageName } }
             .toSet()
 
-        val groupName = matchingGroups.firstOrNull()?.name?.takeIf { it.isNotBlank() } ?: "Location Focus Zone"
-        val reason = "Blocked while inside '$groupName'"
+        val groupNames = matchingGroups.map { it.name }.filter { it.isNotBlank() }.joinToString(", ")
+        val reason = if (groupNames.isNotBlank()) "Blocked while inside '$groupNames'" else "Blocked while inside Location Focus Zone"
 
         if (blockedPackages.isNotEmpty()) {
-            Log.d(TAG, "Activating location block for '$groupName'. Blocking: $blockedPackages")
+            Log.d(TAG, "Activating location block for active zones $activeIds ('$groupNames'). Blocking ${blockedPackages.size} apps: $blockedPackages")
             AccessibilityBridge.setRestrictedPackages(blockedPackages, reason)
         } else {
-            Log.d(TAG, "Entered geofence '$groupName', but no blocked apps were configured.")
+            Log.d(TAG, "Active geofence zones $activeIds ('$groupNames') have no blocked apps configured.")
+            AccessibilityBridge.clearRestrictedPackages()
         }
-    }
-
-    private fun handleGeofenceExit() {
-        Log.d(TAG, "Exited location focus zone. Clearing restrictions.")
-        AccessibilityBridge.clearRestrictedPackages()
     }
 
     fun restoreGeofences(context: Context) {
@@ -121,6 +128,13 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
                 .addOnFailureListener { exception ->
                     Log.e(TAG, "Failed to restore Focus Zones on boot: ${exception.message}")
                 }
+        }
+    }
+
+    companion object {
+        fun onGeofenceRemoved(context: Context, zoneId: String) {
+            ActiveGeofenceState.activeZoneIds.remove(zoneId)
+            GeofenceBroadcastReceiver().updateActiveGeofenceRestrictions(context)
         }
     }
 }

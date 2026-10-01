@@ -25,6 +25,15 @@ internal fun buildMapHtml(centerLat: Double, centerLng: Double): String {
                     border-radius: 50%;
                     box-shadow: 0 0 10px rgba(59, 130, 246, 0.9);
                 }
+                .zone-tooltip {
+                    background: #1F2937;
+                    color: #10B981;
+                    border: 1px solid #10B981;
+                    border-radius: 4px;
+                    font-weight: bold;
+                    font-size: 11px;
+                    padding: 2px 6px;
+                }
             </style>
         </head>
         <body>
@@ -41,6 +50,7 @@ internal fun buildMapHtml(centerLat: Double, centerLng: Double): String {
                 var pinMarker = null;
                 var pinCircle = null;
                 var hasCenteredOnUser = false;
+                var zoneLayers = [];
 
                 function setLocation(lat, lng) {
                     var latLng = [lat, lng];
@@ -97,6 +107,48 @@ internal fun buildMapHtml(centerLat: Double, centerLng: Double): String {
                         map.removeLayer(pinCircle);
                         pinCircle = null;
                     }
+                }
+
+                function setZones(zones) {
+                    zoneLayers.forEach(function(l) { map.removeLayer(l); });
+                    zoneLayers = [];
+
+                    if (!zones || !Array.isArray(zones)) return;
+                    zones.forEach(function(z) {
+                        var latLng = [z.latitude, z.longitude];
+                        var circle = L.circle(latLng, {
+                            radius: z.radiusMeters,
+                            color: '#10B981',
+                            fillColor: '#34D399',
+                            fillOpacity: 0.2,
+                            weight: 2
+                        }).addTo(map);
+                        zoneLayers.push(circle);
+
+                        var marker = L.circleMarker(latLng, {
+                            radius: 6,
+                            color: '#10B981',
+                            fillColor: '#FFFFFF',
+                            weight: 2,
+                            fillOpacity: 1
+                        }).addTo(map);
+
+                        if (z.name) {
+                            marker.bindTooltip(z.name, {
+                                permanent: true,
+                                direction: 'top',
+                                className: 'zone-tooltip'
+                            });
+                        }
+
+                        marker.on('click', function() {
+                            if (window.AndroidBridge && window.AndroidBridge.onZoneClick) {
+                                window.AndroidBridge.onZoneClick(z.id);
+                            }
+                        });
+
+                        zoneLayers.push(marker);
+                    });
                 }
 
                 map.on('click', function(e) {

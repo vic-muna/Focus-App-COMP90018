@@ -40,6 +40,7 @@ fun MapPlaceholder(
     pinRadiusMeters: Float = 100f,
     zones: List<FocusZone> = emptyList(),
     onLocationClick: ((latitude: Double, longitude: Double) -> Unit)? = null,
+    onZoneClick: ((zoneId: String) -> Unit)? = null,
     overlays: @Composable BoxScope.() -> Unit = {},
 ) {
     val isPreview = LocalInspectionMode.current
@@ -56,7 +57,9 @@ fun MapPlaceholder(
                 currentLocation = currentLocation,
                 pinLocation = pinLocation,
                 pinRadiusMeters = pinRadiusMeters,
+                zones = zones,
                 onLocationClick = onLocationClick,
+                onZoneClick = onZoneClick,
             )
         }
 

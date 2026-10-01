@@ -23,7 +23,6 @@ class RoomLocalDataSource(context: Context) : LocalDataSource {
     // always at most one row, regardless of what id the new zone has.
     // (The DAO/table itself stays general-purpose - see FocusZoneDao.)
     override suspend fun saveFocusZone(zone: FocusZone) {
-        db.focusZoneDao().deleteAll()
         db.focusZoneDao().upsert(zone.toEntity())
     }
 

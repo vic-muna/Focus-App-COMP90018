@@ -71,8 +71,11 @@ class FocusRepositoryImpl(
     // through, which is correct - we always want a party member's very first status to show up.
     private val lastPushedPartyStatus = mutableMapOf<String, Pair<PartyMemberStatus, Long>>()
 
+    override suspend fun getFocusZones(): List<FocusZone> =
+        localDataSource.getFocusZones()
+
     override suspend fun getFocusZone(): FocusZone? =
-        localDataSource.getFocusZone()
+        localDataSource.getFocusZones().firstOrNull()
 
     // Deletes on this phone only; the Firebase copy stays.
     // TODO: add a RemoteDataSource delete and call it here, like saveFocusZone() does.
@@ -82,9 +85,8 @@ class FocusRepositoryImpl(
 
     override suspend fun saveFocusZone(zone: FocusZone) {
         FocusValidation.validateFocusZone(zone)
-        localDataSource.saveFocusZone(zone)
-        // Fire-and-forget - see syncScope's doc comment (same "must never block the caller on a
-        // hung network call" reasoning as saveFocusSession(), just applied here too).
+        localDataSource.addFocusZone(zone)
+        // Fire-and-forget - see syncScope's doc comment
         syncScope.launch { syncPendingZoneAndAppGroups() }
     }
 
