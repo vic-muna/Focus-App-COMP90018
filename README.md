@@ -415,12 +415,6 @@ Quick Focus changes below). David's logic is kept; only the UI and wiring change
 - Comments were rewritten to be short and plain; every composable keeps an
   `@Preview`.
 
-### Still open
-- Friend ID system (search and friend list are placeholders).
-- Multiple saved locations and a real map (see the 26/09 note).
-- `data/sensor/GeofenceDataSource.kt` is not called by anything yet.
-- A break ("tea break") during a focus session is not built yet.
-
 ## 01/10/2026 Update (Victor Munacoha)
 - Interactive Map added to the Location Screen.
 - Fine GPS Coordinates are used to display current Location on the Map
@@ -428,3 +422,7 @@ Quick Focus changes below). David's logic is kept; only the UI and wiring change
 - Geofences successfully send a trigger to Focus to block apps
 - Interruption screen display the name of the Focus Zone which blocks the opening
 - Overlaps of the Focus Zones does not lead to unwanted behaviour
+
+### Still open
+- Friend ID system (search and friend list are placeholders).
+- A break ("tea break") during a focus session is not built yet.
