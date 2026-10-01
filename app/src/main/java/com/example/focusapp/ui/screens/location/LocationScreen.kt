@@ -133,8 +133,15 @@ fun LocationScreen(
     LaunchedEffect(Unit) { reloadZones() }
 
     LaunchedEffect(zones) {
-        zones.filter { it.id !in placeNames }.forEach { zone ->
-            resolveApproxPlaceName(context, zone.latitude, zone.longitude)?.let { placeNames[zone.id] = it }
+        zones.forEach { zone ->
+            launch(Dispatchers.IO) {
+                val name = resolveApproxPlaceName(context, zone.latitude, zone.longitude)
+                if (name != null) {
+                    withContext(Dispatchers.Main) {
+                        placeNames[zone.id] = name
+                    }
+                }
+            }
         }
     }
 
@@ -383,9 +390,9 @@ private fun LocationContent(
                 }
                 zones.forEach { zone ->
                     LocationGroupCard(
-                        name = zone.name,
-                        subtitle = placeNameFor(zone)?.let { "Approx. $it" }
-                            ?: "Effective range: ${zone.radiusMeters.toInt()} m",
+                        name = zone.name.ifBlank { "Focus Zone" },
+                        approxLocation = placeNameFor(zone),
+                        radiusMeters = zone.radiusMeters,
                         latitude = zone.latitude,
                         longitude = zone.longitude,
                         enabled = isZoneEnabled(zone),
