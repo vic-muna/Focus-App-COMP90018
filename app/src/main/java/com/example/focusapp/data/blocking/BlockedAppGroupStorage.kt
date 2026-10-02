@@ -42,6 +42,11 @@ class BlockedAppGroupStorage(
         prefs.edit().putString(KEY_GROUPS, array.toString()).apply()
     }
 
+    /** Deletes the saved list (used when a different user signs in on this phone). */
+    fun clear() {
+        prefs.edit().clear().apply()
+    }
+
     private fun groupToJson(group: BlockedAppGroup): JSONObject = JSONObject().apply {
         put("id", group.id)
         put("name", group.name)

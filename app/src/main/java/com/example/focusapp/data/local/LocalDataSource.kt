@@ -59,6 +59,15 @@ interface LocalDataSource {
 
     suspend fun markSessionSynced(sessionId: String)
 
+    // --- Accounts (see AccountManager) ---
+
+    /** Saves rows downloaded from the cloud, marked as already synced. Rows already on the
+     *  phone (same id) are kept as they are - the phone's copy may be newer. */
+    suspend fun importFromCloud(sessions: List<FocusSession>, zones: List<FocusZone>, appGroups: List<AppGroup>)
+
+    /** Deletes everything stored here - used when a different user signs in on this phone. */
+    suspend fun clearAll()
+
     // --- Friends (saved on this phone) ---
 
     suspend fun getFriends(): List<Friend>

@@ -13,9 +13,13 @@ import kotlinx.coroutines.flow.Flow
  */
 interface RemoteDataSource {
 
-    /** Current user's stable id, signing in anonymously if this is the
-     *  first call (there is no login screen anywhere in the app yet). */
+    /** The signed-in user's stable id (a guest's or an account's - see AccountManager).
+     *  Throws if nobody is signed in. */
     suspend fun getUid(): String
+
+    /** Downloads everything this user has backed up under users/{uid} - used to fill a
+     *  new phone (or a reinstall) after logging in. */
+    suspend fun fetchUserData(): CloudUserData
 
     /** Push one completed session to the cloud (used by the offline-sync flow). */
     suspend fun pushSession(session: FocusSession)
@@ -42,3 +46,10 @@ interface RemoteDataSource {
 
     fun updateMyPartyStatus(partyId: String, status: PartyMemberStatus)
 }
+
+/** What [RemoteDataSource.fetchUserData] downloads: the user's backed-up sessions, zone and app groups. */
+data class CloudUserData(
+    val sessions: List<FocusSession> = emptyList(),
+    val zone: FocusZone? = null,
+    val appGroups: List<AppGroup> = emptyList(),
+)

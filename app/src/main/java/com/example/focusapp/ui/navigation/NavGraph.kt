@@ -32,6 +32,7 @@ import com.example.focusapp.data.blocking.defaultTimeSlot
 import com.example.focusapp.data.blocking.watchedSsids
 import com.example.focusapp.data.notification.FocusTimerService
 import com.example.focusapp.data.preferences.BackgroundThemeStorage
+import com.example.focusapp.ui.screens.account.AccountScreen
 import com.example.focusapp.ui.screens.history.HistoryScreen
 import com.example.focusapp.ui.screens.history.ThemePickerScreen
 import com.example.focusapp.ui.screens.home.HomeScreenWithSheet
@@ -278,7 +279,18 @@ fun FocusAppNavGraph(
             }
 
             composable(Destinations.SETTINGS, enterTransition = slideUpEnter, exitTransition = slideDownExit) {
-                SettingsScreen(onClose = { navController.popBackStack() })
+                SettingsScreen(
+                    onClose = { navController.popBackStack() },
+                    onCreateAccountClick = { navController.navigate(Destinations.CREATE_ACCOUNT) },
+                )
+            }
+
+            composable(Destinations.CREATE_ACCOUNT, enterTransition = slideUpEnter, exitTransition = slideDownExit) {
+                AccountScreen(
+                    upgradingGuest = true,
+                    onClose = { navController.popBackStack() },
+                    onDone = { navController.popBackStack() },
+                )
             }
 
             composable(Destinations.HISTORY, enterTransition = slideUpEnter, exitTransition = slideDownExit) {

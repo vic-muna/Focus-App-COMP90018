@@ -17,7 +17,8 @@ import kotlinx.coroutines.tasks.await
 
 /**
  * The Firebase Realtime Database version of [RemoteDataSource].
- * Signs in anonymously, just to get an id for this phone. Needs app/google-services.json.
+ * Every path is keyed by the signed-in user's id (guest or account - see AccountManager).
+ * Needs app/google-services.json.
  *
  * Where the data lives in the database:
  *   users/{uid}/sessions/{sessionId}       focus sessions
@@ -32,9 +33,53 @@ class FirebaseRemoteDataSource(
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
 ) : RemoteDataSource {
 
-    override suspend fun getUid(): String {
-        auth.currentUser?.let { return it.uid }
-        return auth.signInAnonymously().await().user!!.uid
+    // Signing in (as a guest or with an account) happens on the login screen - see AccountManager.
+    // No automatic guest sign-in here: a background upload after logging out would otherwise
+    // quietly create a new guest.
+    override suspend fun getUid(): String =
+        auth.currentUser?.uid ?: throw IllegalStateException("Not signed in")
+
+    // Read field by field: the domain models have no empty constructor, which
+    // Firebase's automatic getValue(Class) needs.
+    override suspend fun fetchUserData(): CloudUserData {
+        val uid = getUid()
+        val user = db.getReference("users/$uid").get().await()
+
+        val sessions = user.child("sessions").children.mapNotNull { child ->
+            val id = child.child("id").getValue(String::class.java) ?: child.key ?: return@mapNotNull null
+            val start = child.child("startTimeMillis").getValue(Long::class.java) ?: return@mapNotNull null
+            FocusSession(
+                id = id,
+                startTimeMillis = start,
+                endTimeMillis = child.child("endTimeMillis").getValue(Long::class.java),
+                distractingAppOpenCount = child.child("distractingAppOpenCount").getValue(Long::class.java)?.toInt() ?: 0,
+                wasCompletedSuccessfully = child.child("wasCompletedSuccessfully").getValue(Boolean::class.java) ?: false,
+                groupId = child.child("groupId").getValue(String::class.java),
+            )
+        }
+
+        val zoneNode = user.child("zone")
+        val zone = run {
+            val id = zoneNode.child("id").getValue(String::class.java) ?: return@run null
+            FocusZone(
+                id = id,
+                name = zoneNode.child("name").getValue(String::class.java) ?: "Focus Zone",
+                latitude = zoneNode.child("latitude").getValue(Double::class.java) ?: return@run null,
+                longitude = zoneNode.child("longitude").getValue(Double::class.java) ?: return@run null,
+                radiusMeters = zoneNode.child("radiusMeters").getValue(Double::class.java)?.toFloat() ?: return@run null,
+            )
+        }
+
+        val appGroups = user.child("appGroups").children.mapNotNull { child ->
+            val id = child.child("id").getValue(String::class.java) ?: child.key ?: return@mapNotNull null
+            AppGroup(
+                id = id,
+                groupName = child.child("groupName").getValue(String::class.java) ?: "",
+                packageNames = child.child("packageNames").children.mapNotNull { it.getValue(String::class.java) },
+            )
+        }
+
+        return CloudUserData(sessions = sessions, zone = zone, appGroups = appGroups)
     }
 
     override suspend fun pushSession(session: FocusSession) {

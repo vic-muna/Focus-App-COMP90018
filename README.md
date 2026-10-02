@@ -445,3 +445,27 @@ Quick Focus changes below). David's logic is kept; only the UI and wiring change
 ### Still open
 - Friend ID system (search and friend list are placeholders).
 - A break ("tea break") during a focus session is not built yet.
+
+## 02/10/2026 Update (David Shiau) - User accounts
+- **Login screen** on first launch (and after logging out): **Log in**, **Create
+  account** (username + password, no email) or **Continue as guest** (the old
+  anonymous mode). Phones that were already using the app as a guest go straight in.
+- **Guest → account:** Settings → Account → **Create account** links the new
+  username/password to the guest, so the uid and all saved data stay the same.
+- **Restore on login:** logging in on a new phone (or after a reinstall) downloads
+  the account's sessions, Focus Zone and app groups from Firebase into Room and
+  re-registers the zone geofences. A failed download is retried on the next start.
+- **Switching users:** when a different user signs in, the previous user's data on
+  the phone (Room, blocked-app lists, saved Wi-Fi, geofences) is cleared first.
+- Settings shows who is signed in and has **Log out** (guests are warned their data
+  can't be recovered).
+- Code: `data/account/AccountManager.kt` (Firebase Auth, a username is stored as
+  `username@users.focusapp.example.com`), `ui/screens/account/AccountScreen.kt`.
+- **Setup:** Firebase Console → Authentication → Sign-in method → enable
+  **Email/Password** (keep **Anonymous** on for guests).
+
+### Known limitations
+- No email, so a forgotten password can't be reset.
+- Only sessions, the Focus Zone and app groups sync. Per-feature blocked-app lists,
+  Wi-Fi networks, friends and the theme are still phone-only.
+- Firebase keeps one `zone` per user, so only the last saved location is restored.

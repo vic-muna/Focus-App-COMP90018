@@ -1,5 +1,6 @@
 package com.example.focusapp.data.repository
 
+import com.example.focusapp.data.remote.CloudUserData
 import com.example.focusapp.domain.model.AppGroup
 import com.example.focusapp.domain.model.FocusSession
 import com.example.focusapp.domain.model.FocusZone
@@ -398,5 +399,67 @@ class FocusRepositoryImplTest {
         repository.deleteFriend("friend-1")
 
         assertEquals(listOf(Friend(uid = "friend-2", nickname = "Sam")), repository.getFriends())
+    }
+
+    // ---------------- accounts (restore on login / clear on switch) ----------------
+
+    @Test
+    fun restoreFromCloud_importsEverything_asAlreadySynced() = runBlocking {
+        val session = FocusSession(id = "s1", startTimeMillis = 1_000L, endTimeMillis = 2_000L)
+        val zone = FocusZone("z1", "Library", -37.8, 144.9, 150f)
+        val group = AppGroup(id = "g1", groupName = "Social")
+        remoteDataSource.cloudUserData = CloudUserData(listOf(session), zone, listOf(group))
+
+        repository.restoreFromCloud()
+
+        assertEquals(listOf(session), repository.getSessionHistory())
+        assertEquals(listOf(zone), repository.getFocusZones())
+        assertEquals(listOf(group), repository.getAppGroups())
+        // Downloaded rows must not be uploaded straight back.
+        assertTrue(localDataSource.getUnsyncedSessions().isEmpty())
+        assertTrue(localDataSource.getUnsyncedAppGroups().isEmpty())
+    }
+
+    @Test
+    fun restoreFromCloud_keepsThePhonesCopy_whenTheSameIdExists() = runBlocking {
+        val localSession = FocusSession(id = "s1", startTimeMillis = 1_000L, distractingAppOpenCount = 5)
+        repository.saveFocusSession(localSession)
+        remoteDataSource.cloudUserData = CloudUserData(
+            sessions = listOf(localSession.copy(distractingAppOpenCount = 0), FocusSession(id = "s2", startTimeMillis = 3_000L))
+        )
+
+        repository.restoreFromCloud()
+
+        val history = repository.getSessionHistory()
+        assertEquals(2, history.size)
+        assertEquals(5, history.single { it.id == "s1" }.distractingAppOpenCount)
+    }
+
+    @Test
+    fun restoreFromCloud_throwsWhenOffline_andLeavesPhoneUnchanged() = runBlocking {
+        remoteDataSource.shouldFailPush = true
+        remoteDataSource.cloudUserData = CloudUserData(sessions = listOf(FocusSession(id = "s1", startTimeMillis = 1L)))
+
+        try {
+            repository.restoreFromCloud()
+            fail("expected the failed download to throw")
+        } catch (expected: java.io.IOException) {
+        }
+        assertTrue(repository.getSessionHistory().isEmpty())
+    }
+
+    @Test
+    fun clearLocalData_removesEverythingOnThePhone() = runBlocking {
+        repository.saveFocusSession(FocusSession(id = "s1", startTimeMillis = 1L))
+        repository.saveFocusZone(FocusZone("z1", "Library", -37.8, 144.9, 150f))
+        repository.saveAppGroup(AppGroup(id = "g1", groupName = "Social"))
+        repository.saveFriend(Friend(uid = "friend-1", nickname = "Alex"))
+
+        repository.clearLocalData()
+
+        assertTrue(repository.getSessionHistory().isEmpty())
+        assertTrue(repository.getFocusZones().isEmpty())
+        assertTrue(repository.getAppGroups().isEmpty())
+        assertTrue(repository.getFriends().isEmpty())
     }
 }
