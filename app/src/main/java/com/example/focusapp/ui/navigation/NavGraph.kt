@@ -25,9 +25,11 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.focusapp.data.accessibility.AccessibilityBridge
+import com.example.focusapp.data.accessibility.BlockSource
 import com.example.focusapp.data.blocking.BlockedAppGroup
 import com.example.focusapp.data.blocking.BlockedAppGroupStorage
 import com.example.focusapp.data.blocking.defaultTimeSlot
+import com.example.focusapp.data.blocking.watchedSsids
 import com.example.focusapp.data.notification.FocusTimerService
 import com.example.focusapp.data.preferences.BackgroundThemeStorage
 import com.example.focusapp.ui.screens.history.HistoryScreen
@@ -135,7 +137,9 @@ fun FocusAppNavGraph(
     fun blockedPackagesFor(source: FocusSessionSource): List<String> {
         val groups = when (source) {
             is FocusSessionSource.Location -> location.groups.filter { it.id == source.zoneId }
-            is FocusSessionSource.Wifi -> wifi.groups.filter { it.id == source.ssid }
+            // The Wi-Fi's apps are already blocked by the App Blocking service for as long as the
+            // phone is on it (see FocusAccessibilityService), so this session only records the time.
+            is FocusSessionSource.Wifi -> emptyList()
             // Quick Focus and Party Mode block the apps picked for Quick Focus.
             FocusSessionSource.Manual, FocusSessionSource.Party -> quickFocus.groups
         }
@@ -144,14 +148,15 @@ fun FocusAppNavGraph(
 
     fun startFocusSession(source: FocusSessionSource) {
         // Turn on app blocking. The reason is shown on the blocked screen.
-        AccessibilityBridge.setRestrictedPackages(
+        AccessibilityBridge.setBlocks(
+            BlockSource.SESSION,
             blockedPackagesFor(source),
             reason = when (source) {
                 is FocusSessionSource.Location -> "Blocked while you're at ${source.zoneName}."
-                is FocusSessionSource.Wifi -> "Blocked while you're connected to ${source.ssid} Wi-Fi."
                 else -> null
             }
         )
+        AccessibilityBridge.startCountingBlockedOpens() // Saved with the session, shown in History.
         val startTimeMillis = System.currentTimeMillis()
         activeFocusSession = ActiveFocusSession(startTimeMillis = startTimeMillis, source = source)
         FocusTimerService.start(context, startTimeMillis) // Timer in the notification shade.
@@ -159,7 +164,8 @@ fun FocusAppNavGraph(
     }
 
     fun endFocusSession() {
-        AccessibilityBridge.clearRestrictedPackages()
+        AccessibilityBridge.clearBlocks(BlockSource.SESSION) // Location and Wi-Fi blocks stay.
+        AccessibilityBridge.stopCountingBlockedOpens()
         FocusTimerService.stop(context)
         // Leave the screen first, then clear the session, so the fading-out screen still has it.
         navController.popBackStack(Destinations.HOME, inclusive = false)
@@ -200,7 +206,7 @@ fun FocusAppNavGraph(
                 HomeScreenWithSheet(
                     groups = schedule.groups,
                     dashboardArt = backgroundTheme.homeArt,
-                    wifiSsids = wifi.groups.filter { it.enabled }.map { it.id },
+                    wifiSsids = wifi.groups.filter { it.enabled }.flatMap { it.watchedSsids }.distinct(),
                     quickFocusApps = quickFocus.groups.firstOrNull()?.apps.orEmpty(),
                     onQuickFocusAppsChange = ::saveQuickFocusApps,
                     onAvatarClick = { navController.navigate(Destinations.HISTORY) },

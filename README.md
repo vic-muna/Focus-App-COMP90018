@@ -423,6 +423,25 @@ Quick Focus changes below). David's logic is kept; only the UI and wiring change
 - Interruption screen display the name of the Focus Zone which blocks the opening
 - Overlaps of the Focus Zones does not lead to unwanted behaviour
 
+## 02/10/2026 Update (David Shiau)
+- Wi-Fi tab: the add/edit card is back to four rows - the connected Wi-Fi (tap to
+  save it), the saved Wi-Fi list (tap to remove), the Wi-Fi that trigger blocking
+  (tick one or more) and the blocked apps. The "type its name" box is gone, and one
+  entry can now watch several networks.
+- Wi-Fi blocking is automatic: `FocusAccessibilityService` follows the phone's Wi-Fi
+  (`data/wifi/WifiWatcher.kt`) and blocks an entry's apps while the phone is on one of
+  its networks, even with Focus closed; leaving the Wi-Fi unblocks them. The Home
+  banner now only starts a focus session to record the time.
+- The Wi-Fi tab warns when App Blocking, precise location, "Allow all the time"
+  location or the phone's Location setting is missing.
+- Wi-Fi detection also works when Wi-Fi isn't the default network (VPN on, or Wi-Fi
+  without internet).
+- `AccessibilityBridge` keeps a separate blocked-app list per source (focus session,
+  Location, Wi-Fi), so ending a session or leaving a zone no longer unblocks the
+  other sources' apps.
+- History: "Distracting app opens" now counts each attempt to open a blocked app
+  during a focus session.
+
 ### Still open
 - Friend ID system (search and friend list are placeholders).
 - A break ("tea break") during a focus session is not built yet.

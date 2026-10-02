@@ -1,6 +1,8 @@
 package com.example.focusapp.ui.screens.wififocus
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
@@ -34,6 +37,7 @@ import com.example.focusapp.ui.components.button.BackButton
 import com.example.focusapp.ui.components.button.ConfirmButton
 import com.example.focusapp.ui.components.button.NextButton
 import com.example.focusapp.ui.components.button.RejectButton
+import com.example.focusapp.ui.components.card.AppIconStack
 import com.example.focusapp.ui.components.card.CardButtonRow
 import com.example.focusapp.ui.components.card.CardLabel
 import com.example.focusapp.ui.components.card.CardTitle
@@ -42,56 +46,65 @@ import com.example.focusapp.ui.components.input.FocusTextField
 import com.example.focusapp.ui.components.bar.verticalScrollbar
 import com.example.focusapp.ui.components.card.sunkenPanel
 
-private val KnownListMaxHeight = 150.dp
+private val WifiListMaxHeight = 110.dp
 
 /**
- * Step 1 of adding / editing a Wi-Fi entry: which network it watches.
- * Android doesn't let apps read the phone's saved-network list, so the
- * choices are:
- *  - "Connected now": [currentSsid], the network the phone is on (null when
- *    it can't be read - [checkResult] says why; tapping that message calls
- *    [onResultAction], e.g. to open settings)
- *  - "Known Wi-Fi": [knownSsids], networks this app has seen before
- *  - a typed name ([manualSsid]) for anything else
- * [selectedSsid] is the pick so far. Networks in [addedSsids] are already
- * in the list, so they can't be picked again.
+ * Step 1 of adding / editing a Wi-Fi entry, four rows:
+ *  1. "Connected now": [currentSsid], the network the phone is on - tap it to
+ *     save it to the list ([onSaveCurrent]). Null when it can't be read -
+ *     [checkResult] says why; tapping that message calls [onResultAction],
+ *     e.g. to open settings.
+ *  2. "Saved Wi-Fi": [savedSsids] - tap one to remove it ([onRemoveSaved]).
+ *  3. "Block on these Wi-Fi": tick the networks that start blocking
+ *     ([selectedSsids], [onToggleSsid]). Lists the saved networks plus any
+ *     ticked ones that aren't saved any more, so an edit doesn't lose them.
+ *  4. "Blocked Apps": [appIcons] picked so far - tap to pick ([onAppsClick]).
+ * Android doesn't let apps read the phone's saved-network list, so networks
+ * are only added from row 1.
  */
 @Composable
 fun WifiNetworkStepCard(
-    selectedSsid: String?,
     currentSsid: String?,
     checkResult: WifiCheckResult?,
-    knownSsids: List<String>,
-    addedSsids: Set<String>,
-    manualSsid: String,
-    onSelect: (String) -> Unit,
-    onManualChange: (String) -> Unit,
+    savedSsids: List<String>,
+    selectedSsids: Set<String>,
+    appIcons: List<Bitmap?>,
+    onSaveCurrent: (String) -> Unit,
+    onRemoveSaved: (String) -> Unit,
+    onToggleSsid: (String) -> Unit,
     onCheckAgain: () -> Unit,
     onResultAction: (WifiCheckResult) -> Unit,
+    onAppsClick: () -> Unit,
     onClose: () -> Unit,
     onNext: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = FocusTheme.colors
     val typography = FocusTheme.typography
-    val selectedTaken = selectedSsid != null && selectedSsid in addedSsids
     val panel = Modifier.sunkenPanel(colors.surfaceSunken)
 
     FocusCard(modifier = modifier) {
         CardButtonRow(
             left = { RejectButton(onClick = onClose) },
-            right = { NextButton(onClick = onNext, enabled = selectedSsid != null && !selectedTaken) },
+            right = { NextButton(onClick = onNext, enabled = selectedSsids.isNotEmpty() && appIcons.isNotEmpty()) },
         )
         CardTitle("Wi-Fi Network", bottomPadding = 0.dp)
 
+        // 1. The network the phone is on now - tap to save it.
         CardLabel("Connected now")
         Column(modifier = panel) {
             if (currentSsid != null) {
-                WifiChoiceRow(
+                val saved = currentSsid in savedSsids
+                WifiRow(
                     ssid = currentSsid,
-                    selected = currentSsid == selectedSsid,
-                    added = currentSsid in addedSsids,
-                    onClick = { onSelect(currentSsid) },
+                    onClick = if (saved) null else ({ onSaveCurrent(currentSsid) }),
+                    trailing = {
+                        Text(
+                            text = if (saved) "Saved" else "Tap to save",
+                            style = typography.caption,
+                            color = if (saved) colors.onSurfaceMuted else colors.accent,
+                        )
+                    },
                 )
             } else {
                 val message = checkResult?.message() ?: "Checking the Wi-Fi this phone is on…"
@@ -118,80 +131,113 @@ fun WifiNetworkStepCard(
             )
         }
 
-        CardLabel("Known Wi-Fi")
-        val others = knownSsids.filter { it != currentSsid }
-        if (others.isEmpty()) {
-            Text(
-                text = "Networks this phone connects to will show up here.",
-                style = typography.caption,
-                color = colors.onSurfaceMuted,
-                textAlign = TextAlign.Center,
-                modifier = panel.padding(horizontal = 16.dp, vertical = 14.dp),
+        // 2. The saved list - tap a network to remove it.
+        CardLabel("Saved Wi-Fi (tap to remove)")
+        WifiList(
+            ssids = savedSsids,
+            emptyText = "Tap the network above to save it here.",
+        ) { ssid ->
+            WifiRow(
+                ssid = ssid,
+                onClick = { onRemoveSaved(ssid) },
+                trailing = { Text(text = "Remove", style = typography.caption, color = colors.rejection) },
             )
-        } else {
-            val listState = rememberLazyListState()
-            LazyColumn(
-                state = listState,
-                modifier = panel
-                    .heightIn(max = KnownListMaxHeight)
-                    .verticalScrollbar(
-                        state = listState,
-                        thumbColor = colors.onSurfaceMuted,
-                        trackColor = colors.surface,
-                    ),
-            ) {
-                items(others, key = { it }) { ssid ->
-                    WifiChoiceRow(
-                        ssid = ssid,
-                        selected = ssid == selectedSsid,
-                        added = ssid in addedSsids,
-                        onClick = { onSelect(ssid) },
-                    )
-                }
-            }
         }
 
-        CardLabel("Or type its name")
-        FocusTextField(
-            value = manualSsid,
-            onValueChange = onManualChange,
-            placeholder = "Wi-Fi name",
-        )
+        // 3. Which networks start blocking.
+        CardLabel("Block apps on these Wi-Fi")
+        WifiList(
+            ssids = (savedSsids + selectedSsids).distinct(),
+            emptyText = "Save a Wi-Fi first, then tick it here.",
+        ) { ssid ->
+            val ticked = ssid in selectedSsids
+            WifiRow(
+                ssid = ssid,
+                onClick = { onToggleSsid(ssid) },
+                role = Role.Checkbox,
+                highlighted = ticked,
+                trailing = { TickBox(ticked) },
+            )
+        }
 
-        if (selectedTaken) {
+        // 4. The apps to block - opens the app picker.
+        CardLabel("Blocked Apps")
+        Row(
+            modifier = panel
+                .clickable(role = Role.Button, onClick = onAppsClick)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (appIcons.isNotEmpty()) {
+                AppIconStack(icons = appIcons, iconSize = 28.dp)
+                Spacer(Modifier.weight(1f))
+            }
             Text(
-                text = "This Wi-Fi is already in your list.",
+                text = when (appIcons.size) {
+                    0 -> "Tap to pick apps"
+                    1 -> "1 app selected"
+                    else -> "${appIcons.size} apps selected"
+                },
                 style = typography.caption,
-                color = colors.rejection,
-                modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+                color = if (appIcons.isEmpty()) colors.accent else colors.onSurface,
+                textAlign = TextAlign.End,
+                modifier = if (appIcons.isEmpty()) Modifier.fillMaxWidth() else Modifier,
             )
         }
     }
 }
 
-/**
- * One pickable network: Wi-Fi icon and name, highlighted when [selected].
- * An [added] network is already in the list - shown dimmed, not pickable.
- */
+/** A height-capped list of Wi-Fi rows, or [emptyText] when there are none. */
 @Composable
-private fun WifiChoiceRow(
-    ssid: String,
-    selected: Boolean,
-    added: Boolean,
-    onClick: () -> Unit,
+private fun WifiList(
+    ssids: List<String>,
+    emptyText: String,
+    row: @Composable (String) -> Unit,
 ) {
     val colors = FocusTheme.colors
-    val tint = when {
-        added -> colors.onSurfaceMuted
-        selected -> colors.accent
-        else -> colors.onSurface
+    val panel = Modifier.sunkenPanel(colors.surfaceSunken)
+    if (ssids.isEmpty()) {
+        Text(
+            text = emptyText,
+            style = FocusTheme.typography.caption,
+            color = colors.onSurfaceMuted,
+            textAlign = TextAlign.Center,
+            modifier = panel.padding(horizontal = 16.dp, vertical = 14.dp),
+        )
+    } else {
+        val listState = rememberLazyListState()
+        LazyColumn(
+            state = listState,
+            modifier = panel
+                .heightIn(max = WifiListMaxHeight)
+                .verticalScrollbar(
+                    state = listState,
+                    thumbColor = colors.onSurfaceMuted,
+                    trackColor = colors.surface,
+                ),
+        ) {
+            items(ssids, key = { it }) { ssid -> row(ssid) }
+        }
     }
+}
+
+/** One network: Wi-Fi icon, name and [trailing]. Not tappable when [onClick] is null. */
+@Composable
+private fun WifiRow(
+    ssid: String,
+    onClick: (() -> Unit)?,
+    trailing: @Composable () -> Unit,
+    role: Role = Role.Button,
+    highlighted: Boolean = false,
+) {
+    val colors = FocusTheme.colors
+    val tint = if (highlighted) colors.accent else colors.onSurface
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = !added, role = Role.RadioButton, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .then(if (onClick != null) Modifier.clickable(role = role, onClick = onClick) else Modifier)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
@@ -209,16 +255,22 @@ private fun WifiChoiceRow(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        if (added) {
-            Text(text = "Added", style = FocusTheme.typography.caption, color = colors.onSurfaceMuted)
-        } else if (selected) {
-            Box(
-                modifier = Modifier
-                    .size(10.dp)
-                    .background(colors.accent, RoundedCornerShape(5.dp)),
-            )
-        }
+        Spacer(Modifier.width(8.dp))
+        trailing()
     }
+}
+
+/** A small round tick box: filled when [ticked]. */
+@Composable
+private fun TickBox(ticked: Boolean) {
+    val colors = FocusTheme.colors
+    val shape = RoundedCornerShape(9.dp)
+    Box(
+        modifier = Modifier
+            .size(18.dp)
+            .border(2.dp, if (ticked) colors.accent else colors.onSurfaceMuted, shape)
+            .background(if (ticked) colors.accent else Color.Transparent, shape),
+    )
 }
 
 /** Why a check found no network name - worded for the step card. */
@@ -236,7 +288,7 @@ private fun WifiCheckResult.message(): String? = when (this) {
 private fun WifiCheckResult.hasAction(): Boolean =
     this == WifiCheckResult.NeedsPreciseLocation || this == WifiCheckResult.LocationServicesOff
 
-/** Step 3 (last): the entry's name. The check saves once a name is entered. */
+/** Step 2 (last): the entry's name. The check saves once a name is entered. */
 @Composable
 fun WifiNameStepCard(
     name: String,
@@ -245,8 +297,6 @@ fun WifiNameStepCard(
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = FocusTheme.colors
-
     FocusCard(modifier = modifier) {
         CardButtonRow(
             left = { BackButton(onClick = onBack) },
@@ -267,16 +317,17 @@ fun WifiNameStepCard(
 private fun WifiNetworkStepCardPreview() {
     FocusAppTheme {
         WifiNetworkStepCard(
-            selectedSsid = "Library-Guest",
-            currentSsid = "MyHome_5G",
-            checkResult = WifiCheckResult.Connected("MyHome_5G"),
-            knownSsids = listOf("MyHome_5G", "Library-Guest", "Cafe Free WiFi", "Office"),
-            addedSsids = setOf("Office"),
-            manualSsid = "",
-            onSelect = {},
-            onManualChange = {},
+            currentSsid = "Cafe Free WiFi",
+            checkResult = WifiCheckResult.Connected("Cafe Free WiFi"),
+            savedSsids = listOf("MyHome_5G", "Library-Guest", "Office"),
+            selectedSsids = setOf("Library-Guest"),
+            appIcons = List(3) { null },
+            onSaveCurrent = {},
+            onRemoveSaved = {},
+            onToggleSsid = {},
             onCheckAgain = {},
             onResultAction = {},
+            onAppsClick = {},
             onClose = {},
             onNext = {},
             modifier = Modifier.padding(16.dp),
@@ -289,16 +340,17 @@ private fun WifiNetworkStepCardPreview() {
 private fun WifiNetworkStepCardNoWifiPreview() {
     FocusAppTheme {
         WifiNetworkStepCard(
-            selectedSsid = null,
             currentSsid = null,
             checkResult = WifiCheckResult.NeedsPreciseLocation,
-            knownSsids = emptyList(),
-            addedSsids = emptySet(),
-            manualSsid = "",
-            onSelect = {},
-            onManualChange = {},
+            savedSsids = emptyList(),
+            selectedSsids = emptySet(),
+            appIcons = emptyList(),
+            onSaveCurrent = {},
+            onRemoveSaved = {},
+            onToggleSsid = {},
             onCheckAgain = {},
             onResultAction = {},
+            onAppsClick = {},
             onClose = {},
             onNext = {},
             modifier = Modifier.padding(16.dp),

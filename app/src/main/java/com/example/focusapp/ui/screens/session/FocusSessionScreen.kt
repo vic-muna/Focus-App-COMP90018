@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.focusapp.R
+import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.data.repository.FocusRepositoryProvider
 import com.example.focusapp.domain.model.FocusSession
 import com.example.focusapp.ui.common.ErrorBanner
@@ -112,6 +113,8 @@ fun FocusSessionScreen(
                 id = "session_${System.currentTimeMillis()}",
                 startTimeMillis = session.startTimeMillis,
                 endTimeMillis = System.currentTimeMillis(),
+                // Blocked apps the user tried to open (counted by FocusAccessibilityService).
+                distractingAppOpenCount = AccessibilityBridge.blockedOpensSoFar(),
                 wasCompletedSuccessfully = true,
                 groupId = null
             )

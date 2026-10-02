@@ -1,6 +1,7 @@
 package com.example.focusapp.ui.screens.wififocus
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,6 +21,7 @@ import com.example.focusapp.R
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
 import com.example.focusapp.data.blocking.BlockedAppGroup
+import com.example.focusapp.data.blocking.watchedSsids
 import com.example.focusapp.ui.common.previewGroups
 import com.example.focusapp.ui.components.button.EditButton
 import com.example.focusapp.ui.components.card.AppIconStack
@@ -29,8 +31,8 @@ import com.example.focusapp.ui.components.card.sunkenPanel
 
 /**
  * The read-only summary of a Wi-Fi entry (same layout idea as the time
- * slot summary) - its name, the network it watches ([BlockedAppGroup.id] is
- * the SSID) and the apps it blocks. The pencil opens the edit steps.
+ * slot summary) - its name, the networks it watches ([watchedSsids]) and
+ * the apps it blocks. The pencil opens the edit steps.
  */
 @Composable
 fun WifiDetailCard(
@@ -62,24 +64,30 @@ fun WifiDetailCard(
         }
 
         CardSectionTitle("Wi-Fi Network")
-        Row(
+        Column(
             modifier = panel.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Icon(
-                painter = painterResource(R.drawable.wifi),
-                contentDescription = null,
-                tint = colors.accent,
-                modifier = Modifier.size(width = 32.dp, height = 25.dp),
-            )
-            Text(
-                text = group.id,
-                style = typography.tileTitle,
-                color = colors.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            group.watchedSsids.forEach { ssid ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.wifi),
+                        contentDescription = null,
+                        tint = colors.accent,
+                        modifier = Modifier.size(width = 32.dp, height = 25.dp),
+                    )
+                    Text(
+                        text = ssid,
+                        style = typography.tileTitle,
+                        color = colors.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
 
         CardSectionTitle("Blocked Apps")
@@ -103,7 +111,7 @@ fun WifiDetailCard(
 private fun WifiDetailCardPreview() {
     FocusAppTheme {
         WifiDetailCard(
-            group = previewGroups().first().copy(id = "MyHome_5G", name = "Home"),
+            group = previewGroups().first().copy(name = "Home", wifiSsids = listOf("MyHome_5G", "MyHome_2G")),
             onEdit = {},
             modifier = Modifier.padding(16.dp),
         )

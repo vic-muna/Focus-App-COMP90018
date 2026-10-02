@@ -5,6 +5,8 @@ import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
 import com.example.focusapp.BlockedActivity
 import com.example.focusapp.data.blocking.BlockedAppGroupStorage
+import com.example.focusapp.data.blocking.watchedSsids
+import com.example.focusapp.data.wifi.WifiWatcher
 import com.example.focusapp.data.usagestats.hasUsageAccessPermission
 import com.example.focusapp.data.usagestats.queryAppUsageInWindow
 import com.example.focusapp.domain.usecase.EvaluateUsageLimitUseCase
@@ -26,8 +28,12 @@ import com.example.focusapp.data.notification.TimeFocusNotification
  * (see res/xml/accessibility_service_config.xml).
  *
  * An app is blocked (by opening [BlockedActivity] on top of it) when:
- *  1. the current focus session blocks it ([AccessibilityBridge.restrictedPackages]), or
+ *  1. a focus session, Location zone or Wi-Fi blocks it ([AccessibilityBridge.restrictedPackages]), or
  *  2. it went over a Time Focus daily limit ([EvaluateUsageLimitUseCase]).
+ *
+ * It also follows the phone's Wi-Fi ([WifiWatcher]): while the phone is on a
+ * network a switched-on Wi-Fi entry watches, that entry's apps are blocked -
+ * no focus session needed - and unblocked when the phone leaves it.
  */
 class FocusAccessibilityService : AccessibilityService() {
 
@@ -41,21 +47,32 @@ class FocusAccessibilityService : AccessibilityService() {
     @Volatile private var limitedPackages: Set<String> = emptySet()
     @Volatile private var lastOpenedPackage: String? = null
 
+    // The app on screen now, so joining a Wi-Fi can block it straight away.
+    @Volatile private var foregroundPackage: String? = null
+    private val wifiGroupStorage by lazy { BlockedAppGroupStorage.forWifiNetworks(this) }
+    private var wifiWatcher: WifiWatcher? = null
+
     /** The user turned the service on. */
     override fun onServiceConnected() {
         super.onServiceConnected()
         AccessibilityBridge.setServiceConnected(true)
         scheduleLimitCheck(0L) // An app may already be open and over its limit.
+        wifiWatcher = WifiWatcher(this) { onWifiChanged() }.also { it.start() }
     }
 
     /** The user switched apps; [event]'s packageName is the app now on screen. */
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val packageName = event?.packageName?.toString() ?: return
+        foregroundPackage = packageName
         if (packageName in limitedPackages) lastOpenedPackage = packageName
 
+        // Picks up Wi-Fi entries switched on/off or edited since the last app switch.
+        wifiWatcher?.retryIfUnknown()
+        updateWifiBlocks()
+
         if (packageName in AccessibilityBridge.restrictedPackages.value) {
-            val reason = AccessibilityBridge.getReasonFor(packageName) ?: AccessibilityBridge.restrictionReason
-            launchBlockedScreen(packageName, reason)
+            AccessibilityBridge.recordBlockedOpen(packageName) // Only counted during a focus session.
+            launchBlockedScreen(packageName, AccessibilityBridge.getReasonFor(packageName))
             return
         }
 
@@ -63,6 +80,30 @@ class FocusAccessibilityService : AccessibilityService() {
         if (packageName != this.packageName) {
             scheduleLimitCheck(LIMIT_CHECK_DELAY_MILLIS)
         }
+    }
+
+    /** The phone joined or left a Wi-Fi: update the blocks, and block the app on screen if it's now blocked. */
+    private fun onWifiChanged() {
+        updateWifiBlocks()
+        val onScreen = foregroundPackage ?: return
+        if (onScreen != packageName && onScreen in AccessibilityBridge.restrictedPackages.value) {
+            launchBlockedScreen(onScreen, AccessibilityBridge.getReasonFor(onScreen))
+        }
+    }
+
+    /** Blocks the apps of every switched-on Wi-Fi entry that watches the current network. */
+    private fun updateWifiBlocks() {
+        val ssid = wifiWatcher?.currentSsid
+        if (ssid == null) {
+            AccessibilityBridge.clearBlocks(BlockSource.WIFI)
+            return
+        }
+        val reason = "Blocked while you're connected to $ssid Wi-Fi."
+        val packages = wifiGroupStorage.getGroupsWithoutIcons().orEmpty()
+            .filter { it.enabled && ssid in it.watchedSsids }
+            .flatMap { group -> group.apps.map { it.packageName } }
+            .filter { it != packageName } // never block Focus itself
+        AccessibilityBridge.setBlocks(BlockSource.WIFI, packages.associateWith { reason })
     }
 
     /**
@@ -143,6 +184,9 @@ class FocusAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         super.onDestroy()
         serviceScope.cancel()
+        wifiWatcher?.stop()
+        wifiWatcher = null
+        AccessibilityBridge.clearBlocks(BlockSource.WIFI)
         AccessibilityBridge.setServiceConnected(false)
     }
 
