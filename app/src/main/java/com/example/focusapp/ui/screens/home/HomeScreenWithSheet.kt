@@ -1,6 +1,5 @@
 package com.example.focusapp.ui.screens.home
 
-import com.example.focusapp.data.wifi.WifiHistoryStorage
 import android.annotation.SuppressLint
 import android.content.Context
 import androidx.compose.foundation.background
@@ -152,12 +151,10 @@ fun HomeScreenWithSheet(
         }
     }
 
-    // Checked even with no networks switched on, so the Wi-Fi tab can list networks seen before.
-    val wifiHistory = remember { WifiHistoryStorage(context) }
     var currentWifiSsid by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(tick) {
-        currentWifiSsid = withContext(Dispatchers.IO) { getCurrentWifiSsid(context) }
-        currentWifiSsid?.let { wifiHistory.remember(it) }
+    LaunchedEffect(tick, wifiSsids.isNotEmpty()) {
+        currentWifiSsid = if (wifiSsids.isEmpty()) null
+        else withContext(Dispatchers.IO) { getCurrentWifiSsid(context) }
     }
 
     // Every matching trigger, so several banners can show at once.
@@ -290,7 +287,7 @@ private fun AutoFocusSuggestionBanner(
     val message = when (result) {
         is FocusTriggerResult.ScheduleMatch -> "Your ${result.groupName} time slot is on - apps over their limit will be blocked"
         is FocusTriggerResult.LocationMatch -> "You've arrived at ${result.zoneName} - start a focus session?"
-        is FocusTriggerResult.WifiMatch -> "You're connecting to ${result.ssid} Wi-Fi - start a focus session?"
+        is FocusTriggerResult.WifiMatch -> "You're on ${result.ssid} Wi-Fi - its apps are blocked. Start a focus session to record it?"
         FocusTriggerResult.NoTrigger -> return
     }
 

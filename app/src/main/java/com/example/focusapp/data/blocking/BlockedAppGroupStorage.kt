@@ -70,6 +70,7 @@ class BlockedAppGroupStorage(
         group.maxOpensPerApp?.let { put("maxOpensPerApp", it) }
         group.maxMinutesPerApp?.let { put("maxMinutesPerApp", it) }
         put("enabled", group.enabled)
+        if (group.wifiSsids.isNotEmpty()) put("wifiSsids", JSONArray(group.wifiSsids))
     }
 
     private fun groupFromJson(obj: JSONObject, loadIcons: Boolean): BlockedAppGroup {
@@ -100,7 +101,10 @@ class BlockedAppGroupStorage(
             // Older saves may not have these keys.
             maxOpensPerApp = if (obj.has("maxOpensPerApp")) obj.getInt("maxOpensPerApp") else null,
             maxMinutesPerApp = if (obj.has("maxMinutesPerApp")) obj.getInt("maxMinutesPerApp") else null,
-            enabled = obj.optBoolean("enabled", true)
+            enabled = obj.optBoolean("enabled", true),
+            wifiSsids = obj.optJSONArray("wifiSsids")
+                ?.let { array -> (0 until array.length()).map { array.getString(it) } }
+                .orEmpty()
         )
     }
 

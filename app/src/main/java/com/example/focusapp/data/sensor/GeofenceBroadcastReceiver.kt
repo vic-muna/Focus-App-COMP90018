@@ -9,6 +9,7 @@ import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.example.focusapp.data.accessibility.AccessibilityBridge
+import com.example.focusapp.data.accessibility.BlockSource
 import com.example.focusapp.data.blocking.BlockedAppGroupStorage
 import com.example.focusapp.data.local.RoomLocalDataSource
 import com.google.android.gms.location.Geofence
@@ -59,8 +60,8 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
     fun updateActiveGeofenceRestrictions(context: Context) {
         val activeIds = ActiveGeofenceState.activeZoneIds
         if (activeIds.isEmpty()) {
-            Log.d(TAG, "No active geofence zones remaining. Clearing all restrictions.")
-            AccessibilityBridge.clearRestrictedPackages()
+            Log.d(TAG, "No active geofence zones remaining. Clearing location restrictions.")
+            AccessibilityBridge.clearBlocks(BlockSource.LOCATION)
             return
         }
 
@@ -80,10 +81,10 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
 
         if (packageToReasonMap.isNotEmpty()) {
             Log.d(TAG, "Activating location block for active zones $activeIds. App mapping: $packageToReasonMap")
-            AccessibilityBridge.setRestrictedPackages(packageToReasonMap)
+            AccessibilityBridge.setBlocks(BlockSource.LOCATION, packageToReasonMap)
         } else {
             Log.d(TAG, "Active geofence zones $activeIds have no blocked apps configured.")
-            AccessibilityBridge.clearRestrictedPackages()
+            AccessibilityBridge.clearBlocks(BlockSource.LOCATION)
         }
     }
 

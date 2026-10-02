@@ -48,6 +48,27 @@ fun hasLocationPermissionForWifi(context: Context): Boolean =
     ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
         PackageManager.PERMISSION_GRANTED
 
+/** Something that stops Wi-Fi entries from blocking apps on their own (see [findWifiBlockingProblem]). */
+enum class WifiBlockingProblem { APP_BLOCKING_OFF, NEEDS_PRECISE_LOCATION, NEEDS_ALL_THE_TIME_LOCATION, LOCATION_SERVICES_OFF }
+
+/**
+ * The first thing missing for Wi-Fi blocking to work while Focus is in the
+ * background, or null if nothing is: App Blocking ([appBlockingOn]), precise
+ * location, location "Allow all the time" (Android 10+), and the phone's Location setting.
+ */
+fun findWifiBlockingProblem(context: Context, appBlockingOn: Boolean): WifiBlockingProblem? {
+    val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+    return when {
+        !appBlockingOn -> WifiBlockingProblem.APP_BLOCKING_OFF
+        !hasLocationPermissionForWifi(context) -> WifiBlockingProblem.NEEDS_PRECISE_LOCATION
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) !=
+            PackageManager.PERMISSION_GRANTED -> WifiBlockingProblem.NEEDS_ALL_THE_TIME_LOCATION
+        !LocationManagerCompat.isLocationEnabled(locationManager) -> WifiBlockingProblem.LOCATION_SERVICES_OFF
+        else -> null
+    }
+}
+
 /**
  * The connected Wi-Fi's name, or null if it can't be read (see [checkCurrentWifi] for why).
  */
@@ -64,10 +85,7 @@ suspend fun getCurrentWifiSsid(context: Context): String? =
 suspend fun checkCurrentWifi(context: Context): WifiCheckResult {
     val connectivityManager =
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-    val network = connectivityManager.activeNetwork ?: return WifiCheckResult.NotOnWifi
-    val capabilities = connectivityManager.getNetworkCapabilities(network)
-        ?: return WifiCheckResult.NotOnWifi
-    if (!capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return WifiCheckResult.NotOnWifi
+    val capabilities = findWifiCapabilities(connectivityManager) ?: return WifiCheckResult.NotOnWifi
 
     if (!hasLocationPermissionForWifi(context)) return WifiCheckResult.NeedsPreciseLocation
     val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
@@ -80,6 +98,21 @@ suspend fun checkCurrentWifi(context: Context): WifiCheckResult {
     } ?: readSsidFromWifiManager(context)
 
     return ssid?.let { WifiCheckResult.Connected(it) } ?: WifiCheckResult.NameUnavailable
+}
+
+/**
+ * The connected Wi-Fi network's capabilities, or null if not on Wi-Fi.
+ * Checks every network, not just the default one: with a VPN on, or on a
+ * Wi-Fi without internet (phone falls back to mobile data), the default
+ * network isn't the Wi-Fi even though the phone is connected to it.
+ */
+@Suppress("DEPRECATION")
+private fun findWifiCapabilities(connectivityManager: ConnectivityManager): NetworkCapabilities? {
+    val networks = listOfNotNull(connectivityManager.activeNetwork) + connectivityManager.allNetworks
+    return networks.firstNotNullOfOrNull { network ->
+        connectivityManager.getNetworkCapabilities(network)
+            ?.takeIf { it.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) }
+    }
 }
 
 /**
@@ -108,7 +141,7 @@ private suspend fun readSsidWithLocationInfo(connectivityManager: ConnectivityMa
 }
 
 @Suppress("DEPRECATION")
-private fun readSsidFromWifiManager(context: Context): String? =
+internal fun readSsidFromWifiManager(context: Context): String? =
     (context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager)
         .connectionInfo?.ssid?.toValidSsid()
 
@@ -117,7 +150,7 @@ private fun readSsidFromWifiManager(context: Context): String? =
  * back wrapped in literal double quotes; a hidden network's comes back as an
  * unquoted hex string - only strip quotes when they're actually there.
  */
-private fun String.toValidSsid(): String? {
+internal fun String.toValidSsid(): String? {
     if (isBlank() || this == WifiManager.UNKNOWN_SSID) return null
     return removeSurrounding("\"")
 }

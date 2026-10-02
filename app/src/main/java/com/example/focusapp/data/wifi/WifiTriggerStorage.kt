@@ -5,7 +5,7 @@ import org.json.JSONArray
 
 /**
  * David's older Wi-Fi setting (on/off plus tagged network names).
- * Now only read, so [WifiHistoryStorage] can still show those networks.
+ * Now only read, so [SavedWifiStorage] can copy those networks into its list.
  */
 class WifiTriggerStorage(context: Context) {
 
