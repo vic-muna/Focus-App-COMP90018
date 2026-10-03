@@ -503,3 +503,11 @@ Quick Focus changes below). David's logic is kept; only the UI and wiring change
 - The daily limit is kept on the phone, so reinstalling resets it.
 - Play Integrity isn't registered yet (the console's Terms of Service step failed), so
   App Check enforcement for AI Logic is off for now.
+
+## 03/10/2026 Update (Yu-Hao Lu)
+
+Party invites were failing silently: sendPartyInvite() was fire-and-forget (no error handling), so a rejected write (most likely blocked by Realtime Database Rules, since it writes into another user's data) never surfaced — the inviter saw no error, and the invite just never arrived. It's now a suspend function that awaits the write and surfaces failures through the existing error banner.
+
+Friends are no longer added by pasting the other person's raw Firebase user ID (a 28-character string). Each user now has a short 6-character friend code (shown under "My Code" in Party Mode, with a copy button) that resolves to their real ID behind the scenes — same format as the existing 6-character group codes.
+
+Added the ability to remove a saved friend from the Friends list.
