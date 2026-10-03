@@ -511,3 +511,41 @@ Party invites were failing silently: sendPartyInvite() was fire-and-forget (no e
 Friends are no longer added by pasting the other person's raw Firebase user ID (a 28-character string). Each user now has a short 6-character friend code (shown under "My Code" in Party Mode, with a copy button) that resolves to their real ID behind the scenes — same format as the existing 6-character group codes.
 
 Added the ability to remove a saved friend from the Friends list.
+
+## 04/10/2026 Update (Jia-Ying Lee) - Friend codes need an account
+
+Friend codes could be read and overwritten by any signed-in user, so a code didn't
+reliably point at its owner. Fixed in the Realtime Database Rules and in Party Mode:
+
+- **Friend codes belong to accounts.** Only a signed-in account (not a guest) can claim
+  a code, only for its own uid, and only one. A claimed code can't be changed or deleted,
+  and the list of all codes can't be read - only one code at a time can be looked up.
+- **Invites can't be forged.** An invite must carry the sender's own uid, and guests
+  can't send one.
+- **Guests:** Party Mode shows no My Code, friend list, search or invites - just a note
+  and **Create group** / **Join group**, which still work with a 6-letter group code.
+  Creating an account (Settings -> Account) turns the friend features on.
+- **Add friend:** a code that doesn't exist now keeps the card open and shows a message,
+  instead of closing without saying anything.
+- Code: `ui/screens/party/PartyModeViewModel.kt` (`isGuest`), `ui/screens/party/FriendsScreen.kt`.
+- Setup (Firebase Console, once): the rules are in
+  `docs/firebase-realtime-database-structure.md` -> **Security Rules**. Paste them into
+  Realtime Database -> Rules and publish. They are already published for this project.
+
+### Demo accounts
+
+Three accounts for testing friends and invites (log in with **Log in**, not as a guest):
+
+| Username | Password |
+|---|---|
+| `testa1` | `Unimelb_Test123` |
+| `testb1` | `Unimelb_Test123` |
+| `testc1` | `Unimelb_Test123` |
+
+To try it: log in as `testa1` on one phone and `testb1` on another, add each other with
+the code under **My Code**, then **Create group** on one and tap **Invite**.
+
+### Testing tip
+- The Android 17 preview emulator image froze while testing Party Mode (the system's GPS
+  service hung). An API 35/36 image, or denying the app's location permission on that
+  emulator, avoids it.
