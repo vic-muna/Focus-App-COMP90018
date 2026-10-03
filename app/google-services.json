@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "392621339730",
+    "firebase_url": "https://focus-531ca-default-rtdb.firebaseio.com",
+    "project_id": "focus-531ca",
+    "storage_bucket": "focus-531ca.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:392621339730:android:a64ee7435bd11a07bc5b8b",
+        "android_client_info": {
+          "package_name": "com.example.focusapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCCnG9g7oPfSETVWNPLdVp26Q6Dt_oDoCI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
