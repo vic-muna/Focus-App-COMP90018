@@ -67,7 +67,7 @@ interface FocusRepository {
      *  into its own PartyMemberStatus.uid before calling [updateMyPartyStatus]. */
     suspend fun getMyUid(): String
 
-    fun sendPartyInvite(partyId: String, toUid: String)
+    suspend fun sendPartyInvite(partyId: String, toUid: String)
 
     /** Live stream of every invite currently addressed to this device across every party -
      *  see [com.example.focusapp.data.remote.RemoteDataSource.observeMyIncomingInvites]. */
@@ -87,4 +87,9 @@ interface FocusRepository {
     suspend fun saveFriend(friend: Friend)
 
     suspend fun deleteFriend(uid: String)
+
+    /** See [com.example.focusapp.data.remote.RemoteDataSource.getOrCreateMyFriendCode]. */
+    suspend fun getOrCreateMyFriendCode(): String
+
+    suspend fun resolveFriendCode(code: String): String?
 }

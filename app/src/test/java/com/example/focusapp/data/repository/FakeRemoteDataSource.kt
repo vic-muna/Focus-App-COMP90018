@@ -68,7 +68,7 @@ class FakeRemoteDataSource : RemoteDataSource {
         pushedAppGroups.add(group)
     }
 
-    override fun sendPartyInvite(partyId: String, toUid: String) {
+    override suspend fun sendPartyInvite(partyId: String, toUid: String) {
         sentInvites.add(partyId to toUid)
     }
 
@@ -86,4 +86,13 @@ class FakeRemoteDataSource : RemoteDataSource {
     override fun updateMyPartyStatus(partyId: String, status: PartyMemberStatus) {
         updatedStatuses.add(partyId to status)
     }
+
+    private val friendCodesByUid = mutableMapOf<String, String>()
+    private var nextFakeFriendCode = 1
+
+    override suspend fun getOrCreateMyFriendCode(): String =
+        friendCodesByUid.getOrPut("fake-uid") { "CODE${nextFakeFriendCode++}" }
+
+    override suspend fun resolveFriendCode(code: String): String? =
+        friendCodesByUid.entries.firstOrNull { (_, c) -> c == code }?.key
 }
