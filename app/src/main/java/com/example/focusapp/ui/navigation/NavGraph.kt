@@ -38,6 +38,7 @@ import com.example.focusapp.ui.screens.history.ThemePickerScreen
 import com.example.focusapp.ui.screens.home.HomeScreenWithSheet
 import com.example.focusapp.ui.screens.location.LocationScreen
 import com.example.focusapp.ui.screens.party.FriendsScreen
+import com.example.focusapp.ui.screens.rewards.RewardsScreen
 import com.example.focusapp.ui.screens.session.ActiveFocusSession
 import com.example.focusapp.ui.screens.session.FocusSessionScreen
 import com.example.focusapp.ui.screens.session.FocusSessionSource
@@ -297,8 +298,13 @@ fun FocusAppNavGraph(
                 HistoryScreen(
                     theme = backgroundTheme,
                     onChangeThemeClick = { navController.navigate(Destinations.THEME_PICKER) },
+                    onRewardsClick = { navController.navigate(Destinations.REWARDS) },
                     onClose = { navController.popBackStack() }
                 )
+            }
+
+            composable(Destinations.REWARDS, enterTransition = slideUpEnter, exitTransition = slideDownExit) {
+                RewardsScreen(onClose = { navController.popBackStack() })
             }
 
             composable(Destinations.THEME_PICKER, enterTransition = slideUpEnter, exitTransition = slideDownExit) {

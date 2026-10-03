@@ -469,3 +469,14 @@ Quick Focus changes below). David's logic is kept; only the UI and wiring change
 - Only sessions, the Focus Zone and app groups sync. Per-feature blocked-app lists,
   Wi-Fi networks, friends and the theme are still phone-only.
 - Firebase keeps one `zone` per user, so only the last saved location is restored.
+
+## 03/10/2026 Update (David Shiau) - Rewards
+- **Rewards page:** the trophy at the dashboard's top-left opens it. Two independent parts,
+  both worked out from the saved sessions (`domain/usecase/CalculateFocusRewardUseCase.kt`):
+  - **Today's milestones:** today's total focus time against 5 min, 30 min, 1 h, 5 h and
+    10 h - back to zero at midnight.
+  - **Daily streak:** days in a row whose focus time reaches the goal (2 h by default).
+    Today only breaks the streak once it ends without reaching the goal.
+- **Settings → Rewards → Daily streak goal:** 30 min to 8 h in 30-minute steps. The streak
+  is recalculated from history, so changing the goal also applies to past days.
+- A session that runs past midnight is split between the two days.

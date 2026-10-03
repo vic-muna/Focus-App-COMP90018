@@ -13,10 +13,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -48,6 +53,7 @@ private val BAR_CHART_MAX_BAR_HEIGHT = 100.dp
 
 /**
  * The dashboard, opened from Home's picture:
+ *  - a trophy in the top-left corner that opens Rewards
  *  - the background theme's ID card (tap to change theme)
  *  - this week's minutes per day
  *  - "This week" / "Last week" cards (tap for each day's sessions)
@@ -57,6 +63,7 @@ private val BAR_CHART_MAX_BAR_HEIGHT = 100.dp
 fun HistoryScreen(
     theme: BackgroundTheme,
     onChangeThemeClick: () -> Unit,
+    onRewardsClick: () -> Unit,
     onClose: () -> Unit,
     viewModel: HistoryViewModel = viewModel(),
 ) {
@@ -74,6 +81,7 @@ fun HistoryScreen(
         isLoading = isLoading,
         weekBuckets = weekBuckets,
         onWeekClick = { selectedWeek = it },
+        onRewardsClick = onRewardsClick,
         onClose = onClose,
     )
 
@@ -94,6 +102,7 @@ private fun HistoryContent(
     isLoading: Boolean,
     weekBuckets: List<WeekBucket>,
     onWeekClick: (WeekBucket) -> Unit,
+    onRewardsClick: () -> Unit,
     onClose: () -> Unit,
 ) {
     val colors = FocusTheme.colors
@@ -174,6 +183,21 @@ private fun HistoryContent(
         }
 
         CloseTopBar(contentDescription = "Close dashboard", onCloseClick = onClose, alignment = Alignment.TopEnd)
+
+        // Same spot and size as Home's top-left Party Mode icon.
+        IconButton(
+            onClick = onRewardsClick,
+            modifier = Modifier
+                .padding(top = FocusSpacing.ScreenTop - 4.dp, start = 21.dp)
+                .size(50.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.EmojiEvents,
+                contentDescription = "Rewards",
+                tint = colors.onSurface,
+                modifier = Modifier.size(42.dp),
+            )
+        }
     }
 }
 
@@ -418,6 +442,7 @@ private fun HistoryContentPreview() {
                 WeekBucket(label = "Last week", sessions = emptyList()),
             ),
             onWeekClick = {},
+            onRewardsClick = {},
             onClose = {},
         )
     }

@@ -9,24 +9,32 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -35,10 +43,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
@@ -47,6 +57,8 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.example.focusapp.R
 import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.data.account.AccountManager
+import com.example.focusapp.data.preferences.RewardSettingsStorage
+import com.example.focusapp.domain.model.formatMinutes
 import com.example.focusapp.ui.components.card.FocusConfirmDialog
 import kotlinx.coroutines.launch
 import com.example.focusapp.data.usagestats.hasUsageAccessPermission
@@ -86,6 +98,7 @@ private fun settingsIntentFor(context: Context, permission: AppPermission): Inte
  * that closes it ([onClose]).
  *  - Account: who is signed in; a guest can create an account
  *    ([onCreateAccountClick]); Log out returns to the login screen
+ *  - Rewards: the daily focus time a day needs to count for the streak
  *  - Music: Focus Music / Home Music switches (TODO: no music player yet -
  *    they only remember their position while the screen is open)
  *  - Permissions: whether each permission is on; tapping a row opens the
@@ -116,6 +129,9 @@ fun SettingsScreen(
             notificationsOn = NotificationManagerCompat.from(context).areNotificationsEnabled()
         }
     }
+
+    val rewardSettings = remember { RewardSettingsStorage(context) }
+    var streakGoalMinutes by remember { mutableIntStateOf(rewardSettings.getStreakGoalMinutes()) }
 
     // TODO(music): wire to the music player once the app has one (and persist these).
     var focusMusicOn by rememberSaveable { mutableStateOf(false) }
@@ -156,6 +172,11 @@ fun SettingsScreen(
             }
         },
         onPermissionClick = { context.startActivity(settingsIntentFor(context, it)) },
+        streakGoalMinutes = streakGoalMinutes,
+        onStreakGoalChange = {
+            streakGoalMinutes = it
+            rewardSettings.saveStreakGoalMinutes(it)
+        },
         focusMusicOn = focusMusicOn,
         onFocusMusicChange = { focusMusicOn = it },
         homeMusicOn = homeMusicOn,
@@ -173,6 +194,8 @@ private fun SettingsContent(
     onLogOutClick: () -> Unit,
     isPermissionOn: (AppPermission) -> Boolean,
     onPermissionClick: (AppPermission) -> Unit,
+    streakGoalMinutes: Int,
+    onStreakGoalChange: (Int) -> Unit,
     focusMusicOn: Boolean,
     onFocusMusicChange: (Boolean) -> Unit,
     homeMusicOn: Boolean,
@@ -236,6 +259,13 @@ private fun SettingsContent(
                 ) { RowArrow() }
             }
 
+            // A day counts for the Rewards streak once it has this much focus time.
+            SettingsSection(title = "Rewards", icon = Icons.Filled.EmojiEvents) {
+                SettingsRow(label = "Daily streak goal") {
+                    GoalStepper(minutes = streakGoalMinutes, onMinutesChange = onStreakGoalChange)
+                }
+            }
+
             SettingsSection(title = "Music", icon = Icons.Filled.MusicNote) {
                 SettingsRow(label = "Focus Music") {
                     FocusSwitch(checked = focusMusicOn, onCheckedChange = onFocusMusicChange)
@@ -262,6 +292,43 @@ private fun SettingsContent(
     }
 }
 
+/** "−  2h  +": changes the streak goal in [RewardSettingsStorage.GOAL_STEP_MINUTES] steps. */
+@Composable
+private fun GoalStepper(minutes: Int, onMinutesChange: (Int) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        StepButton(
+            icon = Icons.Filled.Remove,
+            contentDescription = "Lower goal",
+            enabled = minutes > RewardSettingsStorage.MIN_GOAL_MINUTES,
+            onClick = { onMinutesChange(minutes - RewardSettingsStorage.GOAL_STEP_MINUTES) },
+        )
+        Text(
+            text = formatMinutes(minutes.toLong()),
+            style = FocusTheme.typography.rowLabel,
+            color = FocusTheme.colors.accent,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.width(72.dp),
+        )
+        StepButton(
+            icon = Icons.Filled.Add,
+            contentDescription = "Raise goal",
+            enabled = minutes < RewardSettingsStorage.MAX_GOAL_MINUTES,
+            onClick = { onMinutesChange(minutes + RewardSettingsStorage.GOAL_STEP_MINUTES) },
+        )
+    }
+}
+
+@Composable
+private fun StepButton(icon: ImageVector, contentDescription: String, enabled: Boolean, onClick: () -> Unit) {
+    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(32.dp)) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = if (enabled) FocusTheme.colors.onSurface else FocusTheme.colors.onSurfaceMuted,
+        )
+    }
+}
+
 /** The ">" at the end of a row that opens something. */
 @Composable
 private fun RowArrow() {
@@ -283,6 +350,8 @@ private fun SettingsContentPreview() {
             onLogOutClick = {},
             isPermissionOn = { it == AppPermission.PRECISE_LOCATION || it == AppPermission.NOTIFICATIONS },
             onPermissionClick = {},
+            streakGoalMinutes = 120,
+            onStreakGoalChange = {},
             focusMusicOn = false,
             onFocusMusicChange = {},
             homeMusicOn = true,
