@@ -445,3 +445,61 @@ Quick Focus changes below). David's logic is kept; only the UI and wiring change
 ### Still open
 - Friend ID system (search and friend list are placeholders).
 - A break ("tea break") during a focus session is not built yet.
+
+## 02/10/2026 Update (David Shiau) - User accounts
+- **Login screen** on first launch (and after logging out): **Log in**, **Create
+  account** (username + password, no email) or **Continue as guest** (the old
+  anonymous mode). Phones that were already using the app as a guest go straight in.
+- **Guest → account:** Settings → Account → **Create account** links the new
+  username/password to the guest, so the uid and all saved data stay the same.
+- **Restore on login:** logging in on a new phone (or after a reinstall) downloads
+  the account's sessions, Focus Zone and app groups from Firebase into Room and
+  re-registers the zone geofences. A failed download is retried on the next start.
+- **Switching users:** when a different user signs in, the previous user's data on
+  the phone (Room, blocked-app lists, saved Wi-Fi, geofences) is cleared first.
+- Settings shows who is signed in and has **Log out** (guests are warned their data
+  can't be recovered).
+- Code: `data/account/AccountManager.kt` (Firebase Auth, a username is stored as
+  `username@users.focusapp.example.com`), `ui/screens/account/AccountScreen.kt`.
+- **Setup:** Firebase Console → Authentication → Sign-in method → enable
+  **Email/Password** (keep **Anonymous** on for guests).
+
+### Known limitations
+- No email, so a forgotten password can't be reset.
+- Only sessions, the Focus Zone and app groups sync. Per-feature blocked-app lists,
+  Wi-Fi networks, friends and the theme are still phone-only.
+- Firebase keeps one `zone` per user, so only the last saved location is restored.
+
+## 03/10/2026 Update (David Shiau) - Rewards
+- **Rewards page:** the trophy at the dashboard's top-left opens it. Two independent parts,
+  both worked out from the saved sessions (`domain/usecase/CalculateFocusRewardUseCase.kt`):
+  - **Today's milestones:** today's total focus time against 5 min, 30 min, 1 h, 5 h and
+    10 h - back to zero at midnight.
+  - **Daily streak:** days in a row whose focus time reaches the goal (2 h by default).
+    Today only breaks the streak once it ends without reaching the goal.
+- **Settings → Rewards → Daily streak goal:** 30 min to 8 h in 30-minute steps. The streak
+  is recalculated from history, so changing the goal also applies to past days.
+- A session that runs past midnight is split between the two days.
+
+## 03/10/2026 Update (David Shiau) - Focus Coach (AI weekly feedback)
+- **Focus Coach button** at the dashboard's bottom-right: a one-off report on the last
+  7 days from Gemini, then preset follow-ups ("How can I reduce distractions?", "When is
+  my best time to focus?", "How do I keep my streak going?").
+- Only a summary worked out on the phone is sent - totals vs the week before, minutes per
+  day and time of day, distracting-app attempts per hour, streak - no names or ids
+  (`domain/usecase/BuildWeeklyFocusSummaryUseCase.kt`). A one-time notice asks first.
+- **5 AI answers per day** (report and follow-ups), counted on the phone; failed requests
+  don't count. Today's report is saved, so reopening doesn't ask again.
+- Gemini is called through **Firebase AI Logic** (`data/ai/FocusCoach.kt`, model
+  `gemini-3.5-flash`), so no Gemini key is in the app. Firebase BOM updated to 34.19.0.
+- **App Check:** debug builds use debug tokens, release builds Play Integrity
+  (`src/debug` / `src/release` `AppCheckSetup.kt`).
+- **Setup:** Firebase Console → AI Logic → Get started → **Gemini Developer API**. For
+  App Check, add the debug token printed in Logcat ("Enter this debug secret...") under
+  App Check → Apps → ⋮ → Manage debug tokens. Keep enforcement off for Realtime Database
+  and Authentication.
+
+### Known limitations
+- The daily limit is kept on the phone, so reinstalling resets it.
+- Play Integrity isn't registered yet (the console's Terms of Service step failed), so
+  App Check enforcement for AI Logic is off for now.
