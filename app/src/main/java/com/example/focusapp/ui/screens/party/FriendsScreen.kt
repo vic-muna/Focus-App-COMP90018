@@ -1,5 +1,8 @@
 package com.example.focusapp.ui.screens.party
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -10,10 +13,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Mail
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -23,11 +32,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.core.content.getSystemService
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.focusapp.domain.model.Friend
+import com.example.focusapp.domain.model.PartyInvite
 import com.example.focusapp.ui.common.rememberLocationPermissionState
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusSpacing
@@ -35,7 +47,10 @@ import com.example.focusapp.ui.theme.FocusTheme
 import com.example.focusapp.ui.components.bar.CloseTopBar
 import com.example.focusapp.ui.components.bar.SettingsRow
 import com.example.focusapp.ui.components.bar.SettingsSection
+import com.example.focusapp.ui.components.button.ConfirmButton
 import com.example.focusapp.ui.components.button.FocusPillButton
+import com.example.focusapp.ui.components.button.RejectButton
+import com.example.focusapp.ui.components.card.AddItemCard
 import com.example.focusapp.ui.components.card.FlyCardOverlay
 import com.example.focusapp.ui.components.input.FocusSearchField
 import com.example.focusapp.ui.components.card.consumeTaps
@@ -46,24 +61,33 @@ import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.ui.common.AccessibilityPermissionDialog
 
 /** Which fly card is open on top of the friend list. */
-private enum class GroupCard { NONE, CREATE, JOIN, QUICK_FOCUS_APPS }
+private enum class GroupCard { NONE, CREATE, JOIN, QUICK_FOCUS_APPS, ADD_FRIEND }
 
 /**
  * Party Mode's page. Reached from the group icon on Home (the other side
  * of the gear); the same spot shows an X that closes it ([onClose]).
  *  - Search: filters the friend list by name or ID while typing.
- *  - Friends: [friends] - empty for now (see the TODO on the parameter).
+ *  - Friends: [PartyModeViewModel.friends] - saved on this phone, loaded by the ViewModel
+ *    itself (see its class doc comment; this is the "friend ID system" the old TODO here was
+ *    waiting on). An Add Friend card (last tile in the list) saves a new one by pasting their
+ *    [PartyModeViewModel.myFriendCode] - there's still no cloud directory to search by name, so
+ *    [query] only filters friends already saved, same as before. Each row also has a delete
+ *    icon, calling [PartyModeViewModel.deleteFriend].
+ *  - My Code row: [PartyModeViewModel.myFriendCode], with a copy button - what you'd read out
+ *    (or paste over text) to a friend so THEY can add YOU.
+ *  - Incoming invites: shown above the friend list whenever
+ *    [PartyModeViewModel.incomingInvites] isn't empty, each with Accept/Decline.
  *  - Create group / Join group: fly cards ([CreateGroupCard] /
  *    [JoinGroupCard]) backed by David's cloud party logic in
  *    [PartyModeViewModel] - the group code is the party's cloud id.
  *    Closing a card leaves the group; the host's check calls [onStartFocus].
+ *    CreateGroupCard also lists friends with their own Invite button, calling
+ *    [PartyModeViewModel.inviteFriend] - see that card's doc comment for why only there.
  */
 @Composable
 fun FriendsScreen(
     onClose: () -> Unit,
     onStartFocus: () -> Unit,
-    // TODO(ID system): load the user's friends from the cloud once IDs exist.
-    friends: List<Friend> = emptyList(),
     // The apps a party's focus session blocks (shared with Quick Focus), and how to save a new pick.
     quickFocusApps: List<AppItem> = emptyList(),
     onQuickFocusAppsChange: (List<AppItem>) -> Unit = {},
@@ -72,6 +96,9 @@ fun FriendsScreen(
     val permissionState = rememberLocationPermissionState()
     val members by viewModel.members.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
+    val friends by viewModel.friends.collectAsState()
+    val myFriendCode by viewModel.myFriendCode.collectAsState()
+    val incomingInvites by viewModel.incomingInvites.collectAsState()
     // Blocking only works after the user turns on the accessibility service in Android's settings.
     val isAccessibilityEnabled by AccessibilityBridge.isServiceConnected.collectAsState()
     var showAccessibilityPermissionDialog by remember { mutableStateOf(false) }
@@ -81,6 +108,8 @@ fun FriendsScreen(
     var createCode by rememberSaveable { mutableStateOf("") }
     var joinCode by rememberSaveable { mutableStateOf("") }
     var joined by rememberSaveable { mutableStateOf(false) }
+    var addFriendCode by rememberSaveable { mutableStateOf("") }
+    var addFriendNickname by rememberSaveable { mutableStateOf("") }
 
     fun memberNames(fallback: String) =
         members.map { it.displayName.ifBlank { "Member (${it.uid.take(6)})" } }.ifEmpty { listOf(fallback) }
@@ -90,6 +119,8 @@ fun FriendsScreen(
         card = GroupCard.NONE
         joinCode = ""
         joined = false
+        addFriendCode = ""
+        addFriendNickname = ""
     }
 
     // Back closes an open card first, then the page.
@@ -97,15 +128,21 @@ fun FriendsScreen(
         if (card == GroupCard.QUICK_FOCUS_APPS) card = GroupCard.CREATE else closeCard()
     }
 
+    val context = LocalContext.current
+
     FriendsContent(
         query = query,
         onQueryChange = { query = it },
-        onSearch = {
-            // TODO(ID system): look [query] up as a friend ID in the cloud, so
-            // someone who isn't a friend yet can be found and added.
-        },
+        onSearch = {},
         friends = friends.filter { it.matches(query) },
         hasFriends = friends.isNotEmpty(),
+        myFriendCode = myFriendCode,
+        onCopyMyFriendCode = { code -> copyToClipboard(context, code) },
+        incomingInvites = incomingInvites,
+        inviterLabel = { invite -> friends.firstOrNull { it.uid == invite.fromUid }?.nickname ?: invite.fromUid },
+        onAcceptInvite = { invite -> viewModel.respondToInvite(invite, accept = true) },
+        onDeclineInvite = { invite -> viewModel.respondToInvite(invite, accept = false) },
+        onDeleteFriend = { friend -> viewModel.deleteFriend(friend.uid) },
         onClose = onClose,
         onCreateGroupClick = {
             createCode = newPartyCode()
@@ -114,6 +151,7 @@ fun FriendsScreen(
             card = GroupCard.CREATE
         },
         onJoinGroupClick = { card = GroupCard.JOIN },
+        onAddFriendClick = { card = GroupCard.ADD_FRIEND },
         showGroupCard = card != GroupCard.NONE,
         onGroupCardOutsideClick = {
             if (card == GroupCard.QUICK_FOCUS_APPS) card = GroupCard.CREATE else closeCard()
@@ -130,6 +168,8 @@ fun FriendsScreen(
                     if (isAccessibilityEnabled) card = GroupCard.QUICK_FOCUS_APPS
                     else showAccessibilityPermissionDialog = true
                 },
+                friends = friends,
+                onInviteFriend = viewModel::inviteFriend,
                 modifier = Modifier.consumeTaps(),
             )
             GroupCard.JOIN -> JoinGroupCard(
@@ -157,6 +197,19 @@ fun FriendsScreen(
                 onClose = { card = GroupCard.CREATE },
                 modifier = Modifier.consumeTaps(),
             )
+            GroupCard.ADD_FRIEND -> AddFriendCard(
+                codeInput = addFriendCode,
+                onCodeInputChange = { addFriendCode = it },
+                nicknameInput = addFriendNickname,
+                onNicknameInputChange = { addFriendNickname = it },
+                errorMessage = errorMessage,
+                onClose = ::closeCard,
+                onSave = {
+                    viewModel.addFriend(addFriendCode, addFriendNickname)
+                    closeCard()
+                },
+                modifier = Modifier.consumeTaps(),
+            )
             GroupCard.NONE -> Unit
         }
     }
@@ -164,6 +217,13 @@ fun FriendsScreen(
     if (showAccessibilityPermissionDialog) {
         AccessibilityPermissionDialog(onDismiss = { showAccessibilityPermissionDialog = false })
     }
+}
+
+/** Puts [text] on the system clipboard - used for the "My Code" row's copy button so a
+ *  friend's code can be pasted into [AddFriendCard] without retyping it by hand. */
+private fun copyToClipboard(context: Context, text: String) {
+    val clipboardManager = context.getSystemService<ClipboardManager>() ?: return
+    clipboardManager.setPrimaryClip(ClipData.newPlainText("Focus App friend code", text))
 }
 
 /** Whether [query] appears in this friend's name or ID (a blank query matches everyone). */
@@ -186,6 +246,14 @@ private fun FriendsContent(
     onClose: () -> Unit,
     onCreateGroupClick: () -> Unit,
     onJoinGroupClick: () -> Unit,
+    onAddFriendClick: () -> Unit = {},
+    myFriendCode: String? = null,
+    onCopyMyFriendCode: (String) -> Unit = {},
+    incomingInvites: List<PartyInvite> = emptyList(),
+    inviterLabel: (PartyInvite) -> String = { it.fromUid },
+    onAcceptInvite: (PartyInvite) -> Unit = {},
+    onDeclineInvite: (PartyInvite) -> Unit = {},
+    onDeleteFriend: (Friend) -> Unit = {},
     showGroupCard: Boolean = false,
     onGroupCardOutsideClick: () -> Unit = {},
     groupCard: @Composable () -> Unit = {},
@@ -226,16 +294,65 @@ private fun FriendsContent(
                     onSearch = onSearch,
                 )
 
+                // What a friend needs from you before they can add you back - see
+                // FriendsScreen's class doc comment for why there's no directory to search.
+                if (myFriendCode != null) {
+                    SettingsSection(title = "My Code", icon = Icons.Filled.Group) {
+                        SettingsRow(label = myFriendCode) {
+                            IconButton(onClick = { onCopyMyFriendCode(myFriendCode) }) {
+                                Icon(
+                                    imageVector = Icons.Filled.ContentCopy,
+                                    contentDescription = "Copy my code",
+                                    tint = colors.onSurface,
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Only rendered when there's something to act on - an empty section here would
+                // just be noise above the friend list on every normal visit to this screen.
+                if (incomingInvites.isNotEmpty()) {
+                    SettingsSection(title = "Invites", icon = Icons.Filled.Mail) {
+                        incomingInvites.forEach { invite ->
+                            SettingsRow(label = "${inviterLabel(invite)} invited you") {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    RejectButton(
+                                        onClick = { onDeclineInvite(invite) },
+                                        contentDescription = "Decline invite",
+                                        size = 28.dp,
+                                    )
+                                    ConfirmButton(
+                                        onClick = { onAcceptInvite(invite) },
+                                        contentDescription = "Accept invite",
+                                        size = 28.dp,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 SettingsSection(title = "Friends", icon = Icons.Filled.Group) {
                     friends.forEach { friend ->
                         SettingsRow(label = friend.nickname) {
-                            Text(
-                                text = "ID ${friend.uid}",
-                                style = typography.caption,
-                                color = colors.onSurfaceMuted,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "ID ${friend.uid}",
+                                    style = typography.caption,
+                                    color = colors.onSurfaceMuted,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.widthIn(max = 96.dp),
+                                )
+                                IconButton(onClick = { onDeleteFriend(friend) }) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Delete,
+                                        contentDescription = "Remove ${friend.nickname}",
+                                        tint = colors.onSurfaceMuted,
+                                    )
+                                }
+                            }
                         }
                     }
                     if (friends.isEmpty()) {
@@ -243,9 +360,14 @@ private fun FriendsContent(
                             text = if (hasFriends) "No friend matches \"${query.trim()}\"." else "No friends yet.",
                             style = typography.body,
                             color = colors.onSurfaceMuted,
-                            modifier = Modifier.padding(top = 16.dp),
+                            modifier = Modifier.padding(top = 16.dp, bottom = 16.dp),
                         )
                     }
+                    AddItemCard(
+                        onClick = onAddFriendClick,
+                        onClickLabel = "Add friend",
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
                 }
             }
 

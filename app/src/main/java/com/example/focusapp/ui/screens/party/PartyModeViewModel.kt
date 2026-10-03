@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.focusapp.data.repository.FocusRepositoryProvider
 import com.example.focusapp.data.sensor.SensorDataSource
+import com.example.focusapp.domain.model.Friend
 import com.example.focusapp.domain.model.PartyInvite
 import com.example.focusapp.domain.model.PartyMemberStatus
 import kotlinx.coroutines.Job
@@ -24,7 +25,23 @@ import kotlinx.coroutines.launch
  *
  * Every Firebase call is wrapped in try/catch: a failure shows up in
  * [errorMessage] instead of crashing the app.
- * Invites ([inviteFriend], [incomingInvites]) are ready for the friend ID system.
+ *
+ * [Claude, 2026-10-03] Friends ([friends], [myFriendCode], [addFriend], [deleteFriend]) are the
+ * missing first link [inviteFriend]/[incomingInvites] were "ready and waiting" for - see
+ * [FriendsScreen] for where these actually show up (a copyable "My Code" row, an Add Friend
+ * card, a delete icon per friend, and an Invite button per friend while hosting a group). Still
+ * no server-side friend directory/search - adding someone means they tell you their
+ * [myFriendCode] (e.g. out loud, or copy-paste over text) and you type it into [addFriend]
+ * yourself; there's no way to look a stranger up by name. [myFriendCode] is a short (6-char)
+ * stand-in for this phone's real, much longer Firebase uid - see
+ * RemoteDataSource.getOrCreateMyFriendCode()'s doc comment for why.
+ *
+ * [Claude, 2026-10-03] [inviteFriend] used to call a fire-and-forget write (no .await(), no
+ * error ever surfaced) - a rejected write (e.g. Realtime Database Rules not allowing one user
+ * to write into another user's users/$toUid subtree, which sendPartyInvite needs to do to
+ * deliver the invite) failed completely silently: the inviter saw no error, and the invitee's
+ * [incomingInvites] just never got anything. sendPartyInvite is now suspend and awaited, so a
+ * rejected write throws and shows up in [errorMessage] instead.
  */
 class PartyModeViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -47,11 +64,74 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
     /** Invites sent to this phone. Errors here are ignored, so nobody sees an error before tapping anything. */
     val incomingInvites: StateFlow<List<PartyInvite>> = _incomingInvites.asStateFlow()
 
+    private val _friends = MutableStateFlow<List<Friend>>(emptyList())
+    /** This phone's saved friends (local only - see class doc comment). */
+    val friends: StateFlow<List<Friend>> = _friends.asStateFlow()
+
+    private val _myFriendCode = MutableStateFlow<String?>(null)
+    /** This phone's own short friend code, to share with a friend so they can [addFriend] you
+     *  back - null until it's loaded (first launch generates and claims one). */
+    val myFriendCode: StateFlow<String?> = _myFriendCode.asStateFlow()
+
     init {
         viewModelScope.launch {
             repository.observeMyIncomingInvites()
                 .catch { /* stay empty */ }
                 .collect { _incomingInvites.value = it }
+        }
+        viewModelScope.launch { reloadFriends() }
+        viewModelScope.launch {
+            try {
+                _myFriendCode.value = repository.getOrCreateMyFriendCode()
+            } catch (e: Exception) {
+                // Left null - FriendsScreen just doesn't show the "My Code" row until a retry
+                // succeeds (e.g. the next time this screen is opened); not worth an error
+                // banner for something the user hasn't asked to do yet.
+            }
+        }
+    }
+
+    private suspend fun reloadFriends() {
+        try {
+            _friends.value = repository.getFriends().sortedBy { it.nickname.lowercase() }
+        } catch (e: Exception) {
+            // Local Room read - failing here would mean something is wrong with the database
+            // itself, not just "offline". Leaving the list as whatever it last was (likely
+            // empty, on first call) is safer than surfacing a scary error for a local read.
+        }
+    }
+
+    /** Resolves [code] (one of someone's [myFriendCode] values) to their real uid, then saves
+     *  them as a friend called [nickname] - both trimmed; does nothing if either is blank after
+     *  trimming. The resolve step is the one part of this that needs Firebase (friend codes
+     *  only exist there); the save itself is local only (see class doc comment). */
+    fun addFriend(code: String, nickname: String) {
+        val trimmedCode = code.trim()
+        val trimmedNickname = nickname.trim()
+        if (trimmedCode.isBlank() || trimmedNickname.isBlank()) return
+        viewModelScope.launch {
+            try {
+                val uid = repository.resolveFriendCode(trimmedCode)
+                    ?: run { _errorMessage.value = "No one has that code - check it and try again."; return@launch }
+                repository.saveFriend(Friend(uid = uid, nickname = trimmedNickname))
+                reloadFriends()
+            } catch (e: Exception) {
+                _errorMessage.value = "Couldn't save that friend - try again."
+            }
+        }
+    }
+
+    /** Removes a saved friend - local only, so this always succeeds unless Room itself is
+     *  broken. Does not affect anything already shared with them (party invites already sent,
+     *  memberships already joined). */
+    fun deleteFriend(uid: String) {
+        viewModelScope.launch {
+            try {
+                repository.deleteFriend(uid)
+                reloadFriends()
+            } catch (e: Exception) {
+                _errorMessage.value = "Couldn't remove that friend - try again."
+            }
         }
     }
 
@@ -147,10 +227,12 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
     /** Invites the friend with id [toUid] to the current party (does nothing if not in one). */
     fun inviteFriend(toUid: String) {
         val partyId = currentPartyId ?: return
-        try {
-            repository.sendPartyInvite(partyId, toUid)
-        } catch (e: Exception) {
-            _errorMessage.value = friendlyPartyErrorMessage(e)
+        viewModelScope.launch {
+            try {
+                repository.sendPartyInvite(partyId, toUid)
+            } catch (e: Exception) {
+                _errorMessage.value = friendlyPartyErrorMessage(e)
+            }
         }
     }
 

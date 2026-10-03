@@ -34,6 +34,13 @@ class SavedWifiStorage(context: Context) {
         write(readSsids() - ssid)
     }
 
+    /** Deletes the saved list, including the old [WifiTriggerStorage] networks it copies in
+     *  (used when a different user signs in on this phone). */
+    fun clear() {
+        legacyTagged.clear()
+        prefs.edit().clear().apply()
+    }
+
     private fun readSsids(): List<String> {
         val json = prefs.getString(KEY_SSIDS, null) ?: return emptyList()
         return runCatching {

@@ -1,5 +1,6 @@
 package com.example.focusapp.data.repository
 
+import com.example.focusapp.data.remote.CloudUserData
 import com.example.focusapp.data.remote.RemoteDataSource
 import com.example.focusapp.domain.model.AppGroup
 import com.example.focusapp.domain.model.FocusSession
@@ -38,7 +39,16 @@ class FakeRemoteDataSource : RemoteDataSource {
     val respondedInvites = mutableListOf<Pair<String, Boolean>>() // partyId to accept
     val updatedStatuses = mutableListOf<Pair<String, PartyMemberStatus>>() // partyId to status
 
+    /** What [fetchUserData] returns - set it to simulate a user's cloud backup. */
+    var cloudUserData = CloudUserData()
+
     override suspend fun getUid(): String = "fake-uid"
+
+    override suspend fun fetchUserData(): CloudUserData {
+        if (shouldHangPush) awaitCancellation()
+        if (shouldFailPush) throw IOException("simulated offline / fetch failure")
+        return cloudUserData
+    }
 
     override suspend fun pushSession(session: FocusSession) {
         if (shouldHangPush) awaitCancellation() // never returns, never throws, until cancelled
@@ -58,7 +68,7 @@ class FakeRemoteDataSource : RemoteDataSource {
         pushedAppGroups.add(group)
     }
 
-    override fun sendPartyInvite(partyId: String, toUid: String) {
+    override suspend fun sendPartyInvite(partyId: String, toUid: String) {
         sentInvites.add(partyId to toUid)
     }
 
@@ -76,4 +86,13 @@ class FakeRemoteDataSource : RemoteDataSource {
     override fun updateMyPartyStatus(partyId: String, status: PartyMemberStatus) {
         updatedStatuses.add(partyId to status)
     }
+
+    private val friendCodesByUid = mutableMapOf<String, String>()
+    private var nextFakeFriendCode = 1
+
+    override suspend fun getOrCreateMyFriendCode(): String =
+        friendCodesByUid.getOrPut("fake-uid") { "CODE${nextFakeFriendCode++}" }
+
+    override suspend fun resolveFriendCode(code: String): String? =
+        friendCodesByUid.entries.firstOrNull { (_, c) -> c == code }?.key
 }

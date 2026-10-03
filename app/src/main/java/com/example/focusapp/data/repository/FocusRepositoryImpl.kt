@@ -173,9 +173,24 @@ class FocusRepositoryImpl(
         }
     }
 
+    override suspend fun restoreFromCloud() {
+        val cloud = withTimeout(FIREBASE_PUSH_TIMEOUT_MILLIS) { remoteDataSource.fetchUserData() }
+        localDataSource.importFromCloud(
+            sessions = cloud.sessions,
+            zones = listOfNotNull(cloud.zone),
+            appGroups = cloud.appGroups,
+        )
+    }
+
+    override suspend fun clearLocalData() {
+        localDataSource.clearAll()
+        // Forget throttle state from the previous user's party.
+        lastPushedPartyStatus.clear()
+    }
+
     override suspend fun getMyUid(): String = remoteDataSource.getUid()
 
-    override fun sendPartyInvite(partyId: String, toUid: String) =
+    override suspend fun sendPartyInvite(partyId: String, toUid: String) =
         remoteDataSource.sendPartyInvite(partyId, toUid)
 
     override fun observeMyIncomingInvites(): Flow<List<PartyInvite>> =
@@ -238,4 +253,8 @@ class FocusRepositoryImpl(
     override suspend fun saveFriend(friend: Friend) = localDataSource.saveFriend(friend)
 
     override suspend fun deleteFriend(uid: String) = localDataSource.deleteFriend(uid)
+
+    override suspend fun getOrCreateMyFriendCode(): String = remoteDataSource.getOrCreateMyFriendCode()
+
+    override suspend fun resolveFriendCode(code: String): String? = remoteDataSource.resolveFriendCode(code)
 }

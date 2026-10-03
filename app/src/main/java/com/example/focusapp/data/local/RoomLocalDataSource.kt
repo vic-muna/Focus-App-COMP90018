@@ -7,6 +7,8 @@ import com.example.focusapp.domain.model.AppGroup
 import com.example.focusapp.domain.model.FocusSession
 import com.example.focusapp.domain.model.FocusZone
 import com.example.focusapp.domain.model.Friend
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * The real [LocalDataSource], backed by Room.
@@ -71,6 +73,17 @@ class RoomLocalDataSource(context: Context) : LocalDataSource {
 
     override suspend fun markSessionSynced(sessionId: String) =
         db.focusSessionDao().markSynced(sessionId)
+
+    override suspend fun importFromCloud(sessions: List<FocusSession>, zones: List<FocusZone>, appGroups: List<AppGroup>) {
+        db.focusSessionDao().insertIfMissing(sessions.map { it.toEntity(synced = true) })
+        val localZoneIds = db.focusZoneDao().getAll().map { it.id }.toSet()
+        zones.filter { it.id !in localZoneIds }.forEach { db.focusZoneDao().upsert(it.toEntity(synced = true)) }
+        val localGroupIds = db.appGroupDao().getAll().map { it.id }.toSet()
+        appGroups.filter { it.id !in localGroupIds }.forEach { db.appGroupDao().upsert(it.toEntity(synced = true)) }
+    }
+
+    // clearAllTables() blocks, so it can't run on the main thread.
+    override suspend fun clearAll() = withContext(Dispatchers.IO) { db.clearAllTables() }
 
     override suspend fun getFriends(): List<Friend> =
         db.friendDao().getAll().map { it.toDomain() }

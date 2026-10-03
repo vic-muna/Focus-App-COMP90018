@@ -25,7 +25,10 @@ tasks.register("generateGoogleServicesJson") {
         val outputFile = file("google-services.json")
         val content = templateFile.readText().replace(
             "REPLACE_WITH_YOUR_KEY",
-            localProps.getProperty("FIREBASE_API_KEY", "").trim()
+            // local.properties overrides the shared key in gradle.properties
+            (localProps.getProperty("FIREBASE_API_KEY")
+                ?: providers.gradleProperty("FIREBASE_API_KEY").orNull
+                ?: "").trim()
         )
         outputFile.writeText(content)
     }
@@ -79,6 +82,12 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.database)
     implementation(libs.firebase.auth)
+    // Focus Coach on the dashboard: Gemini through Firebase AI Logic, so no Gemini key ships in the app.
+    implementation(libs.firebase.ai)
+    // App Check proves AI requests come from this app. Debug builds use debug tokens (registered in
+    // the Firebase console); release builds use Play Integrity - see src/debug and src/release.
+    debugImplementation(libs.firebase.appcheck.debug)
+    releaseImplementation(libs.firebase.appcheck.playintegrity)
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)

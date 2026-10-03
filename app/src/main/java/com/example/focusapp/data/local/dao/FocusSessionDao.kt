@@ -2,6 +2,7 @@ package com.example.focusapp.data.local.dao
 
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.example.focusapp.data.local.entity.FocusSessionEntity
 
@@ -14,6 +15,10 @@ interface FocusSessionDao {
     // Sessions are append-only (matches the original stub's `cachedSessions.add(session)`).
     @Insert
     suspend fun insert(session: FocusSessionEntity)
+
+    // Restoring from the cloud after logging in: sessions already on the phone are skipped.
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertIfMissing(sessions: List<FocusSessionEntity>)
 
     // Used by FocusRepositoryImpl.syncPendingSessions() (#43 / #48).
     @Query("SELECT * FROM focus_sessions WHERE synced = 0")

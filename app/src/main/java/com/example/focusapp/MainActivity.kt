@@ -9,19 +9,29 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
+import com.example.focusapp.data.account.AccountManager
 import com.example.focusapp.data.notification.TimeFocusNotification
 import com.example.focusapp.data.sensor.startGPSUpdates
 import com.example.focusapp.ui.navigation.FocusAppNavGraph
+import com.example.focusapp.ui.screens.account.AccountScreen
 import com.example.focusapp.ui.theme.FocusAppTheme
 
 private const val TAG = "MainActivity"
 
-/** The app's only Activity. It shows [FocusAppNavGraph], which switches between the screens. */
+/**
+ * The app's only Activity. It shows [AccountScreen] until someone signs in, then
+ * [FocusAppNavGraph], which switches between the screens.
+ */
 class MainActivity : ComponentActivity() {
 
     // Launcher for background location (geofencing) on Android 10+ (Q+)
@@ -56,6 +66,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        installAppCheck() // Before Focus Coach's first Gemini request (see AppCheckSetup.kt).
         timeSlotToOpen.value = intent.getStringExtra(TimeFocusNotification.EXTRA_OPEN_TIME_SLOT)
 
         requestInitialPermissions()
@@ -64,10 +75,21 @@ class MainActivity : ComponentActivity() {
             // Gives every screen FocusTheme.colors and FocusTheme.typography.
             FocusAppTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    FocusAppNavGraph(
-                        timeSlotToOpen = timeSlotToOpen.value,
-                        onTimeSlotOpened = { timeSlotToOpen.value = null },
-                    )
+                    val account by AccountManager.account.collectAsState()
+                    LaunchedEffect(Unit) { AccountManager.onAppStart(applicationContext) }
+
+                    // Nobody signed in: the login screen. Otherwise the app, rebuilt from
+                    // scratch for each user so nothing from the previous one stays on screen.
+                    Crossfade(targetState = account?.uid, animationSpec = tween(300), label = "account") { uid ->
+                        if (uid == null) {
+                            AccountScreen()
+                        } else {
+                            FocusAppNavGraph(
+                                timeSlotToOpen = timeSlotToOpen.value,
+                                onTimeSlotOpened = { timeSlotToOpen.value = null },
+                            )
+                        }
+                    }
                 }
             }
         }
