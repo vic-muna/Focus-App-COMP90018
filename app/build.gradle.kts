@@ -25,7 +25,10 @@ tasks.register("generateGoogleServicesJson") {
         val outputFile = file("google-services.json")
         val content = templateFile.readText().replace(
             "REPLACE_WITH_YOUR_KEY",
-            localProps.getProperty("FIREBASE_API_KEY", "").trim()
+            // local.properties overrides the shared key in gradle.properties
+            (localProps.getProperty("FIREBASE_API_KEY")
+                ?: providers.gradleProperty("FIREBASE_API_KEY").orNull
+                ?: "").trim()
         )
         outputFile.writeText(content)
     }
