@@ -16,14 +16,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -58,6 +62,7 @@ private val BAR_CHART_MAX_BAR_HEIGHT = 100.dp
  *  - this week's minutes per day
  *  - "This week" / "Last week" cards (tap for each day's sessions)
  *  - every session
+ *  - a Focus Coach button in the bottom-right corner (AI feedback on the week)
  */
 @Composable
 fun HistoryScreen(
@@ -66,13 +71,29 @@ fun HistoryScreen(
     onRewardsClick: () -> Unit,
     onClose: () -> Unit,
     viewModel: HistoryViewModel = viewModel(),
+    coachViewModel: FocusCoachViewModel = viewModel(),
 ) {
     val sessions by viewModel.sessions.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val weekBuckets by viewModel.weekBuckets.collectAsState()
+    val coachState by coachViewModel.state.collectAsState()
 
     // Which week card (if any) is currently open in a detail dialog - null means none.
     var selectedWeek by remember { mutableStateOf<WeekBucket?>(null) }
+    var showCoach by remember { mutableStateOf(false) }
+
+    if (showCoach) {
+        LaunchedEffect(Unit) { coachViewModel.open() }
+        Dialog(onDismissRequest = { showCoach = false }) {
+            FocusCoachDialogContent(
+                state = coachState,
+                onAcceptConsent = coachViewModel::acceptConsent,
+                onRequestReport = coachViewModel::requestReport,
+                onAsk = coachViewModel::ask,
+                onDismiss = { showCoach = false },
+            )
+        }
+    }
 
     HistoryContent(
         theme = theme,
@@ -82,6 +103,7 @@ fun HistoryScreen(
         weekBuckets = weekBuckets,
         onWeekClick = { selectedWeek = it },
         onRewardsClick = onRewardsClick,
+        onCoachClick = { showCoach = true },
         onClose = onClose,
     )
 
@@ -103,6 +125,7 @@ private fun HistoryContent(
     weekBuckets: List<WeekBucket>,
     onWeekClick: (WeekBucket) -> Unit,
     onRewardsClick: () -> Unit,
+    onCoachClick: () -> Unit,
     onClose: () -> Unit,
 ) {
     val colors = FocusTheme.colors
@@ -120,7 +143,8 @@ private fun HistoryContent(
                 end = 32.dp,
                 // Starts below the X in the top-right corner.
                 top = FocusSpacing.ScreenTop + 58.dp,
-                bottom = FocusSpacing.ScreenBottom,
+                // Room for the Focus Coach button, so it never covers the last session.
+                bottom = FocusSpacing.ScreenBottom + 72.dp,
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -196,6 +220,25 @@ private fun HistoryContent(
                 contentDescription = "Rewards",
                 tint = colors.onSurface,
                 modifier = Modifier.size(42.dp),
+            )
+        }
+
+        // Focus Coach: AI feedback on the week.
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 24.dp, bottom = FocusSpacing.ScreenBottom)
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(colors.accent)
+                .clickable(role = Role.Button, onClickLabel = "Open Focus Coach", onClick = onCoachClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.AutoAwesome,
+                contentDescription = "Focus Coach",
+                tint = colors.onPrimaryAction,
+                modifier = Modifier.size(28.dp),
             )
         }
     }
@@ -443,6 +486,7 @@ private fun HistoryContentPreview() {
             ),
             onWeekClick = {},
             onRewardsClick = {},
+            onCoachClick = {},
             onClose = {},
         )
     }

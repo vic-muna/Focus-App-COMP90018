@@ -66,6 +66,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        installAppCheck() // Before Focus Coach's first Gemini request (see AppCheckSetup.kt).
         timeSlotToOpen.value = intent.getStringExtra(TimeFocusNotification.EXTRA_OPEN_TIME_SLOT)
 
         requestInitialPermissions()

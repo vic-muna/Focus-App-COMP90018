@@ -480,3 +480,26 @@ Quick Focus changes below). David's logic is kept; only the UI and wiring change
 - **Settings → Rewards → Daily streak goal:** 30 min to 8 h in 30-minute steps. The streak
   is recalculated from history, so changing the goal also applies to past days.
 - A session that runs past midnight is split between the two days.
+
+## 03/10/2026 Update (David Shiau) - Focus Coach (AI weekly feedback)
+- **Focus Coach button** at the dashboard's bottom-right: a one-off report on the last
+  7 days from Gemini, then preset follow-ups ("How can I reduce distractions?", "When is
+  my best time to focus?", "How do I keep my streak going?").
+- Only a summary worked out on the phone is sent - totals vs the week before, minutes per
+  day and time of day, distracting-app attempts per hour, streak - no names or ids
+  (`domain/usecase/BuildWeeklyFocusSummaryUseCase.kt`). A one-time notice asks first.
+- **5 AI answers per day** (report and follow-ups), counted on the phone; failed requests
+  don't count. Today's report is saved, so reopening doesn't ask again.
+- Gemini is called through **Firebase AI Logic** (`data/ai/FocusCoach.kt`, model
+  `gemini-3.5-flash`), so no Gemini key is in the app. Firebase BOM updated to 34.19.0.
+- **App Check:** debug builds use debug tokens, release builds Play Integrity
+  (`src/debug` / `src/release` `AppCheckSetup.kt`).
+- **Setup:** Firebase Console → AI Logic → Get started → **Gemini Developer API**. For
+  App Check, add the debug token printed in Logcat ("Enter this debug secret...") under
+  App Check → Apps → ⋮ → Manage debug tokens. Keep enforcement off for Realtime Database
+  and Authentication.
+
+### Known limitations
+- The daily limit is kept on the phone, so reinstalling resets it.
+- Play Integrity isn't registered yet (the console's Terms of Service step failed), so
+  App Check enforcement for AI Logic is off for now.
