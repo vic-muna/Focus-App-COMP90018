@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
+import com.example.focusapp.data.account.AccountManager
 
 /**
  * Party Mode's cloud logic (Firebase), used by [FriendsScreen].
@@ -48,6 +49,12 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
     private val repository = FocusRepositoryProvider.get(application)
     private val sensorDataSource = SensorDataSource()
 
+
+    /** A guest has no friend code, friend list or invites - only group codes ([joinParty]).
+     *  The Database Rules refuse a guest's friend code too, so this isn't just hidden UI.
+     *  Read once: creating an account happens on another screen, which makes a new ViewModel. */
+    val isGuest: Boolean = AccountManager.account.value?.isGuest != false
+
     private val _members = MutableStateFlow<List<PartyMemberStatus>>(emptyList())
     /** Live member list for whichever party [joinParty] was last called with. */
     val members: StateFlow<List<PartyMemberStatus>> = _members.asStateFlow()
@@ -74,19 +81,21 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
     val myFriendCode: StateFlow<String?> = _myFriendCode.asStateFlow()
 
     init {
-        viewModelScope.launch {
-            repository.observeMyIncomingInvites()
-                .catch { /* stay empty */ }
-                .collect { _incomingInvites.value = it }
-        }
-        viewModelScope.launch { reloadFriends() }
-        viewModelScope.launch {
-            try {
-                _myFriendCode.value = repository.getOrCreateMyFriendCode()
-            } catch (e: Exception) {
-                // Left null - FriendsScreen just doesn't show the "My Code" row until a retry
-                // succeeds (e.g. the next time this screen is opened); not worth an error
-                // banner for something the user hasn't asked to do yet.
+        if (!isGuest) {
+            viewModelScope.launch {
+                repository.observeMyIncomingInvites()
+                    .catch { /* stay empty */ }
+                    .collect { _incomingInvites.value = it }
+            }
+            viewModelScope.launch { reloadFriends() }
+            viewModelScope.launch {
+                try {
+                    _myFriendCode.value = repository.getOrCreateMyFriendCode()
+                } catch (e: Exception) {
+                    // Left null - FriendsScreen just doesn't show the "My Code" row until a retry
+                    // succeeds (e.g. the next time this screen is opened); not worth an error
+                    // banner for something the user hasn't asked to do yet.
+                }
             }
         }
     }
@@ -104,17 +113,21 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
     /** Resolves [code] (one of someone's [myFriendCode] values) to their real uid, then saves
      *  them as a friend called [nickname] - both trimmed; does nothing if either is blank after
      *  trimming. The resolve step is the one part of this that needs Firebase (friend codes
-     *  only exist there); the save itself is local only (see class doc comment). */
-    fun addFriend(code: String, nickname: String) {
+     *  only exist there); the save itself is local only (see class doc comment).
+     *  [onSaved] runs only once the friend is saved; a wrong code or a failure sets
+     *  [errorMessage] instead, so the Add Friend card can stay open and show it. */
+    fun addFriend(code: String, nickname: String, onSaved: () -> Unit = {}) {
         val trimmedCode = code.trim()
         val trimmedNickname = nickname.trim()
-        if (trimmedCode.isBlank() || trimmedNickname.isBlank()) return
+        if (isGuest || trimmedCode.isBlank() || trimmedNickname.isBlank()) return
+        _errorMessage.value = null
         viewModelScope.launch {
             try {
                 val uid = repository.resolveFriendCode(trimmedCode)
                     ?: run { _errorMessage.value = "No one has that code - check it and try again."; return@launch }
                 repository.saveFriend(Friend(uid = uid, nickname = trimmedNickname))
                 reloadFriends()
+                onSaved()
             } catch (e: Exception) {
                 _errorMessage.value = "Couldn't save that friend - try again."
             }
@@ -226,6 +239,7 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
 
     /** Invites the friend with id [toUid] to the current party (does nothing if not in one). */
     fun inviteFriend(toUid: String) {
+        if (isGuest) return
         val partyId = currentPartyId ?: return
         viewModelScope.launch {
             try {

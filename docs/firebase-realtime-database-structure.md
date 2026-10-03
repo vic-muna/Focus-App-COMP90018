@@ -149,7 +149,22 @@ an auth failure, which shows up differently - see FirebaseRemoteDataSource's
     "users": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && auth.uid === $uid"
+        ".write": "auth != null && auth.uid === $uid",
+        "friendCode": {
+          ".validate": "newData.isString() && root.child('friendCodes').child(newData.val()).val() === auth.uid"
+        },
+        "incomingInvites": {
+          "$partyId": {
+            ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && !data.exists() && newData.child('from').val() === auth.uid"
+          }
+        }
+      }
+    },
+    "friendCodes": {
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && !data.exists() && newData.val() === auth.uid && !root.child('users').child(auth.uid).child('friendCode').exists()",
+        ".validate": "$code.matches(/^[A-Z2-9]{6}$/)"
       }
     },
     "parties": {
@@ -162,7 +177,7 @@ an auth failure, which shows up differently - see FirebaseRemoteDataSource's
         },
         "invites": {
           "$uid": {
-            ".write": "auth != null"
+            ".write": "auth != null && (auth.uid === $uid || newData.child('from').val() === auth.uid)"
           }
         }
       }
