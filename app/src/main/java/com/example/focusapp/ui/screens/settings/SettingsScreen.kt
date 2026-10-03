@@ -9,32 +9,46 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
@@ -42,6 +56,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.focusapp.R
 import com.example.focusapp.data.accessibility.AccessibilityBridge
+import com.example.focusapp.data.account.AccountManager
+import com.example.focusapp.data.preferences.RewardSettingsStorage
+import com.example.focusapp.domain.model.formatMinutes
+import com.example.focusapp.ui.components.card.FocusConfirmDialog
+import kotlinx.coroutines.launch
 import com.example.focusapp.data.usagestats.hasUsageAccessPermission
 import com.example.focusapp.data.wifi.hasLocationPermissionForWifi
 import com.example.focusapp.ui.theme.FocusAppTheme
@@ -77,15 +96,25 @@ private fun settingsIntentFor(context: Context, permission: AppPermission): Inte
 /**
  * Figma: "Settings". Reached from Home's gear; the same spot shows an X
  * that closes it ([onClose]).
+ *  - Account: who is signed in; a guest can create an account
+ *    ([onCreateAccountClick]); Log out returns to the login screen
+ *  - Rewards: the daily focus time a day needs to count for the streak
  *  - Music: Focus Music / Home Music switches (TODO: no music player yet -
  *    they only remember their position while the screen is open)
  *  - Permissions: whether each permission is on; tapping a row opens the
  *    system page to change it, and the switches refresh on coming back
  */
 @Composable
-fun SettingsScreen(onClose: () -> Unit) {
+fun SettingsScreen(
+    onClose: () -> Unit,
+    onCreateAccountClick: () -> Unit = {},
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val scope = rememberCoroutineScope()
+    val account by AccountManager.account.collectAsState()
+    var showLogOutDialog by remember { mutableStateOf(false) }
+    var isLoggingOut by remember { mutableStateOf(false) }
     val appBlockingOn by AccessibilityBridge.isServiceConnected.collectAsState()
     var preciseLocationOn by remember { mutableStateOf(false) }
     var usageAccessOn by remember { mutableStateOf(false) }
@@ -101,11 +130,39 @@ fun SettingsScreen(onClose: () -> Unit) {
         }
     }
 
+    val rewardSettings = remember { RewardSettingsStorage(context) }
+    var streakGoalMinutes by remember { mutableIntStateOf(rewardSettings.getStreakGoalMinutes()) }
+
     // TODO(music): wire to the music player once the app has one (and persist these).
     var focusMusicOn by rememberSaveable { mutableStateOf(false) }
     var homeMusicOn by rememberSaveable { mutableStateOf(false) }
 
+    // Logging out swaps the whole app for the login screen (see MainActivity).
+    if (showLogOutDialog) {
+        val isGuest = account?.isGuest == true
+        FocusConfirmDialog(
+            title = "Log out?",
+            message = if (isGuest) {
+                "You're a guest, so your data can't be recovered after logging out. Create an account first to keep it."
+            } else {
+                "Your data is backed up to your account. Log in again on any phone to get it back."
+            },
+            confirmLabel = "Log out",
+            confirmColor = FocusTheme.colors.rejection,
+            onConfirm = {
+                showLogOutDialog = false
+                isLoggingOut = true
+                scope.launch { AccountManager.logOut(context) }
+            },
+            onDismiss = { showLogOutDialog = false },
+        )
+    }
+
     SettingsContent(
+        username = account?.username,
+        isLoggingOut = isLoggingOut,
+        onCreateAccountClick = onCreateAccountClick,
+        onLogOutClick = { showLogOutDialog = true },
         isPermissionOn = { permission ->
             when (permission) {
                 AppPermission.PRECISE_LOCATION -> preciseLocationOn
@@ -115,6 +172,11 @@ fun SettingsScreen(onClose: () -> Unit) {
             }
         },
         onPermissionClick = { context.startActivity(settingsIntentFor(context, it)) },
+        streakGoalMinutes = streakGoalMinutes,
+        onStreakGoalChange = {
+            streakGoalMinutes = it
+            rewardSettings.saveStreakGoalMinutes(it)
+        },
         focusMusicOn = focusMusicOn,
         onFocusMusicChange = { focusMusicOn = it },
         homeMusicOn = homeMusicOn,
@@ -126,8 +188,14 @@ fun SettingsScreen(onClose: () -> Unit) {
 /** Stateless layout of [SettingsScreen]. */
 @Composable
 private fun SettingsContent(
+    username: String?,
+    isLoggingOut: Boolean,
+    onCreateAccountClick: () -> Unit,
+    onLogOutClick: () -> Unit,
     isPermissionOn: (AppPermission) -> Boolean,
     onPermissionClick: (AppPermission) -> Unit,
+    streakGoalMinutes: Int,
+    onStreakGoalChange: (Int) -> Unit,
     focusMusicOn: Boolean,
     onFocusMusicChange: (Boolean) -> Unit,
     homeMusicOn: Boolean,
@@ -173,6 +241,31 @@ private fun SettingsContent(
                     .clip(RoundedCornerShape(24.dp)),
             )
 
+            // username == null means a guest.
+            SettingsSection(title = "Account", icon = Icons.Filled.AccountCircle) {
+                SettingsRow(label = "Signed in as") {
+                    Text(
+                        text = username ?: "Guest",
+                        style = FocusTheme.typography.rowLabel,
+                        color = colors.accent,
+                    )
+                }
+                if (username == null) {
+                    SettingsRow(label = "Create account", onClick = onCreateAccountClick) { RowArrow() }
+                }
+                SettingsRow(
+                    label = if (isLoggingOut) "Logging out…" else "Log out",
+                    onClick = if (isLoggingOut) null else onLogOutClick,
+                ) { RowArrow() }
+            }
+
+            // A day counts for the Rewards streak once it has this much focus time.
+            SettingsSection(title = "Rewards", icon = Icons.Filled.EmojiEvents) {
+                SettingsRow(label = "Daily streak goal") {
+                    GoalStepper(minutes = streakGoalMinutes, onMinutesChange = onStreakGoalChange)
+                }
+            }
+
             SettingsSection(title = "Music", icon = Icons.Filled.MusicNote) {
                 SettingsRow(label = "Focus Music") {
                     FocusSwitch(checked = focusMusicOn, onCheckedChange = onFocusMusicChange)
@@ -199,13 +292,66 @@ private fun SettingsContent(
     }
 }
 
+/** "−  2h  +": changes the streak goal in [RewardSettingsStorage.GOAL_STEP_MINUTES] steps. */
+@Composable
+private fun GoalStepper(minutes: Int, onMinutesChange: (Int) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        StepButton(
+            icon = Icons.Filled.Remove,
+            contentDescription = "Lower goal",
+            enabled = minutes > RewardSettingsStorage.MIN_GOAL_MINUTES,
+            onClick = { onMinutesChange(minutes - RewardSettingsStorage.GOAL_STEP_MINUTES) },
+        )
+        Text(
+            text = formatMinutes(minutes.toLong()),
+            style = FocusTheme.typography.rowLabel,
+            color = FocusTheme.colors.accent,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.width(72.dp),
+        )
+        StepButton(
+            icon = Icons.Filled.Add,
+            contentDescription = "Raise goal",
+            enabled = minutes < RewardSettingsStorage.MAX_GOAL_MINUTES,
+            onClick = { onMinutesChange(minutes + RewardSettingsStorage.GOAL_STEP_MINUTES) },
+        )
+    }
+}
+
+@Composable
+private fun StepButton(icon: ImageVector, contentDescription: String, enabled: Boolean, onClick: () -> Unit) {
+    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(32.dp)) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = if (enabled) FocusTheme.colors.onSurface else FocusTheme.colors.onSurfaceMuted,
+        )
+    }
+}
+
+/** The ">" at the end of a row that opens something. */
+@Composable
+private fun RowArrow() {
+    Icon(
+        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+        contentDescription = null,
+        tint = FocusTheme.colors.onSurfaceMuted,
+    )
+}
+
 @Preview(widthDp = 393, heightDp = 852)
 @Composable
 private fun SettingsContentPreview() {
     FocusAppTheme {
         SettingsContent(
+            username = null,
+            isLoggingOut = false,
+            onCreateAccountClick = {},
+            onLogOutClick = {},
             isPermissionOn = { it == AppPermission.PRECISE_LOCATION || it == AppPermission.NOTIFICATIONS },
             onPermissionClick = {},
+            streakGoalMinutes = 120,
+            onStreakGoalChange = {},
             focusMusicOn = false,
             onFocusMusicChange = {},
             homeMusicOn = true,

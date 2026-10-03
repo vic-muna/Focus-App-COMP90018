@@ -13,5 +13,9 @@ object Destinations {
     const val SETTINGS = "settings"             // Top-right gear
     const val HISTORY = "history"               // Dashboard (avatar)
     const val THEME_PICKER = "theme_picker"     // From the dashboard's ID card
+    const val REWARDS = "rewards"               // From the dashboard's trophy
     const val FOCUS_SESSION = "focus_session"   // The running focus timer
+
+    // Opened from Settings
+    const val CREATE_ACCOUNT = "create_account" // A guest turning into an account
 }

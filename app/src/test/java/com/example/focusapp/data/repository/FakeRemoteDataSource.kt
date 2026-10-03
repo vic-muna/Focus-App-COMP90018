@@ -1,5 +1,6 @@
 package com.example.focusapp.data.repository
 
+import com.example.focusapp.data.remote.CloudUserData
 import com.example.focusapp.data.remote.RemoteDataSource
 import com.example.focusapp.domain.model.AppGroup
 import com.example.focusapp.domain.model.FocusSession
@@ -38,7 +39,16 @@ class FakeRemoteDataSource : RemoteDataSource {
     val respondedInvites = mutableListOf<Pair<String, Boolean>>() // partyId to accept
     val updatedStatuses = mutableListOf<Pair<String, PartyMemberStatus>>() // partyId to status
 
+    /** What [fetchUserData] returns - set it to simulate a user's cloud backup. */
+    var cloudUserData = CloudUserData()
+
     override suspend fun getUid(): String = "fake-uid"
+
+    override suspend fun fetchUserData(): CloudUserData {
+        if (shouldHangPush) awaitCancellation()
+        if (shouldFailPush) throw IOException("simulated offline / fetch failure")
+        return cloudUserData
+    }
 
     override suspend fun pushSession(session: FocusSession) {
         if (shouldHangPush) awaitCancellation() // never returns, never throws, until cancelled

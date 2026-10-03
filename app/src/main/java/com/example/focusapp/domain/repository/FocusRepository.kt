@@ -52,9 +52,18 @@ interface FocusRepository {
      *  automatic attempt inside saveFocusSession(). */
     suspend fun syncPendingSessions()
 
+    // --- Accounts (see data/account/AccountManager) ---
+
+    /** Downloads the signed-in user's backed-up sessions, zone and app groups into the phone's
+     *  storage. Rows already on the phone are kept. Throws if the download fails. */
+    suspend fun restoreFromCloud()
+
+    /** Deletes everything in the phone's storage (Room) - used when a different user signs in. */
+    suspend fun clearLocalData()
+
     // --- Study Party (real-time, Firebase-backed - see data/remote) ---
 
-    /** This device's stable per-install id (anonymous-auth uid) - needed so a caller can put itself
+    /** The signed-in user's id (guest or account) - needed so a caller can put itself
      *  into its own PartyMemberStatus.uid before calling [updateMyPartyStatus]. */
     suspend fun getMyUid(): String
 

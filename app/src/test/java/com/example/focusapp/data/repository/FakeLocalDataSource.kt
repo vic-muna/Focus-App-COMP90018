@@ -95,6 +95,30 @@ class FakeLocalDataSource : LocalDataSource {
         syncedSessionIds.add(sessionId)
     }
 
+    override suspend fun importFromCloud(sessions: List<FocusSession>, zones: List<FocusZone>, appGroups: List<AppGroup>) {
+        sessions.filter { s -> this.sessions.none { it.id == s.id } }.forEach {
+            this.sessions.add(it)
+            syncedSessionIds.add(it.id)
+        }
+        val localZoneIds = getFocusZones().map { it.id }.toSet()
+        zones.filter { it.id !in localZoneIds }.forEach { addFocusZone(it) }
+        appGroups.filter { g -> this.appGroups.none { it.id == g.id } }.forEach {
+            this.appGroups.add(it)
+            syncedAppGroupIds.add(it.id)
+        }
+    }
+
+    override suspend fun clearAll() {
+        zone = null
+        zoneSynced = false
+        appGroups.clear()
+        syncedAppGroupIds.clear()
+        sessions.clear()
+        syncedSessionIds.clear()
+        friends.clear()
+        extraZones.clear()
+    }
+
     override suspend fun getFriends(): List<Friend> =
         friends.sortedBy { it.nickname.lowercase() }
 

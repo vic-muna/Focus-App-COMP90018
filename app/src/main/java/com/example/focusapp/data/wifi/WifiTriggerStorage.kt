@@ -37,6 +37,10 @@ class WifiTriggerStorage(context: Context) {
         writeTaggedSsids(getTaggedSsids() - ssid)
     }
 
+    fun clear() {
+        prefs.edit().clear().apply()
+    }
+
     private fun writeTaggedSsids(ssids: List<String>) {
         prefs.edit().putString(KEY_TAGGED_SSIDS, JSONArray(ssids).toString()).apply()
     }

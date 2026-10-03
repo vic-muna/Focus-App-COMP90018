@@ -23,19 +23,27 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
 
-/** A sunken pill text box ("Enter Group Name"), one line, centered text. */
+/**
+ * A sunken pill text box ("Enter Group Name"), one line, centered text.
+ * [isPassword] hides what's typed behind dots.
+ */
 @Composable
 fun FocusTextField(
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String,
     modifier: Modifier = Modifier,
+    isPassword: Boolean = false,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
 ) {
     val colors = FocusTheme.colors
     val textStyle = FocusTheme.typography.inputLarge.copy(
@@ -49,6 +57,8 @@ fun FocusTextField(
         singleLine = true,
         textStyle = textStyle,
         cursorBrush = SolidColor(colors.accent),
+        visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
+        keyboardOptions = if (isPassword) keyboardOptions.copy(keyboardType = KeyboardType.Password) else keyboardOptions,
         modifier = modifier
             .fillMaxWidth()
             .height(42.dp),
