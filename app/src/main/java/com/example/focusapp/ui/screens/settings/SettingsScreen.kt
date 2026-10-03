@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Flip
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Security
@@ -61,10 +63,14 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.example.focusapp.R
 import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.data.account.AccountManager
+import com.example.focusapp.data.blocking.AppItem
 import com.example.focusapp.data.preferences.NoiseAlertStorage
 import com.example.focusapp.data.preferences.RewardSettingsStorage
 import com.example.focusapp.domain.model.formatMinutes
+import com.example.focusapp.ui.common.AccessibilityPermissionDialog
 import com.example.focusapp.ui.components.card.FocusConfirmDialog
+import com.example.focusapp.ui.components.card.FlyCardOverlay
+import com.example.focusapp.ui.components.card.consumeTaps
 import kotlinx.coroutines.launch
 import com.example.focusapp.data.usagestats.hasUsageAccessPermission
 import com.example.focusapp.data.wifi.hasLocationPermissionForWifi
@@ -106,6 +112,9 @@ private fun settingsIntentFor(context: Context, permission: AppPermission): Inte
  *  - Account: who is signed in; a guest can create an account
  *    ([onCreateAccountClick]); Log out returns to the login screen
  *  - Rewards: the daily focus time a day needs to count for the streak
+ *  - Noise Alert: the "too loud" banner in Focus Mode, and its threshold
+ *  - Flip to Focus: lying the phone face-down starts a session; its own
+ *    list of apps to block (kept in NavGraph.kt, like Quick Focus's)
  *  - Music: Focus Music / Home Music switches (TODO: no music player yet -
  *    they only remember their position while the screen is open)
  *  - Permissions: whether each permission is on; tapping a row opens the
@@ -115,6 +124,10 @@ private fun settingsIntentFor(context: Context, permission: AppPermission): Inte
 fun SettingsScreen(
     onClose: () -> Unit,
     onCreateAccountClick: () -> Unit = {},
+    flipFocusOn: Boolean = false,
+    onFlipFocusOnChange: (Boolean) -> Unit = {},
+    flipFocusApps: List<AppItem> = emptyList(),
+    onFlipFocusAppsChange: (List<AppItem>) -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -148,6 +161,10 @@ fun SettingsScreen(
     var noiseAlertOn by remember { mutableStateOf(noiseAlertSettings.isEnabled()) }
     var noiseThresholdDb by remember { mutableIntStateOf(noiseAlertSettings.getThresholdDb()) }
 
+    var showFlipFocusAppsPicker by remember { mutableStateOf(false) }
+    var showAccessibilityPermissionDialog by remember { mutableStateOf(false) }
+    BackHandler(enabled = showFlipFocusAppsPicker) { showFlipFocusAppsPicker = false }
+
     // TODO(music): wire to the music player once the app has one (and persist these).
     var focusMusicOn by rememberSaveable { mutableStateOf(false) }
     var homeMusicOn by rememberSaveable { mutableStateOf(false) }
@@ -173,43 +190,71 @@ fun SettingsScreen(
         )
     }
 
-    SettingsContent(
-        username = account?.username,
-        isLoggingOut = isLoggingOut,
-        onCreateAccountClick = onCreateAccountClick,
-        onLogOutClick = { showLogOutDialog = true },
-        isPermissionOn = { permission ->
-            when (permission) {
-                AppPermission.PRECISE_LOCATION -> preciseLocationOn
-                AppPermission.APP_BLOCKING -> appBlockingOn
-                AppPermission.USAGE_ACCESS -> usageAccessOn
-                AppPermission.NOTIFICATIONS -> notificationsOn
-                AppPermission.MICROPHONE -> microphoneOn
+    if (showAccessibilityPermissionDialog) {
+        AccessibilityPermissionDialog(onDismiss = { showAccessibilityPermissionDialog = false })
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        SettingsContent(
+            username = account?.username,
+            isLoggingOut = isLoggingOut,
+            onCreateAccountClick = onCreateAccountClick,
+            onLogOutClick = { showLogOutDialog = true },
+            isPermissionOn = { permission ->
+                when (permission) {
+                    AppPermission.PRECISE_LOCATION -> preciseLocationOn
+                    AppPermission.APP_BLOCKING -> appBlockingOn
+                    AppPermission.USAGE_ACCESS -> usageAccessOn
+                    AppPermission.NOTIFICATIONS -> notificationsOn
+                    AppPermission.MICROPHONE -> microphoneOn
+                }
+            },
+            onPermissionClick = { context.startActivity(settingsIntentFor(context, it)) },
+            streakGoalMinutes = streakGoalMinutes,
+            onStreakGoalChange = {
+                streakGoalMinutes = it
+                rewardSettings.saveStreakGoalMinutes(it)
+            },
+            noiseAlertOn = noiseAlertOn,
+            onNoiseAlertChange = {
+                noiseAlertOn = it
+                noiseAlertSettings.saveEnabled(it)
+                if (it && !microphoneOn) micPermission.request()
+            },
+            noiseThresholdDb = noiseThresholdDb,
+            onNoiseThresholdChange = {
+                noiseThresholdDb = it
+                noiseAlertSettings.saveThresholdDb(it)
+            },
+            flipFocusOn = flipFocusOn,
+            onFlipFocusOnChange = {
+                onFlipFocusOnChange(it)
+                // Flip to Focus can't block apps without App Blocking, same as Quick Focus.
+                if (it && !appBlockingOn) showAccessibilityPermissionDialog = true
+            },
+            flipFocusAppCount = flipFocusApps.size,
+            onFlipFocusAppsClick = { showFlipFocusAppsPicker = true },
+            focusMusicOn = focusMusicOn,
+            onFocusMusicChange = { focusMusicOn = it },
+            homeMusicOn = homeMusicOn,
+            onHomeMusicChange = { homeMusicOn = it },
+            onClose = onClose,
+        )
+
+        if (showFlipFocusAppsPicker) {
+            FlyCardOverlay(onOutsideClick = { showFlipFocusAppsPicker = false }) {
+                FlipFocusAppsCard(
+                    savedApps = flipFocusApps,
+                    onSave = { apps ->
+                        showFlipFocusAppsPicker = false
+                        onFlipFocusAppsChange(apps)
+                    },
+                    onClose = { showFlipFocusAppsPicker = false },
+                    modifier = Modifier.consumeTaps(),
+                )
             }
-        },
-        onPermissionClick = { context.startActivity(settingsIntentFor(context, it)) },
-        streakGoalMinutes = streakGoalMinutes,
-        onStreakGoalChange = {
-            streakGoalMinutes = it
-            rewardSettings.saveStreakGoalMinutes(it)
-        },
-        noiseAlertOn = noiseAlertOn,
-        onNoiseAlertChange = {
-            noiseAlertOn = it
-            noiseAlertSettings.saveEnabled(it)
-            if (it && !microphoneOn) micPermission.request()
-        },
-        noiseThresholdDb = noiseThresholdDb,
-        onNoiseThresholdChange = {
-            noiseThresholdDb = it
-            noiseAlertSettings.saveThresholdDb(it)
-        },
-        focusMusicOn = focusMusicOn,
-        onFocusMusicChange = { focusMusicOn = it },
-        homeMusicOn = homeMusicOn,
-        onHomeMusicChange = { homeMusicOn = it },
-        onClose = onClose,
-    )
+        }
+    }
 }
 
 /** Stateless layout of [SettingsScreen]. */
@@ -227,6 +272,10 @@ private fun SettingsContent(
     onNoiseAlertChange: (Boolean) -> Unit,
     noiseThresholdDb: Int,
     onNoiseThresholdChange: (Int) -> Unit,
+    flipFocusOn: Boolean,
+    onFlipFocusOnChange: (Boolean) -> Unit,
+    flipFocusAppCount: Int,
+    onFlipFocusAppsClick: () -> Unit,
     focusMusicOn: Boolean,
     onFocusMusicChange: (Boolean) -> Unit,
     homeMusicOn: Boolean,
@@ -305,6 +354,29 @@ private fun SettingsContent(
                 if (noiseAlertOn) {
                     SettingsRow(label = "Threshold") {
                         ThresholdStepper(thresholdDb = noiseThresholdDb, onThresholdChange = onNoiseThresholdChange)
+                    }
+                }
+            }
+
+            // Lying the phone face-down while the app is open starts a session that blocks these apps.
+            SettingsSection(title = "Flip to Focus", icon = Icons.Filled.Flip) {
+                SettingsRow(label = "Start when face-down") {
+                    FocusSwitch(checked = flipFocusOn, onCheckedChange = onFlipFocusOnChange)
+                }
+                if (flipFocusOn) {
+                    SettingsRow(label = "Apps to block", onClick = onFlipFocusAppsClick) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = when (flipFocusAppCount) {
+                                    0 -> "None"
+                                    1 -> "1 app"
+                                    else -> "$flipFocusAppCount apps"
+                                },
+                                style = FocusTheme.typography.rowLabel,
+                                color = colors.accent,
+                            )
+                            RowArrow()
+                        }
                     }
                 }
             }
@@ -432,6 +504,10 @@ private fun SettingsContentPreview() {
             onNoiseAlertChange = {},
             noiseThresholdDb = NoiseAlertStorage.DEFAULT_THRESHOLD_DB,
             onNoiseThresholdChange = {},
+            flipFocusOn = true,
+            onFlipFocusOnChange = {},
+            flipFocusAppCount = 3,
+            onFlipFocusAppsClick = {},
             focusMusicOn = false,
             onFocusMusicChange = {},
             homeMusicOn = true,
