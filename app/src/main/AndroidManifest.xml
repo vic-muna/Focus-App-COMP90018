@@ -3,17 +3,11 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-        NOTE (Permissions - intentionally left commented out):
-        The mechanisms described in the project plan (shake/face-down
-        gestures, ambient volume detection) will each need a runtime
-        permission below. They stay commented out because no branch
-        implements them yet - uncomment the ones you need as you
-        implement each feature, and remember Android also requires you
-        to *request* dangerous permissions at runtime, not just declare
-        them here.
-
-        <uses-permission android:name="android.permission.RECORD_AUDIO" />
+        Microphone, for the room's sound level on the Focus Mode screen
+        (data/sensor/NoiseLevelDataSource.kt). A runtime permission - asked
+        for by ui/common/MicrophonePermission.kt. Audio is measured, never saved.
     -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!--
         Required since Android 11 (API 30): apps can no longer see every
