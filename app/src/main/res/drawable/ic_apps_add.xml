@@ -1,0 +1,27 @@
+<!-- Figma: Group 6 (apps grid + plus). White so callers tint it with a theme color. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="26.8871dp"
+    android:height="26.8215dp"
+    android:viewportWidth="26.8871"
+    android:viewportHeight="26.8215">
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M2.5,1.5H9.5607A1,1 0,0 1,10.5607 2.5V9.5357A1,1 0,0 1,9.5607 10.5357H2.5A1,1 0,0 1,1.5 9.5357V2.5A1,1 0,0 1,2.5 1.5Z" />
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M2.5,16.2858H9.5607A1,1 0,0 1,10.5607 17.2858V24.3215A1,1 0,0 1,9.5607 25.3215H2.5A1,1 0,0 1,1.5 24.3215V17.2858A1,1 0,0 1,2.5 16.2858Z" />
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M17.3265,1.5H24.3871A1,1 0,0 1,25.3871 2.5V9.5357A1,1 0,0 1,24.3871 10.5357H17.3265A1,1 0,0 1,16.3265 9.5357V2.5A1,1 0,0 1,17.3265 1.5Z" />
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M21.2686,16.2858V25.3215M25.3871,21.2143L16.3265,21.2143" />
+</vector>

@@ -14,28 +14,35 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
-import com.example.app2.R
 
 @OptIn(UnstableApi::class)
 @Composable
 fun VideoBackground(
+    videoResId: Int,
     modifier: Modifier = Modifier,
-    playWhenReady: Boolean = true
+    playWhenReady: Boolean = true,
+    isMuted: Boolean = false
 ) {
     val context = LocalContext.current
     
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
-            val mediaItem = MediaItem.fromUri("android.resource://${context.packageName}/${R.raw.progress_beach}")
-            setMediaItem(mediaItem)
-            prepare()
             repeatMode = Player.REPEAT_MODE_ALL
         }
     }
 
-    // Update play state without recreating player
+    LaunchedEffect(videoResId) {
+        val mediaItem = MediaItem.fromUri("android.resource://${context.packageName}/$videoResId")
+        exoPlayer.setMediaItem(mediaItem)
+        exoPlayer.prepare()
+    }
+
     LaunchedEffect(playWhenReady) {
         exoPlayer.playWhenReady = playWhenReady
+    }
+
+    LaunchedEffect(isMuted) {
+        exoPlayer.volume = if (isMuted) 0f else 1f
     }
 
     DisposableEffect(Unit) {

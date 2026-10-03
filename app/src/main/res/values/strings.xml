@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">app2</string>
+    <string name="app_name">Focus App</string>
+    <string name="accessibility_service_description">Lets Focus detect which app is currently in the foreground, so it can enforce app restrictions.</string>
 </resources>
