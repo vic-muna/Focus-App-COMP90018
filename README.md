@@ -614,3 +614,11 @@ streak now unlocks a new background theme.
   `ui/screens/rewards/RewardsScreen.kt`, `ui/navigation/NavGraph.kt` (the dialog).
 - Note: the "already shown" and "unlocked by code" records are kept on the phone, not in
   the account.
+
+## 04/10/2026 Update (Yu-Hao Lu)
+- The real user account has been connected (visitors are displayed as "Guest").
+
+- AI merging is complete. FocusCoach now has sessionFeedback(...), sharing the same Firebase AI Logic settings as the weekly report, but a second GenerativeModel is enabled with different system prompts (the "3-5 suggestions" format of the weekly report is not suitable for a single session's one-sentence feedback). It's intentionally sharing the same daily quota of 5 times with the weekly report, instead of creating a separate set—otherwise, users running Quick Focus multiple times a day would exhaust their free quota prematurely. The FocusRepositoryProvider has also added the context passing step.
+
+- Password reset via security questions:
+The password is encrypted using a "key calculated from the answer" and stored in Firebase (PasswordRecovery.kt); security questions (set during registration with a question and answer; if you forget your password, answering correctly resets it). If you forget your password, answering the question correctly decrypts the password, retrieves the original password, logs in normally, and then calls Firebase's native updatePassword() to change the password.
