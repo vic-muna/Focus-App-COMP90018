@@ -1,9 +1,7 @@
 package com.example.focusapp.ui.screens.settings
 
-import android.Manifest
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
@@ -57,7 +55,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.focusapp.R
@@ -66,22 +63,24 @@ import com.example.focusapp.data.account.AccountManager
 import com.example.focusapp.data.blocking.AppItem
 import com.example.focusapp.data.preferences.NoiseAlertStorage
 import com.example.focusapp.data.preferences.RewardSettingsStorage
-import com.example.focusapp.domain.model.formatMinutes
-import com.example.focusapp.ui.common.AccessibilityPermissionDialog
-import com.example.focusapp.ui.components.card.FocusConfirmDialog
-import com.example.focusapp.ui.components.card.FlyCardOverlay
-import com.example.focusapp.ui.components.card.consumeTaps
-import kotlinx.coroutines.launch
 import com.example.focusapp.data.usagestats.hasUsageAccessPermission
 import com.example.focusapp.data.wifi.hasLocationPermissionForWifi
-import com.example.focusapp.ui.theme.FocusAppTheme
-import com.example.focusapp.ui.theme.FocusSpacing
-import com.example.focusapp.ui.theme.FocusTheme
+import com.example.focusapp.domain.model.formatMinutes
+import com.example.focusapp.ui.common.AccessibilityPermissionDialog
+import com.example.focusapp.ui.common.hasMicrophonePermission
+import com.example.focusapp.ui.common.rememberMicrophonePermissionState
 import com.example.focusapp.ui.components.bar.SettingsRow
 import com.example.focusapp.ui.components.bar.SettingsSection
 import com.example.focusapp.ui.components.bar.SettingsTopBar
+import com.example.focusapp.ui.components.card.AppPickerCard
+import com.example.focusapp.ui.components.card.FlyCardOverlay
+import com.example.focusapp.ui.components.card.FocusConfirmDialog
+import com.example.focusapp.ui.components.card.consumeTaps
 import com.example.focusapp.ui.components.input.FocusSwitch
-import com.example.focusapp.ui.common.rememberMicrophonePermissionState
+import com.example.focusapp.ui.theme.FocusAppTheme
+import com.example.focusapp.ui.theme.FocusSpacing
+import com.example.focusapp.ui.theme.FocusTheme
+import kotlinx.coroutines.launch
 
 /**
  * The permissions this app asks for. An app can't switch these on or off
@@ -149,8 +148,7 @@ fun SettingsScreen(
             preciseLocationOn = hasLocationPermissionForWifi(context)
             usageAccessOn = hasUsageAccessPermission(context)
             notificationsOn = NotificationManagerCompat.from(context).areNotificationsEnabled()
-            microphoneOn = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-                PackageManager.PERMISSION_GRANTED
+            microphoneOn = hasMicrophonePermission(context)
         }
     }
 
@@ -243,9 +241,10 @@ fun SettingsScreen(
 
         if (showFlipFocusAppsPicker) {
             FlyCardOverlay(onOutsideClick = { showFlipFocusAppsPicker = false }) {
-                FlipFocusAppsCard(
+                AppPickerCard(
+                    title = "Flip to Focus Apps",
                     savedApps = flipFocusApps,
-                    onSave = { apps ->
+                    onConfirm = { apps ->
                         showFlipFocusAppsPicker = false
                         onFlipFocusAppsChange(apps)
                     },
@@ -367,11 +366,7 @@ private fun SettingsContent(
                     SettingsRow(label = "Apps to block", onClick = onFlipFocusAppsClick) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = when (flipFocusAppCount) {
-                                    0 -> "None"
-                                    1 -> "1 app"
-                                    else -> "$flipFocusAppCount apps"
-                                },
+                                text = appCountLabel(flipFocusAppCount),
                                 style = FocusTheme.typography.rowLabel,
                                 color = colors.accent,
                             )
@@ -475,6 +470,13 @@ private fun StepButton(icon: ImageVector, contentDescription: String, enabled: B
             tint = if (enabled) FocusTheme.colors.onSurface else FocusTheme.colors.onSurfaceMuted,
         )
     }
+}
+
+/** "None", "1 app" or "3 apps". */
+private fun appCountLabel(count: Int): String = when (count) {
+    0 -> "None"
+    1 -> "1 app"
+    else -> "$count apps"
 }
 
 /** The ">" at the end of a row that opens something. */
