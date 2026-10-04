@@ -569,3 +569,22 @@ the code under **My Code**, then **Create group** on one and tap **Invite**.
 - The Android 17 preview emulator image froze while testing Party Mode (the system's GPS
   service hung). An API 35/36 image, or denying the app's location permission on that
   emulator, avoids it.
+
+## 04/10/2026 Update (Jia-Ying Lee) - Merge and tidy-up of noise alert and gestures
+
+David's noise alert, Flip to Focus and Shake to End are merged with the Party Mode fix.
+No behaviour changed; the code was reorganised so it is easier to read:
+
+- **One app picker card.** Quick Focus, Party Mode and Flip to Focus each had their own
+  copy of the "pick apps to block" card. They now share
+  `ui/components/card/AppPickerCard.kt` (`QuickFocusAppsCard` and `FlipFocusAppsCard`
+  were removed).
+- **Noise alert has its own file.** The microphone permission, the dB readout and the
+  "too loud" banner moved out of `FocusSessionScreen.kt` into
+  `ui/screens/session/NoiseAlert.kt`, with previews. The timer screen just calls
+  `NoiseAlert()`.
+- **Settings:** the microphone check is one helper, `hasMicrophonePermission()` in
+  `ui/common/MicrophonePermission.kt`.
+- Note: `app/google-services.json` is still tracked in git on `main`.
+- Known issue: 4 tests in `FocusRepositoryImplTest` (`saveFocusZone...`) already fail on
+  `main`; they are not related to this change.

@@ -1,6 +1,7 @@
 package com.example.focusapp.ui.common
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.ActivityResultLauncher
@@ -12,6 +13,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+
+/** Whether the app may use the microphone right now. */
+fun hasMicrophonePermission(context: Context): Boolean =
+    ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
 /**
  * Holds whether the app has microphone permission, and exposes [request] to
@@ -31,12 +36,7 @@ class MicrophonePermissionState internal constructor(initialGranted: Boolean) {
 @Composable
 fun rememberMicrophonePermissionState(): MicrophonePermissionState {
     val context = LocalContext.current
-    val state = remember {
-        MicrophonePermissionState(
-            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-                PackageManager.PERMISSION_GRANTED
-        )
-    }
+    val state = remember { MicrophonePermissionState(hasMicrophonePermission(context)) }
 
     state.launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()

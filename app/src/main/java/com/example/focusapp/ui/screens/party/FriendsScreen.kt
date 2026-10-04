@@ -55,7 +55,7 @@ import com.example.focusapp.ui.components.card.FlyCardOverlay
 import com.example.focusapp.ui.components.input.FocusSearchField
 import com.example.focusapp.ui.components.card.consumeTaps
 import com.example.focusapp.data.blocking.AppItem
-import com.example.focusapp.ui.screens.home.QuickFocusAppsCard
+import com.example.focusapp.ui.components.card.AppPickerCard
 import androidx.compose.runtime.remember
 import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.ui.common.AccessibilityPermissionDialog
@@ -192,9 +192,11 @@ fun FriendsScreen(
                 modifier = Modifier.consumeTaps(),
             )
 
-            GroupCard.QUICK_FOCUS_APPS -> QuickFocusAppsCard(
+            GroupCard.QUICK_FOCUS_APPS -> AppPickerCard(
+                title = "Quick Focus Apps",
                 savedApps = quickFocusApps,
-                onStart = { apps ->
+                confirmDescription = "Start focusing",
+                onConfirm = { apps ->
                     onQuickFocusAppsChange(apps)
                     card =
                         GroupCard.CREATE // Coming back after focusing shows the group card again.
