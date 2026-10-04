@@ -112,7 +112,8 @@ fun FriendsScreen(
     var addFriendNickname by rememberSaveable { mutableStateOf("") }
 
     fun memberNames(fallback: String) =
-        members.map { it.displayName.ifBlank { "Member (${it.uid.take(6)})" } }.ifEmpty { listOf(fallback) }
+        members.map { it.displayName.ifBlank { "Member (${it.uid.take(6)})" } }
+            .ifEmpty { listOf(fallback) }
 
     fun closeCard() {
         viewModel.leaveParty()
@@ -131,6 +132,7 @@ fun FriendsScreen(
     val context = LocalContext.current
 
     FriendsContent(
+        isGuest = viewModel.isGuest,
         query = query,
         onQueryChange = { query = it },
         onSearch = {},
@@ -139,7 +141,9 @@ fun FriendsScreen(
         myFriendCode = myFriendCode,
         onCopyMyFriendCode = { code -> copyToClipboard(context, code) },
         incomingInvites = incomingInvites,
-        inviterLabel = { invite -> friends.firstOrNull { it.uid == invite.fromUid }?.nickname ?: invite.fromUid },
+        inviterLabel = { invite ->
+            friends.firstOrNull { it.uid == invite.fromUid }?.nickname ?: invite.fromUid
+        },
         onAcceptInvite = { invite -> viewModel.respondToInvite(invite, accept = true) },
         onDeclineInvite = { invite -> viewModel.respondToInvite(invite, accept = false) },
         onDeleteFriend = { friend -> viewModel.deleteFriend(friend.uid) },
@@ -172,6 +176,7 @@ fun FriendsScreen(
                 onInviteFriend = viewModel::inviteFriend,
                 modifier = Modifier.consumeTaps(),
             )
+
             GroupCard.JOIN -> JoinGroupCard(
                 codeInput = joinCode,
                 onCodeInputChange = { joinCode = it },
@@ -186,30 +191,39 @@ fun FriendsScreen(
                 },
                 modifier = Modifier.consumeTaps(),
             )
+
             GroupCard.QUICK_FOCUS_APPS -> QuickFocusAppsCard(
                 savedApps = quickFocusApps,
                 onStart = { apps ->
                     onQuickFocusAppsChange(apps)
-                    card = GroupCard.CREATE // Coming back after focusing shows the group card again.
+                    card =
+                        GroupCard.CREATE // Coming back after focusing shows the group card again.
                     viewModel.setFocusing(true)
                     onStartFocus()
                 },
                 onClose = { card = GroupCard.CREATE },
                 modifier = Modifier.consumeTaps(),
             )
+
             GroupCard.ADD_FRIEND -> AddFriendCard(
                 codeInput = addFriendCode,
-                onCodeInputChange = { addFriendCode = it },
+                onCodeInputChange = {
+                    addFriendCode = it
+                    viewModel.clearError() // The message was about the code that's being changed.
+                },
                 nicknameInput = addFriendNickname,
                 onNicknameInputChange = { addFriendNickname = it },
                 errorMessage = errorMessage,
                 onClose = ::closeCard,
                 onSave = {
-                    viewModel.addFriend(addFriendCode, addFriendNickname)
-                    closeCard()
+                    // Stays open until the friend is saved, so a wrong code's message can show.
+                    viewModel.addFriend(addFriendCode, addFriendNickname) {
+                        if (card == GroupCard.ADD_FRIEND) closeCard()
+                    }
                 },
                 modifier = Modifier.consumeTaps(),
             )
+
             GroupCard.NONE -> Unit
         }
     }
@@ -229,7 +243,10 @@ private fun copyToClipboard(context: Context, text: String) {
 /** Whether [query] appears in this friend's name or ID (a blank query matches everyone). */
 private fun Friend.matches(query: String): Boolean {
     val text = query.trim()
-    return text.isEmpty() || nickname.contains(text, ignoreCase = true) || uid.contains(text, ignoreCase = true)
+    return text.isEmpty() || nickname.contains(text, ignoreCase = true) || uid.contains(
+        text,
+        ignoreCase = true
+    )
 }
 
 /**
@@ -247,6 +264,8 @@ private fun FriendsContent(
     onCreateGroupClick: () -> Unit,
     onJoinGroupClick: () -> Unit,
     onAddFriendClick: () -> Unit = {},
+    // A guest only gets the group buttons - see PartyModeViewModel.isGuest.
+    isGuest: Boolean = false,
     myFriendCode: String? = null,
     onCopyMyFriendCode: (String) -> Unit = {},
     incomingInvites: List<PartyInvite> = emptyList(),
@@ -269,7 +288,12 @@ private fun FriendsContent(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = 32.dp, end = 32.dp, top = FocusSpacing.ScreenTop, bottom = FocusSpacing.ScreenBottom),
+                .padding(
+                    start = 32.dp,
+                    end = 32.dp,
+                    top = FocusSpacing.ScreenTop,
+                    bottom = FocusSpacing.ScreenBottom
+                ),
         ) {
             Column(
                 modifier = Modifier
@@ -284,10 +308,26 @@ private fun FriendsContent(
                         .height(42.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(text = "Party Mode", style = typography.primaryActionLabel, color = colors.onSurface)
+                    Text(
+                        text = "Party Mode",
+                        style = typography.primaryActionLabel,
+                        color = colors.onSurface
+                    )
                 }
 
-                FocusSearchField(
+                if (isGuest) {
+                    SettingsSection(title = "Friends", icon = Icons.Filled.Group) {
+                        Text(
+                            text = "Friends need an account - create one in Settings. " +
+                                    "As a guest you can still create or join a group with a group code.",
+                            style = typography.body,
+                            color = colors.onSurfaceMuted,
+                            modifier = Modifier.padding(top = 16.dp, bottom = 16.dp),
+                        )
+                    }
+                }
+
+                if (!isGuest) FocusSearchField(
                     value = query,
                     onValueChange = onQueryChange,
                     placeholder = "Search friend ID",
@@ -296,7 +336,7 @@ private fun FriendsContent(
 
                 // What a friend needs from you before they can add you back - see
                 // FriendsScreen's class doc comment for why there's no directory to search.
-                if (myFriendCode != null) {
+                if (!isGuest && myFriendCode != null) {
                     SettingsSection(title = "My Code", icon = Icons.Filled.Group) {
                         SettingsRow(label = myFriendCode) {
                             IconButton(onClick = { onCopyMyFriendCode(myFriendCode) }) {
@@ -312,7 +352,7 @@ private fun FriendsContent(
 
                 // Only rendered when there's something to act on - an empty section here would
                 // just be noise above the friend list on every normal visit to this screen.
-                if (incomingInvites.isNotEmpty()) {
+                if (!isGuest && incomingInvites.isNotEmpty()) {
                     SettingsSection(title = "Invites", icon = Icons.Filled.Mail) {
                         incomingInvites.forEach { invite ->
                             SettingsRow(label = "${inviterLabel(invite)} invited you") {
@@ -333,7 +373,7 @@ private fun FriendsContent(
                     }
                 }
 
-                SettingsSection(title = "Friends", icon = Icons.Filled.Group) {
+                if (!isGuest) SettingsSection(title = "Friends", icon = Icons.Filled.Group) {
                     friends.forEach { friend ->
                         SettingsRow(label = friend.nickname) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -443,6 +483,24 @@ private fun FriendsContentEmptyPreview() {
         )
     }
 }
+@Preview(widthDp = 393, heightDp = 852)
+@Composable
+private fun FriendsContentGuestPreview() {
+    FocusAppTheme {
+        FriendsContent(
+            isGuest = true,
+            query = "",
+            onQueryChange = {},
+            onSearch = {},
+            friends = emptyList(),
+            hasFriends = false,
+            onClose = {},
+            onCreateGroupClick = {},
+            onJoinGroupClick = {},
+        )
+    }
+}
+
 
 @Preview(widthDp = 393, heightDp = 852)
 @Composable

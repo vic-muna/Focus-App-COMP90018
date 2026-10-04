@@ -54,10 +54,9 @@ interface RemoteDataSource {
      * (vanishingly rare at this app's scale - six characters from a 32-symbol alphabet is over
      * a billion combinations - but checked rather than assumed).
      *
-     * Deliberately separate from AccountManager's username system (see that class): a username
-     * requires creating a password-protected account, which is a bigger commitment than "give
-     * my friend a short code to paste in" - this works the same for a guest or an account
-     * holder, with no sign-up step of its own.
+     * Accounts only: the Database Rules refuse a guest's claim (see
+     * docs/firebase-realtime-database-structure.md), and a claimed code can't be changed or
+     * deleted afterwards - so a code always points at the account that first claimed it.
      */
     suspend fun getOrCreateMyFriendCode(): String
 
