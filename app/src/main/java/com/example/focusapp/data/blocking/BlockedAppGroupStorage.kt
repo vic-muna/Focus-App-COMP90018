@@ -128,6 +128,11 @@ class BlockedAppGroupStorage(
 
         fun forQuickFocus(context: Context) = BlockedAppGroupStorage(context, QUICK_FOCUS_PREFS_NAME)
 
+        private const val FLIP_FOCUS_PREFS_NAME = "focus_flip_focus"
+
+        /** Flip to Focus keeps a single group: whether it's on, and the apps it blocks. */
+        fun forFlipFocus(context: Context) = BlockedAppGroupStorage(context, FLIP_FOCUS_PREFS_NAME)
+
         private const val KEY_GROUPS = "groups_json"
     }
 }

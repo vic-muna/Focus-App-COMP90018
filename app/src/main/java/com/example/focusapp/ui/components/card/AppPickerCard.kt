@@ -1,4 +1,4 @@
-package com.example.focusapp.ui.screens.home
+package com.example.focusapp.ui.components.card
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -14,33 +14,35 @@ import com.example.focusapp.ui.common.pickedApps
 import com.example.focusapp.ui.common.rememberInstalledApps
 import com.example.focusapp.ui.common.toggle
 import com.example.focusapp.ui.components.button.ConfirmButton
-import com.example.focusapp.ui.components.card.AppSelectCard
 import com.example.focusapp.ui.theme.FocusAppTheme
 
 /**
- * Shown every time Quick Focus (or a Party Mode group) starts: pick the apps to block.
- * The last pick ([savedApps]) starts ticked; the check calls [onStart] with the new pick.
+ * A one-step "pick the apps to block" card, used by Quick Focus, Party Mode and
+ * Flip to Focus. It loads the installed apps and keeps the ticks by itself.
+ * [savedApps] start ticked; the check calls [onConfirm] with the new pick.
  */
 @Composable
-fun QuickFocusAppsCard(
+fun AppPickerCard(
+    title: String,
     savedApps: List<AppItem>,
-    onStart: (List<AppItem>) -> Unit,
+    onConfirm: (List<AppItem>) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    confirmDescription: String = "Save apps",
 ) {
     var selection by remember { mutableStateOf(savedApps.map { it.packageName }.toSet()) }
     val installedApps = rememberInstalledApps(shouldLoad = true)
 
     AppSelectCard(
-        title = "Quick Focus Apps",
+        title = title,
         apps = installedApps,
         selectedPackages = selection,
         onToggleApp = { pkg -> selection = selection.toggle(pkg) },
         onClose = onClose,
         actionButton = {
             ConfirmButton(
-                onClick = { onStart(pickedApps(installedApps, selection, savedApps)) },
-                contentDescription = "Start focusing",
+                onClick = { onConfirm(pickedApps(installedApps, selection, savedApps)) },
+                contentDescription = confirmDescription,
                 enabled = selection.isNotEmpty(),
             )
         },
@@ -50,9 +52,15 @@ fun QuickFocusAppsCard(
 
 @Preview(widthDp = 360)
 @Composable
-private fun QuickFocusAppsCardPreview() {
+private fun AppPickerCardPreview() {
     FocusAppTheme {
         // Shows "Loading apps…" in the preview: installed apps are only read on a phone.
-        QuickFocusAppsCard(savedApps = emptyList(), onStart = {}, onClose = {}, modifier = Modifier.padding(16.dp))
+        AppPickerCard(
+            title = "Quick Focus Apps",
+            savedApps = emptyList(),
+            onConfirm = {},
+            onClose = {},
+            modifier = Modifier.padding(16.dp),
+        )
     }
 }

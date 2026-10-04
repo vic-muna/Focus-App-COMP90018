@@ -1,5 +1,6 @@
 package com.example.focusapp.ui.screens.session
 
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -28,16 +29,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.focusapp.R
 import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.data.repository.FocusRepositoryProvider
+import com.example.focusapp.data.sensor.MotionSensorDataSource
 import com.example.focusapp.domain.model.FocusSession
+import com.example.focusapp.domain.usecase.ShakeDetector
 import com.example.focusapp.ui.common.ErrorBanner
 import com.example.focusapp.ui.common.friendlyErrorMessage
+import com.example.focusapp.ui.common.vibrateShort
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
 import kotlinx.coroutines.Dispatchers
@@ -49,7 +56,7 @@ import com.example.focusapp.ui.components.button.InfoButton
 
 // Matches the hint bubble's "Hold for 5 seconds" copy - change both together.
 private const val CANCEL_HOLD_DURATION_MILLIS = 5_000L
-private const val EXIT_HINT = "Hold for 5 seconds to exit\nthe focus mode"
+private const val EXIT_HINT = "Hold for 5 seconds or shake\nthe phone to exit the focus mode"
 private const val CANCEL_HOLD_STEP_MILLIS = 50L
 private const val HINT_AUTO_HIDE_MILLIS = 5_000L
 
@@ -57,6 +64,8 @@ private const val HINT_AUTO_HIDE_MILLIS = 5_000L
 sealed class FocusSessionSource {
     data object Manual : FocusSessionSource()
     data object Party : FocusSessionSource()
+    /** Flipping the phone face-down (Settings -> Flip to Focus). */
+    data object Flip : FocusSessionSource()
     data class Location(val zoneName: String, val zoneId: String) : FocusSessionSource()
     data class Wifi(val ssid: String) : FocusSessionSource()
 }
@@ -69,8 +78,8 @@ data class ActiveFocusSession(
 
 /**
  * The focus timer screen: the background art, the elapsed time, and an "i"
- * button that shows how to leave. Holding anywhere for 5 seconds (or pressing
- * Back) ends the session, which is saved first.
+ * button that shows how to leave. Holding anywhere for 5 seconds, shaking the
+ * phone (or pressing Back) ends the session, which is saved first.
  */
 @Composable
 fun FocusSessionScreen(
@@ -107,6 +116,8 @@ fun FocusSessionScreen(
     }
     val colors = FocusTheme.colors
 
+    val lifecycleOwner = LocalLifecycleOwner.current
+
     fun saveAndFinish() {
         scope.launch {
             val completed = FocusSession(
@@ -137,6 +148,19 @@ fun FocusSessionScreen(
     }
 
     BackHandler(onBack = ::cancelSession)
+
+    // Shaking the phone ends the session too, like holding (see ShakeDetector).
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            val shakeDetector = ShakeDetector()
+            MotionSensorDataSource(context).gForceFlow().collect { gForce ->
+                if (shakeDetector.onReading(gForce, SystemClock.elapsedRealtime()) && !isEnding) {
+                    vibrateShort(context)
+                    cancelSession()
+                }
+            }
+        }
+    }
 
     var isHolding by remember { mutableStateOf(false) }
     var holdProgress by remember { mutableStateOf(0f) }
@@ -195,14 +219,19 @@ fun FocusSessionScreen(
             InfoButton(onClick = { showExitHint = !showExitHint })
         }
 
-        Text(
-            text = elapsedLabel,
-            style = FocusTheme.typography.timer,
-            color = colors.sessionTimer,
+        Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 150.dp)
-        )
+                .padding(top = 150.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = elapsedLabel,
+                style = FocusTheme.typography.timer,
+                color = colors.sessionTimer
+            )
+            NoiseAlert()
+        }
 
         if (saveError != null) {
             Column(

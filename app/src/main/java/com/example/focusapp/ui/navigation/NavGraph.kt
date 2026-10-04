@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -20,6 +21,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -32,6 +36,8 @@ import com.example.focusapp.data.blocking.defaultTimeSlot
 import com.example.focusapp.data.blocking.watchedSsids
 import com.example.focusapp.data.notification.FocusTimerService
 import com.example.focusapp.data.preferences.BackgroundThemeStorage
+import com.example.focusapp.data.sensor.MotionSensorDataSource
+import com.example.focusapp.ui.common.vibrateShort
 import com.example.focusapp.ui.screens.account.AccountScreen
 import com.example.focusapp.ui.screens.history.HistoryScreen
 import com.example.focusapp.ui.screens.history.ThemePickerScreen
@@ -48,6 +54,8 @@ import com.example.focusapp.ui.screens.wififocus.WifiFocusScreen
 import com.example.focusapp.ui.theme.BackgroundThemes
 import com.example.focusapp.ui.theme.FocusTheme
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
 import com.example.focusapp.data.blocking.AppItem
 
@@ -70,6 +78,9 @@ private val slideUpEnter: Enter = {
 private val slideDownExit: Exit = {
     if (involvesHome()) fadeOut(tween(300)) else slideOutVertically { height -> height } + fadeOut()
 }
+
+/** How long the phone must stay face-down before Flip to Focus starts a session. */
+private const val FLIP_HOLD_MILLIS = 2_000L
 
 // ---------- Saved group lists ----------
 
@@ -122,6 +133,10 @@ fun FocusAppNavGraph(
     val wifi = rememberSavedGroupList(remember { BlockedAppGroupStorage.forWifiNetworks(context) })
     // Quick Focus keeps a single group: the apps it blocks.
     val quickFocus = rememberSavedGroupList(remember { BlockedAppGroupStorage.forQuickFocus(context) })
+    // Flip to Focus keeps a single group too: on/off ("enabled") and the apps it blocks.
+    val flipFocus = rememberSavedGroupList(remember { BlockedAppGroupStorage.forFlipFocus(context) })
+    val flipFocusGroup = flipFocus.groups.firstOrNull()
+        ?: BlockedAppGroup(id = "flip_focus", name = "Flip to Focus", apps = emptyList(), schedule = defaultTimeSlot(), enabled = false)
 
     var activeFocusSession by remember { mutableStateOf<ActiveFocusSession?>(null) }
 
@@ -144,6 +159,7 @@ fun FocusAppNavGraph(
             is FocusSessionSource.Wifi -> emptyList()
             // Quick Focus and Party Mode block the apps picked for Quick Focus.
             FocusSessionSource.Manual, FocusSessionSource.Party -> quickFocus.groups
+            FocusSessionSource.Flip -> listOf(flipFocusGroup)
         }
         return groups.flatMap { group -> group.apps.map { it.packageName } }.distinct()
     }
@@ -172,6 +188,31 @@ fun FocusAppNavGraph(
         // Leave the screen first, then clear the session, so the fading-out screen still has it.
         navController.popBackStack(Destinations.HOME, inclusive = false)
         activeFocusSession = null
+    }
+
+    // Flip to Focus: while the app is open and no session is running, lying the phone
+    // face-down for a moment starts a session that blocks the Flip to Focus apps.
+    // Like Quick Focus, it needs App Blocking on and at least one app picked.
+    val isAppBlockingOn by AccessibilityBridge.isServiceConnected.collectAsState()
+    val canFlipToFocus = activeFocusSession == null && isAppBlockingOn &&
+        flipFocusGroup.enabled && flipFocusGroup.apps.isNotEmpty()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    // Keyed on the apps too, so a session started by this effect blocks the latest pick.
+    LaunchedEffect(canFlipToFocus, flipFocusGroup.apps, lifecycleOwner) {
+        if (!canFlipToFocus) return@LaunchedEffect
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            MotionSensorDataSource(context).isFaceDownFlow().collectLatest { isFaceDown ->
+                if (!isFaceDown) return@collectLatest
+                // Cancelled if the phone is picked up again before the hold ends.
+                delay(FLIP_HOLD_MILLIS)
+                vibrateShort(context)
+                startFocusSession(FocusSessionSource.Flip)
+            }
+        }
+    }
+
+    fun saveFlipFocus(change: (BlockedAppGroup) -> BlockedAppGroup) {
+        flipFocus.groups = listOf(change(flipFocusGroup))
     }
 
     // Home is the root; every other tab sits directly on top of it.
@@ -283,6 +324,10 @@ fun FocusAppNavGraph(
                 SettingsScreen(
                     onClose = { navController.popBackStack() },
                     onCreateAccountClick = { navController.navigate(Destinations.CREATE_ACCOUNT) },
+                    flipFocusOn = flipFocusGroup.enabled,
+                    onFlipFocusOnChange = { on -> saveFlipFocus { it.copy(enabled = on) } },
+                    flipFocusApps = flipFocusGroup.apps,
+                    onFlipFocusAppsChange = { apps -> saveFlipFocus { it.copy(apps = apps) } },
                 )
             }
 

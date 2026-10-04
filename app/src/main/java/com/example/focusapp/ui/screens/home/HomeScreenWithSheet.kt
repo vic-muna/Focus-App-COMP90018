@@ -52,6 +52,7 @@ import com.example.focusapp.data.blocking.BlockedAppGroup
 import com.example.focusapp.ui.common.previewGroups
 import androidx.activity.compose.BackHandler
 import com.example.focusapp.data.blocking.AppItem
+import com.example.focusapp.ui.components.card.AppPickerCard
 import com.example.focusapp.ui.components.card.FlyCardOverlay
 import com.example.focusapp.ui.components.card.consumeTaps
 import com.example.focusapp.ui.common.AccessibilityPermissionDialog
@@ -240,9 +241,11 @@ fun HomeScreenWithSheet(
 
         if (showQuickFocusPicker) {
             FlyCardOverlay(onOutsideClick = { showQuickFocusPicker = false }) {
-                QuickFocusAppsCard(
+                AppPickerCard(
+                    title = "Quick Focus Apps",
                     savedApps = quickFocusApps,
-                    onStart = { apps ->
+                    confirmDescription = "Start focusing",
+                    onConfirm = { apps ->
                         showQuickFocusPicker = false
                         onQuickFocusAppsChange(apps)
                         onFocusSessionStart(FocusSessionSource.Manual)
