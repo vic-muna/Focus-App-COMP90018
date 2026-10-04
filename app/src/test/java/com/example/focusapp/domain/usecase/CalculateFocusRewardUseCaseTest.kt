@@ -113,4 +113,25 @@ class CalculateFocusRewardUseCaseTest {
         assertEquals(0, useCase.execute(sessions, streakGoalMinutes = 120, now = now).currentStreakDays)
         assertEquals(2, useCase.execute(sessions, streakGoalMinutes = 60, now = now).currentStreakDays)
     }
+
+    @Test
+    fun `the best streak keeps the longest run even after it was broken`() {
+        // A 3-day run a while ago, a missed day, then today and yesterday.
+        val sessions = listOf(
+            session(0, 9, 120), session(1, 9, 120),
+            session(3, 9, 120), session(4, 9, 120), session(5, 9, 120),
+        )
+
+        val result = useCase.execute(sessions, streakGoalMinutes = 120, now = now)
+
+        assertEquals(2, result.currentStreakDays)
+        assertEquals(3, result.bestStreakDays)
+    }
+
+    @Test
+    fun `no day reached the goal - the best streak is zero`() {
+        val result = useCase.execute(listOf(session(0, 9, 30)), streakGoalMinutes = 120, now = now)
+
+        assertEquals(0, result.bestStreakDays)
+    }
 }

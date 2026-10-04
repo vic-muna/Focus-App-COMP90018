@@ -65,6 +65,7 @@ import com.example.focusapp.data.preferences.NoiseAlertStorage
 import com.example.focusapp.data.preferences.RewardSettingsStorage
 import com.example.focusapp.data.usagestats.hasUsageAccessPermission
 import com.example.focusapp.data.wifi.hasLocationPermissionForWifi
+import com.example.focusapp.domain.model.RewardRules
 import com.example.focusapp.domain.model.formatMinutes
 import com.example.focusapp.ui.common.AccessibilityPermissionDialog
 import com.example.focusapp.ui.common.hasMicrophonePermission
@@ -402,15 +403,15 @@ private fun SettingsContent(
     }
 }
 
-/** "−  2h  +": changes the streak goal in [RewardSettingsStorage.GOAL_STEP_MINUTES] steps. */
+/** "−  2h  +": changes the streak goal in [RewardRules.GOAL_STEP_MINUTES] steps. */
 @Composable
 private fun GoalStepper(minutes: Int, onMinutesChange: (Int) -> Unit) {
     ValueStepper(
         text = formatMinutes(minutes.toLong()),
         what = "goal",
         value = minutes,
-        step = RewardSettingsStorage.GOAL_STEP_MINUTES,
-        range = RewardSettingsStorage.MIN_GOAL_MINUTES..RewardSettingsStorage.MAX_GOAL_MINUTES,
+        step = RewardRules.GOAL_STEP_MINUTES,
+        range = RewardRules.MIN_GOAL_MINUTES..RewardRules.MAX_GOAL_MINUTES,
         onValueChange = onMinutesChange,
     )
 }

@@ -41,6 +41,7 @@ import com.example.focusapp.domain.model.DailyMilestone
 import com.example.focusapp.domain.model.RewardProgress
 import com.example.focusapp.domain.model.formatMinutes
 import com.example.focusapp.ui.components.bar.CloseTopBar
+import com.example.focusapp.ui.theme.BackgroundThemes
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusSpacing
 import com.example.focusapp.ui.theme.FocusTheme
@@ -49,6 +50,7 @@ import com.example.focusapp.ui.theme.FocusTheme
  * Rewards, opened from the dashboard's trophy:
  *  - the daily streak and how close today is to counting for it
  *  - today's focus-time milestones (back to zero at midnight)
+ *  - backgrounds unlocked by the best daily streak so far
  */
 @Composable
 fun RewardsScreen(
@@ -100,6 +102,7 @@ private fun RewardsContent(progress: RewardProgress?, onClose: () -> Unit) {
             } else {
                 StreakCard(progress)
                 MilestonesCard(progress)
+                BackgroundsCard(bestStreakDays = progress.bestStreakDays)
             }
         }
 
@@ -124,7 +127,7 @@ private fun StreakCard(progress: RewardProgress) {
             Spacer(Modifier.width(12.dp))
             Column {
                 Text(
-                    text = "${progress.currentStreakDays} ${if (progress.currentStreakDays == 1) "day" else "days"}",
+                    text = formatDays(progress.currentStreakDays),
                     style = typography.statValue,
                     color = colors.onSurface,
                 )
@@ -174,16 +177,60 @@ private fun MilestonesCard(progress: RewardProgress) {
             progress.milestones.forEach { milestone ->
                 MilestoneRow(
                     milestone = milestone,
-                    minutesToGo = if (milestone == next) milestone.minutes - progress.todayFocusMinutes else null,
+                    toGoLabel = if (milestone == next) {
+                        "${formatMinutes(milestone.minutes - progress.todayFocusMinutes)} to go"
+                    } else {
+                        null
+                    },
                 )
             }
         }
     }
 }
 
-/** One milestone: a ticked accent circle once reached; the next one to reach says how far off it is. */
+/** Reward backgrounds: each one unlocks once the best daily streak reaches its goal. */
 @Composable
-private fun MilestoneRow(milestone: DailyMilestone, minutesToGo: Long?) {
+private fun BackgroundsCard(bestStreakDays: Int) {
+    val colors = FocusTheme.colors
+    val typography = FocusTheme.typography
+    val rewardThemes = BackgroundThemes.all.filter { it.unlockStreakDays > 0 }
+
+    RewardCard {
+        Text(text = "Backgrounds", style = typography.tileTitle, color = colors.onSurface)
+        Text(
+            text = "Reach your daily goal several days in a row",
+            style = typography.caption,
+            color = colors.onSurfaceMuted,
+        )
+        Spacer(Modifier.height(12.dp))
+        Text(text = formatDays(bestStreakDays), style = typography.statValue, color = colors.onSurface)
+        Text(text = "best streak so far", style = typography.caption, color = colors.onSurfaceMuted)
+        Spacer(Modifier.height(16.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            rewardThemes.forEach { theme ->
+                val unlocked = theme.isUnlocked(bestStreakDays)
+                MilestoneRow(
+                    milestone = DailyMilestone(theme.unlockStreakDays, reached = unlocked),
+                    toGoLabel = if (unlocked) null else "${formatDays(theme.unlockStreakDays - bestStreakDays)} to go",
+                    label = "${theme.name} - ${theme.unlockStreakDays}-day streak",
+                    reachedLabel = "Unlocked",
+                )
+            }
+        }
+    }
+}
+
+/**
+ * One milestone: a ticked accent circle once reached; [toGoLabel] says how far off the next one is.
+ * [label] and [reachedLabel] let the Backgrounds card reuse the row with its own words.
+ */
+@Composable
+private fun MilestoneRow(
+    milestone: DailyMilestone,
+    toGoLabel: String?,
+    label: String = formatMilestone(milestone.minutes),
+    reachedLabel: String = "Reached",
+) {
     val colors = FocusTheme.colors
     val typography = FocusTheme.typography
 
@@ -209,15 +256,15 @@ private fun MilestoneRow(milestone: DailyMilestone, minutesToGo: Long?) {
         }
         Spacer(Modifier.width(12.dp))
         Text(
-            text = formatMilestone(milestone.minutes),
+            text = label,
             style = typography.body,
-            color = if (milestone.reached || minutesToGo != null) colors.onSurface else colors.onSurfaceMuted,
+            color = if (milestone.reached || toGoLabel != null) colors.onSurface else colors.onSurfaceMuted,
             modifier = Modifier.weight(1f),
         )
         when {
-            milestone.reached -> Text(text = "Reached", style = typography.caption, color = colors.accent)
-            minutesToGo != null -> Text(
-                text = "${formatMinutes(minutesToGo)} to go",
+            milestone.reached -> Text(text = reachedLabel, style = typography.caption, color = colors.accent)
+            toGoLabel != null -> Text(
+                text = toGoLabel,
                 style = typography.caption,
                 color = colors.onSurface,
             )
@@ -258,6 +305,9 @@ private fun ProgressBar(fraction: Float) {
     }
 }
 
+/** "1 day", "3 days". */
+private fun formatDays(days: Int): String = if (days == 1) "1 day" else "$days days"
+
 /** "5 minutes", "1 hour", "10 hours". */
 private fun formatMilestone(minutes: Int): String = when {
     minutes < 60 -> "$minutes minutes"
@@ -274,6 +324,7 @@ private fun RewardsContentPreview() {
                 todayFocusMinutes = 80,
                 milestones = listOf(5, 30, 60, 300, 600).map { DailyMilestone(it, reached = 80 >= it) },
                 currentStreakDays = 3,
+                bestStreakDays = 4,
             ),
             onClose = {},
         )
