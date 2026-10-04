@@ -95,6 +95,11 @@ class FakeLocalDataSource : LocalDataSource {
         syncedSessionIds.add(sessionId)
     }
 
+    override suspend fun saveSessionFeedback(sessionId: String, feedback: String) {
+        val index = sessions.indexOfFirst { it.id == sessionId }
+        if (index != -1) sessions[index] = sessions[index].copy(aiFeedback = feedback)
+    }
+
     override suspend fun importFromCloud(sessions: List<FocusSession>, zones: List<FocusZone>, appGroups: List<AppGroup>) {
         sessions.filter { s -> this.sessions.none { it.id == s.id } }.forEach {
             this.sessions.add(it)

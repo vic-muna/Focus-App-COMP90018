@@ -20,6 +20,7 @@ import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.database.FirebaseDatabase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,8 +39,9 @@ data class Account(val uid: String, val username: String?) {
  * Signing in, as a guest or with a username + password account (Firebase Auth).
  *
  * Firebase only knows email + password, so a username is stored as the email
- * "username@[EMAIL_DOMAIN]". No email is ever sent, so a forgotten password
- * can't be reset.
+ * "username@[EMAIL_DOMAIN]". No email is ever sent - [getSecurityQuestion]/[recoverPassword]
+ * are how a forgotten password is recovered instead; see [PasswordRecovery]'s doc comment for
+ * how that works without a backend.
  *
  * A guest who creates an account keeps their uid (the account is linked to the
  * guest), so everything they saved stays theirs. Logging in on another phone
@@ -51,6 +53,12 @@ data class Account(val uid: String, val username: String?) {
 object AccountManager {
 
     private const val EMAIL_DOMAIN = "users.focusapp.example.com"
+    // Keyed by username (not uid) - a forgotten-password flow starts from the one thing the
+    // user still has, their username, same reasoning as emailFor() below. Needs a Realtime
+    // Database rule letting this be read while signed out (recovering access IS the signed-out
+    // case) and written only by whoever is - or is about to prove themselves to be, via
+    // sign-in - that uid; see this class's README/chat notes for the exact rule.
+    private const val RECOVERY_PATH = "accountRecovery"
     private const val PREFS_NAME = "focus_account"
     // The uid whose data is in the phone's storage right now.
     private const val KEY_OWNER_UID = "local_data_owner_uid"
@@ -98,8 +106,21 @@ object AccountManager {
     /**
      * Creates an account. If a guest is signed in, the account is linked to the guest:
      * the uid stays the same, so their data needs no copying.
+     *
+     * [securityQuestion]/[securityAnswer]: see [PasswordRecovery] - [password] is encrypted
+     * under a key derived from [securityAnswer] and saved to RECOVERY_PATH/[username], which
+     * is how [recoverPassword] gets it back later. Written AFTER the account itself is created,
+     * so a failure here (e.g. offline) leaves a real, working account with recovery simply not
+     * set up yet rather than no account at all - not caught here on purpose, the same "let the
+     * caller's own error handling deal with it" as every other suspend call in this class.
      */
-    suspend fun createAccount(context: Context, username: String, password: String) {
+    suspend fun createAccount(
+        context: Context,
+        username: String,
+        password: String,
+        securityQuestion: String,
+        securityAnswer: String
+    ) {
         val email = emailFor(username)
         val guest = auth.currentUser?.takeIf { it.isAnonymous }
         val user = if (guest != null) {
@@ -107,9 +128,76 @@ object AccountManager {
         } else {
             auth.createUserWithEmailAndPassword(email, password).await().user
         } ?: error("Sign-up returned no user")
+        saveRecoveryBlob(username, user.uid, password, securityQuestion, securityAnswer)
         prepareLocalData(context, user.uid, restore = false)
         _account.value = Account(user.uid, username)
     }
+
+    /** The question to show on the "Forgot password" screen for [username], or null if no
+     *  account with that username has recovery set up (never created one, or signed up before
+     *  this feature existed). Doesn't require being signed in - a forgotten-password flow is
+     *  exactly the situation where the user can't sign in yet. */
+    suspend fun getSecurityQuestion(username: String): String? {
+        val normalized = normalizeUsername(username)
+        val snapshot = FirebaseDatabase.getInstance().getReference("$RECOVERY_PATH/$normalized/question").get().await()
+        return snapshot.getValue(String::class.java)
+    }
+
+    /**
+     * Recovers access to [username]'s account by answering its security question, then sets
+     * [newPassword]. Throws [SecurityAnswerException] for a wrong answer or a username with no
+     * recovery set up (both read the same way to the UI: "that didn't work", with no hint about
+     * which one it was - revealing "no such account" would let someone probe for valid
+     * usernames). Any other exception (network, etc.) is a normal Firebase exception - see
+     * [errorMessageFor].
+     */
+    suspend fun recoverPassword(context: Context, username: String, answer: String, newPassword: String) {
+        val normalized = normalizeUsername(username)
+        val ref = FirebaseDatabase.getInstance().getReference("$RECOVERY_PATH/$normalized")
+        val snapshot = ref.get().await()
+        val blob = PasswordRecovery.EncryptedBlob(
+            ciphertextBase64 = snapshot.child("password").getValue(String::class.java) ?: throw SecurityAnswerException(),
+            ivBase64 = snapshot.child("iv").getValue(String::class.java) ?: throw SecurityAnswerException(),
+            saltBase64 = snapshot.child("salt").getValue(String::class.java) ?: throw SecurityAnswerException(),
+        )
+        val question = snapshot.child("question").getValue(String::class.java) ?: throw SecurityAnswerException()
+        val recoveredPassword = PasswordRecovery.decrypt(blob, answer) ?: throw SecurityAnswerException()
+
+        // Proves the recovered password is genuinely right (not just "decryption didn't throw") -
+        // signInWithEmailAndPassword independently rejects a wrong password, same as it would
+        // for a normal log-in.
+        val user = auth.signInWithEmailAndPassword(emailFor(normalized), recoveredPassword).await().user
+            ?: error("Recovery sign-in returned no user")
+        user.updatePassword(newPassword).await()
+        // Re-encrypted under the SAME answer so recovery keeps working after this password
+        // change too - otherwise this would be a one-time-use recovery, not a real reset.
+        saveRecoveryBlob(normalized, user.uid, newPassword, question, answer)
+        prepareLocalData(context, user.uid, restore = true)
+        _account.value = Account(user.uid, normalized)
+    }
+
+    private suspend fun saveRecoveryBlob(
+        username: String,
+        uid: String,
+        password: String,
+        question: String,
+        answer: String
+    ) {
+        val blob = PasswordRecovery.encrypt(password, answer)
+        val value = mapOf(
+            "uid" to uid,
+            "question" to question,
+            "password" to blob.ciphertextBase64,
+            "iv" to blob.ivBase64,
+            "salt" to blob.saltBase64,
+        )
+        FirebaseDatabase.getInstance().getReference("$RECOVERY_PATH/${normalizeUsername(username)}").setValue(value).await()
+    }
+
+    /** Thrown by [recoverPassword] for "that answer (or username) doesn't unlock anything" -
+     *  deliberately one exception type for both cases, not two - see that function's doc
+     *  comment for why. */
+    class SecurityAnswerException : Exception("That answer doesn't match.")
 
     /** Logs in to an existing account and downloads its data. */
     suspend fun logIn(context: Context, username: String, password: String) {
@@ -135,6 +223,7 @@ object AccountManager {
 
     /** A message for the user explaining why signing in or up failed. */
     fun errorMessageFor(e: Exception): String = when (e) {
+        is SecurityAnswerException -> "That didn't match. Check your username and answer."
         is FirebaseAuthUserCollisionException -> "That username is already taken."
         is FirebaseAuthWeakPasswordException -> "That password is too weak. Try a longer one."
         is FirebaseAuthInvalidUserException,

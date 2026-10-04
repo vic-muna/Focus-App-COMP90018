@@ -18,7 +18,8 @@ object FocusRepositoryProvider {
         return instance ?: synchronized(this) {
             instance ?: FocusRepositoryImpl(
                 localDataSource = RoomLocalDataSource(context.applicationContext),
-                remoteDataSource = FirebaseRemoteDataSource()
+                remoteDataSource = FirebaseRemoteDataSource(),
+                context = context.applicationContext
             ).also { instance = it }
         }
     }

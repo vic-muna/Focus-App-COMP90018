@@ -27,6 +27,12 @@ interface FocusSessionDao {
     @Query("UPDATE focus_sessions SET synced = 1 WHERE id = :sessionId")
     suspend fun markSynced(sessionId: String)
 
+    // Written once, after FocusCoach.sessionFeedback()'s Gemini call returns - see
+    // FocusRepositoryImpl.saveFocusSession(). A plain UPDATE, not part of insert(), since the
+    // feedback text isn't ready at the moment the session row is first inserted.
+    @Query("UPDATE focus_sessions SET aiFeedback = :feedback WHERE id = :sessionId")
+    suspend fun updateAiFeedback(sessionId: String, feedback: String)
+
     // Time-range query for "app-level and time interval analysis" (Innovation
     // marking criterion) - e.g. Dashboard's "this week vs last week" or
     // "distribution by hour" needs this instead of getAll()'s full dump.

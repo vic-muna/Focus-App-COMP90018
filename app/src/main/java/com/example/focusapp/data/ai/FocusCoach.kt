@@ -1,6 +1,7 @@
 package com.example.focusapp.data.ai
 
 import com.google.firebase.Firebase
+import com.google.firebase.ai.GenerativeModel
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.Content
 import com.google.firebase.ai.type.GenerativeBackend
@@ -18,6 +19,14 @@ interface FocusCoach {
 
     /** Answers [question] about the same week, with the [report] already given as context. */
     suspend fun followUp(summary: String, report: String, question: String): String
+
+    /**
+     * [Claude, 2026-10-04] One short line about a single just-finished focus session - the
+     * per-session counterpart to [weeklyReport]. Deliberately on this same interface/class
+     * (one Gemini setup, one App Check-verified client) rather than a second, separate AI
+     * class - see this file's git history for the chat where that consolidation was decided.
+     */
+    suspend fun sessionFeedback(durationMinutes: Long, distractingAppOpenCount: Int, wasCompletedSuccessfully: Boolean): String
 }
 
 /**
@@ -34,16 +43,46 @@ class GeminiFocusCoach : FocusCoach {
         )
     }
 
+    // [Claude, 2026-10-04] A second GenerativeModel, same Firebase AI Logic setup and same
+    // MODEL_NAME, but its own system instruction tailored to a one-line reply instead of the
+    // weekly report's multi-bullet format - SYSTEM_INSTRUCTION above explicitly asks for
+    // "3 to 5 lines", which a single just-finished session has nowhere near enough data to fill
+    // sensibly. Two models in one class, both behind this same FocusCoach interface and the
+    // same App Check-verified client, rather than two separate AI classes - see
+    // sessionFeedback()'s own doc comment.
+    private val sessionModel by lazy {
+        Firebase.ai(backend = GenerativeBackend.googleAI()).generativeModel(
+            modelName = MODEL_NAME,
+            systemInstruction = content { text(SESSION_SYSTEM_INSTRUCTION) },
+        )
+    }
+
     override suspend fun weeklyReport(summary: String): String =
-        ask(content(role = "user") { text(reportRequest(summary)) })
+        ask(model, content(role = "user") { text(reportRequest(summary)) })
 
     override suspend fun followUp(summary: String, report: String, question: String): String = ask(
+        model,
         content(role = "user") { text(reportRequest(summary)) },
         content(role = "model") { text(report) },
         content(role = "user") { text("$question Answer in under 100 words.") },
     )
 
-    private suspend fun ask(vararg turns: Content): String {
+    override suspend fun sessionFeedback(
+        durationMinutes: Long,
+        distractingAppOpenCount: Int,
+        wasCompletedSuccessfully: Boolean
+    ): String = ask(
+        sessionModel,
+        content(role = "user") {
+            text(
+                "Session just finished: $durationMinutes minutes, " +
+                    "$distractingAppOpenCount distracting-app opens, " +
+                    "completed in full: $wasCompletedSuccessfully."
+            )
+        },
+    )
+
+    private suspend fun ask(model: GenerativeModel, vararg turns: Content): String {
         val response = model.generateContent(turns.toList())
         val text = response.text?.let(::toPlainText)
         if (text.isNullOrBlank()) throw IllegalStateException("Focus Coach didn't send an answer.")
@@ -67,6 +106,15 @@ class GeminiFocusCoach : FocusCoach {
             with a concrete suggestion. Stay under 150 words.
             If there is little data, say so and suggest starting with short, regular sessions.
             Do not give medical or mental-health advice.
+        """.trimIndent()
+
+        val SESSION_SYSTEM_INSTRUCTION = """
+            You are a short, encouraging line of feedback inside a focus app, shown right after
+            one focus session ends. The user shares that one session's stats. Base your reply
+            only on those numbers; never invent data.
+            Write exactly ONE plain-text sentence, no more than about 20 words: no headings,
+            bold, italics, bullets or quotation marks.
+            Be warm but not over the top. Do not give medical or mental-health advice.
         """.trimIndent()
     }
 }

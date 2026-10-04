@@ -74,6 +74,9 @@ class RoomLocalDataSource(context: Context) : LocalDataSource {
     override suspend fun markSessionSynced(sessionId: String) =
         db.focusSessionDao().markSynced(sessionId)
 
+    override suspend fun saveSessionFeedback(sessionId: String, feedback: String) =
+        db.focusSessionDao().updateAiFeedback(sessionId, feedback)
+
     override suspend fun importFromCloud(sessions: List<FocusSession>, zones: List<FocusZone>, appGroups: List<AppGroup>) {
         db.focusSessionDao().insertIfMissing(sessions.map { it.toEntity(synced = true) })
         val localZoneIds = db.focusZoneDao().getAll().map { it.id }.toSet()

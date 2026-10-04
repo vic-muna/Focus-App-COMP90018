@@ -19,7 +19,11 @@ data class FocusSessionEntity(
     val distractingAppOpenCount: Int,
     val wasCompletedSuccessfully: Boolean,
     val synced: Boolean = false,
-    val groupId: String? = null
+    val groupId: String? = null,
+    /** See [FocusSession.aiFeedback]. Not sent to Firebase (pushSession() predates this field) -
+     *  purely a local cache so the same session doesn't get a fresh Gemini call every time
+     *  History re-renders. */
+    val aiFeedback: String? = null
 )
 
 fun FocusSessionEntity.toDomain() = FocusSession(
@@ -28,7 +32,8 @@ fun FocusSessionEntity.toDomain() = FocusSession(
     endTimeMillis = endTimeMillis,
     distractingAppOpenCount = distractingAppOpenCount,
     wasCompletedSuccessfully = wasCompletedSuccessfully,
-    groupId = groupId
+    groupId = groupId,
+    aiFeedback = aiFeedback
 )
 
 fun FocusSession.toEntity(synced: Boolean = false) = FocusSessionEntity(
@@ -38,5 +43,6 @@ fun FocusSession.toEntity(synced: Boolean = false) = FocusSessionEntity(
     distractingAppOpenCount = distractingAppOpenCount,
     wasCompletedSuccessfully = wasCompletedSuccessfully,
     synced = synced,
-    groupId = groupId
+    groupId = groupId,
+    aiFeedback = aiFeedback
 )

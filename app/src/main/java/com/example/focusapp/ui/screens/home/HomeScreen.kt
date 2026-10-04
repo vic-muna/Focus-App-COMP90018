@@ -2,6 +2,7 @@ package com.example.focusapp.ui.screens.home
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.material3.Text
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -25,6 +26,8 @@ import com.example.focusapp.ui.theme.FocusTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import com.example.focusapp.ui.theme.FocusSpacing
 import androidx.annotation.DrawableRes
@@ -85,6 +88,23 @@ fun HomeScreen(
                     // requiredSize lets the image overflow the box; clipToBounds trims the margin.
                     .requiredSize(width = DashboardImageWidth, height = DashboardImageHeight)
                     .offset(y = DashboardArtOffsetY),
+            )
+
+            // [Claude, 2026-10-04] On the artwork itself now, centered, bigger - a caption
+            // underneath read as part of the layout, not as a label FOR the picture above it.
+            // The Image's own contentDescription ("Focus history") already covers screen
+            // readers; this is the sighted-user equivalent, not a second tap target - the
+            // whole Box is already one. A translucent pill behind the text (rather than relying
+            // on the text color alone) keeps it readable regardless of which background theme's
+            // art is showing underneath - dashboardArt changes per theme, this doesn't.
+            Text(
+                text = "History",
+                style = FocusTheme.typography.tileTitle,
+                color = FocusTheme.colors.onSurface,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(FocusTheme.colors.surface.copy(alpha = 0.72f))
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
             )
         }
 

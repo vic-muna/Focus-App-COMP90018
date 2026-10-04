@@ -25,6 +25,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -445,6 +446,20 @@ private fun SessionRow(session: FocusSession) {
             color = colors.onSurface,
             style = typography.body
         )
+        // [Claude, 2026-10-04] Generated fire-and-forget right after this session was saved
+        // (see FocusRepositoryImpl.saveFocusSession()) - null for the first few seconds after a
+        // session ends, for any session saved before this feature existed, for a declined/
+        // exhausted Focus Coach quota, or if Gemini's call simply failed. All of those read the
+        // same way here: nothing shown, not an error - the row above is already complete
+        // without it.
+        session.aiFeedback?.let { feedback ->
+            Text(
+                text = feedback,
+                color = colors.onSurfaceMuted,
+                style = typography.caption.copy(fontStyle = FontStyle.Italic),
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
     }
 }
 

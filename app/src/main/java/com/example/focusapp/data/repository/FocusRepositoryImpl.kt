@@ -1,6 +1,10 @@
 package com.example.focusapp.data.repository
 
+import android.content.Context
+import com.example.focusapp.data.ai.FocusCoach
+import com.example.focusapp.data.ai.GeminiFocusCoach
 import com.example.focusapp.data.local.LocalDataSource
+import com.example.focusapp.data.preferences.FocusCoachStorage
 import com.example.focusapp.data.remote.RemoteDataSource
 import com.example.focusapp.domain.model.AppGroup
 import com.example.focusapp.domain.model.FocusSession
@@ -62,8 +66,24 @@ class FocusRepositoryImpl(
     // override this with an Unconfined scope - see FocusRepositoryImplTest - so the fakes'
     // (non-suspending) work still finishes before each test's next line runs, keeping them
     // exactly as deterministic as before this change.
-    private val syncScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val syncScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    // [Claude, 2026-10-04] Only used for per-session AI feedback (see saveFocusSession() below) -
+    // null in every test (FocusRepositoryImplTest never passes one), which is also exactly how
+    // production behaves before the user has ever opened Focus Coach: no consent/quota record
+    // exists yet, generateAndCacheSessionFeedback() checks that first and returns early, so a
+    // null context here isn't a special case to work around, it's the same "nothing to do yet"
+    // path a real context would also take for a first-time user.
+    private val context: Context? = null,
 ) : FocusRepository {
+
+    // [Claude, 2026-10-04 fix] `by lazy` is a property delegate - valid on a val declared in a
+    // class BODY, not inside a primary constructor's parameter list (that's a parameter
+    // declaration, not a property-with-getter one). Having it in the constructor above was a
+    // syntax error that threw off the parser for the rest of the file, which is why the
+    // original error log showed dozens of unrelated-looking "unresolved reference" lines below
+    // this point - none of those were really wrong on their own, the parser just lost its place
+    // after this line failed to parse.
+    private val focusCoach: FocusCoach by lazy { GeminiFocusCoach() }
 
     // Last status actually pushed to Firebase, keyed by "partyId/uid", so repeat calls for the
     // same party+user can be throttled - see updateMyPartyStatus() below. Not persisted; a fresh
@@ -146,6 +166,40 @@ class FocusRepositoryImpl(
         // Fire-and-forget on purpose - see syncScope's doc comment above for why this must
         // NOT be `syncPendingSessions()` awaited directly here.
         syncScope.launch { syncPendingSessions() }
+        syncScope.launch { generateAndCacheSessionFeedback(session) }
+    }
+
+    /**
+     * [Claude, 2026-10-04] Generates [session]'s Focus Coach line and caches it locally - same
+     * fire-and-forget reasoning as syncPendingSessions() above (a slow/failed Gemini call must
+     * never delay saving the session). Shares FocusCoachStorage's consent flag and
+     * DAILY_LIMIT counter with the weekly report/follow-ups (see that class's doc comment) -
+     * deliberately the SAME quota, not a separate one: both features hit the same free-tier
+     * Gemini budget, and a user doing several Quick Focus sessions a day could otherwise burn
+     * through it before ever opening Focus Coach's weekly view. A null [context] (every test,
+     * and production before Focus Coach has ever been opened once) just means there's no
+     * consent/quota record yet, same as a real context would show a first-time user - see this
+     * class's constructor doc comment.
+     */
+    private suspend fun generateAndCacheSessionFeedback(session: FocusSession) {
+        val appContext = context ?: return
+        val durationMinutes = ((session.endTimeMillis ?: return) - session.startTimeMillis) / 60_000
+        val storage = FocusCoachStorage(appContext)
+        if (!storage.hasConsent()) return
+        if (storage.requestsUsedToday() >= FocusCoachStorage.DAILY_LIMIT) return
+        val feedback = try {
+            focusCoach.sessionFeedback(
+                durationMinutes = durationMinutes,
+                distractingAppOpenCount = session.distractingAppOpenCount,
+                wasCompletedSuccessfully = session.wasCompletedSuccessfully
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return // Same "just don't show one this time" contract as a declined/unreachable call.
+        }
+        storage.recordRequest()
+        localDataSource.saveSessionFeedback(session.id, feedback)
     }
 
     /**

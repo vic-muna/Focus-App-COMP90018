@@ -18,10 +18,12 @@ import com.example.focusapp.data.local.entity.PackageListConverter
 /**
  * The Room database (tables on the phone).
  * When the version goes up, old local data is wiped (fallbackToDestructiveMigration).
+ * version 5: added `focus_sessions.aiFeedback` (Focus Coach's per-session line - see
+ * data/ai/FocusCoach.kt's sessionFeedback() and FocusRepositoryImpl.saveFocusSession()).
  */
 @Database(
     entities = [FocusZoneEntity::class, AppGroupEntity::class, FocusSessionEntity::class, FriendEntity::class],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(PackageListConverter::class)

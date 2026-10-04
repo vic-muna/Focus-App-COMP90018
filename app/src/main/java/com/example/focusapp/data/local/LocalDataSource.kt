@@ -59,6 +59,10 @@ interface LocalDataSource {
 
     suspend fun markSessionSynced(sessionId: String)
 
+    /** Caches one Focus Coach line for an already-saved session - see
+     *  data/ai/FocusCoach.kt's sessionFeedback() and FocusRepositoryImpl.saveFocusSession(). */
+    suspend fun saveSessionFeedback(sessionId: String, feedback: String)
+
     // --- Accounts (see AccountManager) ---
 
     /** Saves rows downloaded from the cloud, marked as already synced. Rows already on the

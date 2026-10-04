@@ -33,6 +33,7 @@ import androidx.navigation.NavBackStackEntry
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.focusapp.data.account.AccountManager
 import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.data.accessibility.BlockSource
 import com.example.focusapp.data.blocking.BlockedAppGroup
@@ -131,6 +132,10 @@ fun FocusAppNavGraph(
 ) {
     val navController = rememberNavController()
     val context = LocalContext.current
+
+    // Null for a guest (Account.isGuest) - HomeScreenWithSheet falls back to "Guest" in that
+    // case. See that parameter's own doc comment for why this wasn't flowing through before.
+    val account by AccountManager.account.collectAsState()
 
     // Each feature keeps its own group list.
     val schedule = rememberSavedGroupList(remember { BlockedAppGroupStorage(context) })
@@ -293,6 +298,7 @@ fun FocusAppNavGraph(
         ) {
             composable(Destinations.HOME, enterTransition = fadeEnter, exitTransition = fadeExit) {
                 HomeScreenWithSheet(
+                    userName = account?.username,
                     groups = schedule.groups,
                     dashboardArt = backgroundTheme.homeArt,
                     wifiSsids = wifi.groups.filter { it.enabled }.flatMap { it.watchedSsids }.distinct(),
