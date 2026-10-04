@@ -1,9 +1,12 @@
 package com.example.focusapp.ui.screens.settings
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -21,9 +24,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Flip
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Security
@@ -52,14 +57,20 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.focusapp.R
 import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.data.account.AccountManager
+import com.example.focusapp.data.blocking.AppItem
+import com.example.focusapp.data.preferences.NoiseAlertStorage
 import com.example.focusapp.data.preferences.RewardSettingsStorage
 import com.example.focusapp.domain.model.formatMinutes
+import com.example.focusapp.ui.common.AccessibilityPermissionDialog
 import com.example.focusapp.ui.components.card.FocusConfirmDialog
+import com.example.focusapp.ui.components.card.FlyCardOverlay
+import com.example.focusapp.ui.components.card.consumeTaps
 import kotlinx.coroutines.launch
 import com.example.focusapp.data.usagestats.hasUsageAccessPermission
 import com.example.focusapp.data.wifi.hasLocationPermissionForWifi
@@ -70,6 +81,7 @@ import com.example.focusapp.ui.components.bar.SettingsRow
 import com.example.focusapp.ui.components.bar.SettingsSection
 import com.example.focusapp.ui.components.bar.SettingsTopBar
 import com.example.focusapp.ui.components.input.FocusSwitch
+import com.example.focusapp.ui.common.rememberMicrophonePermissionState
 
 /**
  * The permissions this app asks for. An app can't switch these on or off
@@ -81,11 +93,12 @@ private enum class AppPermission(val label: String) {
     APP_BLOCKING("App Blocking"),
     USAGE_ACCESS("Usage Access"),
     NOTIFICATIONS("Notifications"),
+    MICROPHONE("Microphone"),
 }
 
 /** The system settings page where [permission] is turned on or off. */
 private fun settingsIntentFor(context: Context, permission: AppPermission): Intent = when (permission) {
-    AppPermission.PRECISE_LOCATION ->
+    AppPermission.PRECISE_LOCATION, AppPermission.MICROPHONE ->
         Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
     AppPermission.APP_BLOCKING -> Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
     AppPermission.USAGE_ACCESS -> Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
@@ -99,6 +112,9 @@ private fun settingsIntentFor(context: Context, permission: AppPermission): Inte
  *  - Account: who is signed in; a guest can create an account
  *    ([onCreateAccountClick]); Log out returns to the login screen
  *  - Rewards: the daily focus time a day needs to count for the streak
+ *  - Noise Alert: the "too loud" banner in Focus Mode, and its threshold
+ *  - Flip to Focus: lying the phone face-down starts a session; its own
+ *    list of apps to block (kept in NavGraph.kt, like Quick Focus's)
  *  - Music: Focus Music / Home Music switches (TODO: no music player yet -
  *    they only remember their position while the screen is open)
  *  - Permissions: whether each permission is on; tapping a row opens the
@@ -108,6 +124,10 @@ private fun settingsIntentFor(context: Context, permission: AppPermission): Inte
 fun SettingsScreen(
     onClose: () -> Unit,
     onCreateAccountClick: () -> Unit = {},
+    flipFocusOn: Boolean = false,
+    onFlipFocusOnChange: (Boolean) -> Unit = {},
+    flipFocusApps: List<AppItem> = emptyList(),
+    onFlipFocusAppsChange: (List<AppItem>) -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -119,6 +139,8 @@ fun SettingsScreen(
     var preciseLocationOn by remember { mutableStateOf(false) }
     var usageAccessOn by remember { mutableStateOf(false) }
     var notificationsOn by remember { mutableStateOf(false) }
+    var microphoneOn by remember { mutableStateOf(false) }
+    val micPermission = rememberMicrophonePermissionState()
 
     // Re-read every time the screen comes back - the user may have just
     // changed a permission on the system page a row opened.
@@ -127,11 +149,21 @@ fun SettingsScreen(
             preciseLocationOn = hasLocationPermissionForWifi(context)
             usageAccessOn = hasUsageAccessPermission(context)
             notificationsOn = NotificationManagerCompat.from(context).areNotificationsEnabled()
+            microphoneOn = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                PackageManager.PERMISSION_GRANTED
         }
     }
 
     val rewardSettings = remember { RewardSettingsStorage(context) }
     var streakGoalMinutes by remember { mutableIntStateOf(rewardSettings.getStreakGoalMinutes()) }
+
+    val noiseAlertSettings = remember { NoiseAlertStorage(context) }
+    var noiseAlertOn by remember { mutableStateOf(noiseAlertSettings.isEnabled()) }
+    var noiseThresholdDb by remember { mutableIntStateOf(noiseAlertSettings.getThresholdDb()) }
+
+    var showFlipFocusAppsPicker by remember { mutableStateOf(false) }
+    var showAccessibilityPermissionDialog by remember { mutableStateOf(false) }
+    BackHandler(enabled = showFlipFocusAppsPicker) { showFlipFocusAppsPicker = false }
 
     // TODO(music): wire to the music player once the app has one (and persist these).
     var focusMusicOn by rememberSaveable { mutableStateOf(false) }
@@ -158,31 +190,71 @@ fun SettingsScreen(
         )
     }
 
-    SettingsContent(
-        username = account?.username,
-        isLoggingOut = isLoggingOut,
-        onCreateAccountClick = onCreateAccountClick,
-        onLogOutClick = { showLogOutDialog = true },
-        isPermissionOn = { permission ->
-            when (permission) {
-                AppPermission.PRECISE_LOCATION -> preciseLocationOn
-                AppPermission.APP_BLOCKING -> appBlockingOn
-                AppPermission.USAGE_ACCESS -> usageAccessOn
-                AppPermission.NOTIFICATIONS -> notificationsOn
+    if (showAccessibilityPermissionDialog) {
+        AccessibilityPermissionDialog(onDismiss = { showAccessibilityPermissionDialog = false })
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        SettingsContent(
+            username = account?.username,
+            isLoggingOut = isLoggingOut,
+            onCreateAccountClick = onCreateAccountClick,
+            onLogOutClick = { showLogOutDialog = true },
+            isPermissionOn = { permission ->
+                when (permission) {
+                    AppPermission.PRECISE_LOCATION -> preciseLocationOn
+                    AppPermission.APP_BLOCKING -> appBlockingOn
+                    AppPermission.USAGE_ACCESS -> usageAccessOn
+                    AppPermission.NOTIFICATIONS -> notificationsOn
+                    AppPermission.MICROPHONE -> microphoneOn
+                }
+            },
+            onPermissionClick = { context.startActivity(settingsIntentFor(context, it)) },
+            streakGoalMinutes = streakGoalMinutes,
+            onStreakGoalChange = {
+                streakGoalMinutes = it
+                rewardSettings.saveStreakGoalMinutes(it)
+            },
+            noiseAlertOn = noiseAlertOn,
+            onNoiseAlertChange = {
+                noiseAlertOn = it
+                noiseAlertSettings.saveEnabled(it)
+                if (it && !microphoneOn) micPermission.request()
+            },
+            noiseThresholdDb = noiseThresholdDb,
+            onNoiseThresholdChange = {
+                noiseThresholdDb = it
+                noiseAlertSettings.saveThresholdDb(it)
+            },
+            flipFocusOn = flipFocusOn,
+            onFlipFocusOnChange = {
+                onFlipFocusOnChange(it)
+                // Flip to Focus can't block apps without App Blocking, same as Quick Focus.
+                if (it && !appBlockingOn) showAccessibilityPermissionDialog = true
+            },
+            flipFocusAppCount = flipFocusApps.size,
+            onFlipFocusAppsClick = { showFlipFocusAppsPicker = true },
+            focusMusicOn = focusMusicOn,
+            onFocusMusicChange = { focusMusicOn = it },
+            homeMusicOn = homeMusicOn,
+            onHomeMusicChange = { homeMusicOn = it },
+            onClose = onClose,
+        )
+
+        if (showFlipFocusAppsPicker) {
+            FlyCardOverlay(onOutsideClick = { showFlipFocusAppsPicker = false }) {
+                FlipFocusAppsCard(
+                    savedApps = flipFocusApps,
+                    onSave = { apps ->
+                        showFlipFocusAppsPicker = false
+                        onFlipFocusAppsChange(apps)
+                    },
+                    onClose = { showFlipFocusAppsPicker = false },
+                    modifier = Modifier.consumeTaps(),
+                )
             }
-        },
-        onPermissionClick = { context.startActivity(settingsIntentFor(context, it)) },
-        streakGoalMinutes = streakGoalMinutes,
-        onStreakGoalChange = {
-            streakGoalMinutes = it
-            rewardSettings.saveStreakGoalMinutes(it)
-        },
-        focusMusicOn = focusMusicOn,
-        onFocusMusicChange = { focusMusicOn = it },
-        homeMusicOn = homeMusicOn,
-        onHomeMusicChange = { homeMusicOn = it },
-        onClose = onClose,
-    )
+        }
+    }
 }
 
 /** Stateless layout of [SettingsScreen]. */
@@ -196,6 +268,14 @@ private fun SettingsContent(
     onPermissionClick: (AppPermission) -> Unit,
     streakGoalMinutes: Int,
     onStreakGoalChange: (Int) -> Unit,
+    noiseAlertOn: Boolean,
+    onNoiseAlertChange: (Boolean) -> Unit,
+    noiseThresholdDb: Int,
+    onNoiseThresholdChange: (Int) -> Unit,
+    flipFocusOn: Boolean,
+    onFlipFocusOnChange: (Boolean) -> Unit,
+    flipFocusAppCount: Int,
+    onFlipFocusAppsClick: () -> Unit,
     focusMusicOn: Boolean,
     onFocusMusicChange: (Boolean) -> Unit,
     homeMusicOn: Boolean,
@@ -266,6 +346,41 @@ private fun SettingsContent(
                 }
             }
 
+            // Focus Mode shows a "too loud" banner when the room's average level passes the threshold.
+            SettingsSection(title = "Noise Alert", icon = Icons.AutoMirrored.Filled.VolumeUp) {
+                SettingsRow(label = "Too-loud alert") {
+                    FocusSwitch(checked = noiseAlertOn, onCheckedChange = onNoiseAlertChange)
+                }
+                if (noiseAlertOn) {
+                    SettingsRow(label = "Threshold") {
+                        ThresholdStepper(thresholdDb = noiseThresholdDb, onThresholdChange = onNoiseThresholdChange)
+                    }
+                }
+            }
+
+            // Lying the phone face-down while the app is open starts a session that blocks these apps.
+            SettingsSection(title = "Flip to Focus", icon = Icons.Filled.Flip) {
+                SettingsRow(label = "Start when face-down") {
+                    FocusSwitch(checked = flipFocusOn, onCheckedChange = onFlipFocusOnChange)
+                }
+                if (flipFocusOn) {
+                    SettingsRow(label = "Apps to block", onClick = onFlipFocusAppsClick) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = when (flipFocusAppCount) {
+                                    0 -> "None"
+                                    1 -> "1 app"
+                                    else -> "$flipFocusAppCount apps"
+                                },
+                                style = FocusTheme.typography.rowLabel,
+                                color = colors.accent,
+                            )
+                            RowArrow()
+                        }
+                    }
+                }
+            }
+
             SettingsSection(title = "Music", icon = Icons.Filled.MusicNote) {
                 SettingsRow(label = "Focus Music") {
                     FocusSwitch(checked = focusMusicOn, onCheckedChange = onFocusMusicChange)
@@ -295,15 +410,48 @@ private fun SettingsContent(
 /** "−  2h  +": changes the streak goal in [RewardSettingsStorage.GOAL_STEP_MINUTES] steps. */
 @Composable
 private fun GoalStepper(minutes: Int, onMinutesChange: (Int) -> Unit) {
+    ValueStepper(
+        text = formatMinutes(minutes.toLong()),
+        what = "goal",
+        value = minutes,
+        step = RewardSettingsStorage.GOAL_STEP_MINUTES,
+        range = RewardSettingsStorage.MIN_GOAL_MINUTES..RewardSettingsStorage.MAX_GOAL_MINUTES,
+        onValueChange = onMinutesChange,
+    )
+}
+
+/** "−  55 dB  +": changes the noise threshold in [NoiseAlertStorage.THRESHOLD_STEP_DB] steps. */
+@Composable
+private fun ThresholdStepper(thresholdDb: Int, onThresholdChange: (Int) -> Unit) {
+    ValueStepper(
+        text = "$thresholdDb dB",
+        what = "threshold",
+        value = thresholdDb,
+        step = NoiseAlertStorage.THRESHOLD_STEP_DB,
+        range = NoiseAlertStorage.MIN_THRESHOLD_DB..NoiseAlertStorage.MAX_THRESHOLD_DB,
+        onValueChange = onThresholdChange,
+    )
+}
+
+/** "−  [text]  +": moves [value] by [step] within [range]. [what] names it for screen readers. */
+@Composable
+private fun ValueStepper(
+    text: String,
+    what: String,
+    value: Int,
+    step: Int,
+    range: IntRange,
+    onValueChange: (Int) -> Unit,
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         StepButton(
             icon = Icons.Filled.Remove,
-            contentDescription = "Lower goal",
-            enabled = minutes > RewardSettingsStorage.MIN_GOAL_MINUTES,
-            onClick = { onMinutesChange(minutes - RewardSettingsStorage.GOAL_STEP_MINUTES) },
+            contentDescription = "Lower $what",
+            enabled = value > range.first,
+            onClick = { onValueChange(value - step) },
         )
         Text(
-            text = formatMinutes(minutes.toLong()),
+            text = text,
             style = FocusTheme.typography.rowLabel,
             color = FocusTheme.colors.accent,
             textAlign = TextAlign.Center,
@@ -311,9 +459,9 @@ private fun GoalStepper(minutes: Int, onMinutesChange: (Int) -> Unit) {
         )
         StepButton(
             icon = Icons.Filled.Add,
-            contentDescription = "Raise goal",
-            enabled = minutes < RewardSettingsStorage.MAX_GOAL_MINUTES,
-            onClick = { onMinutesChange(minutes + RewardSettingsStorage.GOAL_STEP_MINUTES) },
+            contentDescription = "Raise $what",
+            enabled = value < range.last,
+            onClick = { onValueChange(value + step) },
         )
     }
 }
@@ -352,6 +500,14 @@ private fun SettingsContentPreview() {
             onPermissionClick = {},
             streakGoalMinutes = 120,
             onStreakGoalChange = {},
+            noiseAlertOn = true,
+            onNoiseAlertChange = {},
+            noiseThresholdDb = NoiseAlertStorage.DEFAULT_THRESHOLD_DB,
+            onNoiseThresholdChange = {},
+            flipFocusOn = true,
+            onFlipFocusOnChange = {},
+            flipFocusAppCount = 3,
+            onFlipFocusAppsClick = {},
             focusMusicOn = false,
             onFocusMusicChange = {},
             homeMusicOn = true,

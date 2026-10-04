@@ -1,6 +1,10 @@
 package com.example.focusapp.ui.screens.session
 
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,7 +18,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -28,20 +36,32 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.focusapp.R
 import com.example.focusapp.data.accessibility.AccessibilityBridge
+import com.example.focusapp.data.preferences.NoiseAlertStorage
 import com.example.focusapp.data.repository.FocusRepositoryProvider
+import com.example.focusapp.data.sensor.MotionSensorDataSource
+import com.example.focusapp.data.sensor.NoiseLevelDataSource
 import com.example.focusapp.domain.model.FocusSession
+import com.example.focusapp.domain.usecase.NoiseLevel
+import com.example.focusapp.domain.usecase.NoiseLevelTracker
+import com.example.focusapp.domain.usecase.ShakeDetector
 import com.example.focusapp.ui.common.ErrorBanner
 import com.example.focusapp.ui.common.friendlyErrorMessage
+import com.example.focusapp.ui.common.rememberMicrophonePermissionState
+import com.example.focusapp.ui.common.vibrateShort
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.annotation.DrawableRes
@@ -49,7 +69,7 @@ import com.example.focusapp.ui.components.button.InfoButton
 
 // Matches the hint bubble's "Hold for 5 seconds" copy - change both together.
 private const val CANCEL_HOLD_DURATION_MILLIS = 5_000L
-private const val EXIT_HINT = "Hold for 5 seconds to exit\nthe focus mode"
+private const val EXIT_HINT = "Hold for 5 seconds or shake\nthe phone to exit the focus mode"
 private const val CANCEL_HOLD_STEP_MILLIS = 50L
 private const val HINT_AUTO_HIDE_MILLIS = 5_000L
 
@@ -57,6 +77,8 @@ private const val HINT_AUTO_HIDE_MILLIS = 5_000L
 sealed class FocusSessionSource {
     data object Manual : FocusSessionSource()
     data object Party : FocusSessionSource()
+    /** Flipping the phone face-down (Settings -> Flip to Focus). */
+    data object Flip : FocusSessionSource()
     data class Location(val zoneName: String, val zoneId: String) : FocusSessionSource()
     data class Wifi(val ssid: String) : FocusSessionSource()
 }
@@ -69,8 +91,8 @@ data class ActiveFocusSession(
 
 /**
  * The focus timer screen: the background art, the elapsed time, and an "i"
- * button that shows how to leave. Holding anywhere for 5 seconds (or pressing
- * Back) ends the session, which is saved first.
+ * button that shows how to leave. Holding anywhere for 5 seconds, shaking the
+ * phone (or pressing Back) ends the session, which is saved first.
  */
 @Composable
 fun FocusSessionScreen(
@@ -107,6 +129,39 @@ fun FocusSessionScreen(
     }
     val colors = FocusTheme.colors
 
+    // The room's sound level, measured only while this screen is visible and the
+    // noise alert is on in Settings.
+    val noiseAlertSettings = remember { NoiseAlertStorage(context) }
+    val isNoiseAlertOn = remember { noiseAlertSettings.isEnabled() }
+    val micPermission = rememberMicrophonePermissionState()
+    var noiseLevel by remember { mutableStateOf<NoiseLevel?>(null) }
+    var isMicUnavailable by remember { mutableStateOf(false) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(Unit) {
+        if (isNoiseAlertOn && !micPermission.hasPermission) micPermission.request()
+    }
+    LaunchedEffect(micPermission.hasPermission, lifecycleOwner) {
+        if (!isNoiseAlertOn || !micPermission.hasPermission) return@LaunchedEffect
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            // Start fresh each time the screen comes back, so old readings don't count.
+            noiseLevel = null
+            val tracker = NoiseLevelTracker(noiseAlertSettings.getThresholdDb())
+            NoiseLevelDataSource(context).decibelFlow()
+                .catch { isMicUnavailable = true }
+                .collect { noiseLevel = tracker.onReading(it, SystemClock.elapsedRealtime()) }
+        }
+    }
+    // TODO(noise): the raw/average readout is for tuning only - remove once settled.
+    val noiseLabel = when {
+        !micPermission.hasPermission -> "Mic off · tap to allow"
+        isMicUnavailable -> "Mic unavailable"
+        else -> {
+            val raw = noiseLevel?.rawDb?.let { "%.0f".format(it) } ?: "--"
+            val average = noiseLevel?.averageDb?.let { "%.0f".format(it) } ?: "--"
+            "Raw ~$raw dB · Avg ~$average dB"
+        }
+    }
+
     fun saveAndFinish() {
         scope.launch {
             val completed = FocusSession(
@@ -137,6 +192,19 @@ fun FocusSessionScreen(
     }
 
     BackHandler(onBack = ::cancelSession)
+
+    // Shaking the phone ends the session too, like holding (see ShakeDetector).
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            val shakeDetector = ShakeDetector()
+            MotionSensorDataSource(context).gForceFlow().collect { gForce ->
+                if (shakeDetector.onReading(gForce, SystemClock.elapsedRealtime()) && !isEnding) {
+                    vibrateShort(context)
+                    cancelSession()
+                }
+            }
+        }
+    }
 
     var isHolding by remember { mutableStateOf(false) }
     var holdProgress by remember { mutableStateOf(0f) }
@@ -195,14 +263,36 @@ fun FocusSessionScreen(
             InfoButton(onClick = { showExitHint = !showExitHint })
         }
 
-        Text(
-            text = elapsedLabel,
-            style = FocusTheme.typography.timer,
-            color = colors.sessionTimer,
+        Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 150.dp)
-        )
+                .padding(top = 150.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = elapsedLabel,
+                style = FocusTheme.typography.timer,
+                color = colors.sessionTimer
+            )
+            if (isNoiseAlertOn) {
+                Text(
+                    text = noiseLabel,
+                    style = FocusTheme.typography.body,
+                    color = colors.sessionTimer,
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .clickable(enabled = !micPermission.hasPermission) { micPermission.request() }
+                )
+                AnimatedVisibility(
+                    visible = noiseLevel?.isTooLoud == true,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier.padding(top = 16.dp)
+                ) {
+                    TooLoudBanner()
+                }
+            }
+        }
 
         if (saveError != null) {
             Column(
@@ -246,6 +336,31 @@ fun FocusSessionScreen(
                 )
             }
         }
+    }
+}
+
+/** Shown on the timer while the room's average sound level is above the Settings threshold. */
+@Composable
+private fun TooLoudBanner() {
+    val colors = FocusTheme.colors
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .background(colors.notification, RoundedCornerShape(16.dp))
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+            contentDescription = null,
+            tint = colors.pure,
+            modifier = Modifier.size(20.dp)
+        )
+        Text(
+            text = "It's too loud for studying",
+            style = FocusTheme.typography.body,
+            color = colors.pure,
+            modifier = Modifier.padding(start = 8.dp)
+        )
     }
 }
 
