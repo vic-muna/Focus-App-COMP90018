@@ -588,3 +588,31 @@ No behaviour changed; the code was reorganised so it is easier to read:
 - Note: `app/google-services.json` is still tracked in git on `main`.
 - Known issue: 4 tests in `FocusRepositoryImplTest` (`saveFocusZone...`) already fail on
   `main`; they are not related to this change.
+
+## 04/10/2026 Update (Jia-Ying Lee) - Reward backgrounds
+
+Kevin's idea (focus to unlock rewards), built on David's Rewards data: keeping a daily
+streak now unlocks a new background theme.
+
+- **New theme: Valley** ("Enjoy the calm of the valley"), with its own Home and Focus
+  Mode art. The Time Focus banner crops the Focus Mode art until a header is drawn.
+- **How it unlocks:** reach the daily goal (Settings -> Rewards -> Daily streak goal)
+  7 days in a row. It uses the *best* streak so far, so a missed day later does not lock
+  it again. Nothing new is stored: it is worked out from the saved focus sessions.
+- **Where it shows:**
+  - Theme picker: a locked theme is dimmed with a lock and "7-day streak to unlock".
+  - Rewards page: a **Backgrounds** card with the best streak and how far each theme is.
+  - A "New background unlocked!" dialog (once per theme) when the app opens or a session
+    ends, with **Use it now** / **Later**.
+- **Testing shortcut:** in the theme picker, tap a locked theme 3 times and type
+  `Unimelb_90018` to unlock it straight away.
+- **All the rules are in one file:** `domain/model/RewardRules.kt` - daily milestones,
+  the daily goal (default and range), the streak each background needs, and the test
+  code. Change the numbers there.
+- To add a reward background: add its streak to `RewardRules.kt`, then the theme (name,
+  intro, art) to `ui/theme/BackgroundThemes.kt`.
+- Code: `domain/usecase/CalculateFocusRewardUseCase.kt` (`bestStreakDays`),
+  `ui/screens/history/ThemePickerScreen.kt`, `ui/screens/history/ThemeUnlockCodeCard.kt`,
+  `ui/screens/rewards/RewardsScreen.kt`, `ui/navigation/NavGraph.kt` (the dialog).
+- Note: the "already shown" and "unlocked by code" records are kept on the phone, not in
+  the account.

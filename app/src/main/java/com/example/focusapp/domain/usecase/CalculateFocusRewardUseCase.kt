@@ -3,16 +3,20 @@ package com.example.focusapp.domain.usecase
 import com.example.focusapp.domain.model.DailyMilestone
 import com.example.focusapp.domain.model.FocusSession
 import com.example.focusapp.domain.model.RewardProgress
+import com.example.focusapp.domain.model.RewardRules
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
 /**
  * Turns the saved focus sessions into the Rewards page's [RewardProgress]:
- *  - Daily milestones: today's focus time against [DAILY_MILESTONE_MINUTES]. Only today counts,
+ *  - Daily milestones: today's focus time against [RewardRules.DAILY_MILESTONE_MINUTES]. Only today counts,
  *    so everything is back to zero at midnight.
  *  - Daily streak: a day counts when its focus time reaches the streak goal. The streak is the
  *    number of such days in a row, ending today - or yesterday, while today hasn't reached the
  *    goal yet (today can still save the streak until midnight).
+ *  - Best streak: the longest run of such days at any time. Unlike the daily streak it
+ *    doesn't drop after a missed day, and it unlocks backgrounds
+ *    (see BackgroundTheme.unlockStreakDays).
  * A session that runs past midnight is split between the two days.
  * Days follow the phone's time zone. Nothing is stored: everything is worked out from the
  * sessions, so changing the goal applies to past days too.
@@ -39,9 +43,10 @@ class CalculateFocusRewardUseCase {
 
         return RewardProgress(
             todayFocusMinutes = todayMinutes,
-            milestones = DAILY_MILESTONE_MINUTES.map { DailyMilestone(it, reached = todayMinutes >= it) },
+            milestones = RewardRules.DAILY_MILESTONE_MINUTES.map { DailyMilestone(it, reached = todayMinutes >= it) },
             currentStreakDays = streak,
             streakGoalMinutes = streakGoalMinutes,
+            bestStreakDays = bestStreakDays(minutesByDay, streakGoalMinutes),
         )
     }
 
@@ -62,6 +67,26 @@ class CalculateFocusRewardUseCase {
         return millisByDay.mapValues { TimeUnit.MILLISECONDS.toMinutes(it.value) }
     }
 
+    /** The longest run of days in a row with at least [goalMinutes] of focus. */
+    private fun bestStreakDays(minutesByDay: Map<Long, Long>, goalMinutes: Int): Int {
+        val goalDays = minutesByDay.filterValues { it >= goalMinutes }.keys
+        var best = 0
+        goalDays.forEach { dayMillis ->
+            // Count each run once, from its first day.
+            val dayBefore = startOfDay(dayMillis).apply { add(Calendar.DAY_OF_YEAR, -1) }
+            if (dayBefore.timeInMillis in goalDays) return@forEach
+
+            var length = 0
+            val day = startOfDay(dayMillis)
+            while (day.timeInMillis in goalDays) {
+                length++
+                day.add(Calendar.DAY_OF_YEAR, 1)
+            }
+            best = maxOf(best, length)
+        }
+        return best
+    }
+
     private fun startOfDay(millis: Long): Calendar =
         startOfDay(Calendar.getInstance().apply { timeInMillis = millis })
 
@@ -70,10 +95,5 @@ class CalculateFocusRewardUseCase {
         set(Calendar.MINUTE, 0)
         set(Calendar.SECOND, 0)
         set(Calendar.MILLISECOND, 0)
-    }
-
-    companion object {
-        /** 5 min, 30 min, 1 h, 5 h, 10 h of focus in one day. */
-        val DAILY_MILESTONE_MINUTES = listOf(5, 30, 60, 300, 600)
     }
 }

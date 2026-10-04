@@ -17,8 +17,24 @@ class BackgroundThemeStorage(context: Context) {
         prefs.edit().putString(KEY_SELECTED_ID, id).apply()
     }
 
+    /** Themes whose "unlocked" dialog was already shown, so it only shows once. */
+    fun getAnnouncedIds(): Set<String> = prefs.getStringSet(KEY_ANNOUNCED_IDS, emptySet()).orEmpty()
+
+    fun saveAnnounced(id: String) {
+        prefs.edit().putStringSet(KEY_ANNOUNCED_IDS, getAnnouncedIds() + id).apply()
+    }
+
+    /** Themes unlocked with the test code instead of a streak. */
+    fun getCodeUnlockedIds(): Set<String> = prefs.getStringSet(KEY_CODE_UNLOCKED_IDS, emptySet()).orEmpty()
+
+    fun saveCodeUnlocked(id: String) {
+        prefs.edit().putStringSet(KEY_CODE_UNLOCKED_IDS, getCodeUnlockedIds() + id).apply()
+    }
+
     private companion object {
         const val PREFS_NAME = "focus_background_theme"
         const val KEY_SELECTED_ID = "selected_id"
+        const val KEY_ANNOUNCED_IDS = "announced_ids"
+        const val KEY_CODE_UNLOCKED_IDS = "code_unlocked_ids"
     }
 }

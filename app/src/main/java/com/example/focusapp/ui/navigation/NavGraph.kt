@@ -12,6 +12,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import com.example.focusapp.data.preferences.RewardSettingsStorage
+import com.example.focusapp.data.repository.FocusRepositoryProvider
+import com.example.focusapp.domain.usecase.CalculateFocusRewardUseCase
+import com.example.focusapp.ui.components.card.FocusConfirmDialog
+import com.example.focusapp.ui.theme.BackgroundTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -143,6 +148,12 @@ fun FocusAppNavGraph(
     // The picked background theme - shown on the dashboard, Home and Focus Mode.
     val themeStorage = remember { BackgroundThemeStorage(context) }
     var backgroundTheme by remember { mutableStateOf(BackgroundThemes.byId(themeStorage.getSelectedId())) }
+    // Longest daily streak so far - reward backgrounds unlock as it grows.
+    var bestStreakDays by remember { mutableStateOf(0) }
+    // Backgrounds unlocked with the test code instead of a streak.
+    var codeUnlockedThemeIds by remember { mutableStateOf(themeStorage.getCodeUnlockedIds()) }
+    // A background that has just unlocked: shown once in a dialog.
+    var newlyUnlockedTheme by remember { mutableStateOf<BackgroundTheme?>(null) }
 
     fun saveQuickFocusApps(apps: List<AppItem>) {
         quickFocus.groups = listOf(
@@ -235,6 +246,41 @@ fun FocusAppNavGraph(
 
     // A slot to show on the Time Focus tab (from a Time Focus notification).
     var timeSlotToShow by remember { mutableStateOf<String?>(null) }
+
+    // Re-read when the app opens and every time a session ends: the session that just
+    // finished may have unlocked a background.
+    val isSessionRunning = activeFocusSession != null
+    LaunchedEffect(isSessionRunning) {
+        if (isSessionRunning) return@LaunchedEffect
+        val sessions = runCatching { FocusRepositoryProvider.get(context).getSessionHistory() }.getOrNull()
+            ?: return@LaunchedEffect
+        val streakGoalMinutes = RewardSettingsStorage(context).getStreakGoalMinutes()
+        bestStreakDays = CalculateFocusRewardUseCase().execute(sessions, streakGoalMinutes).bestStreakDays
+        val announcedIds = themeStorage.getAnnouncedIds()
+        newlyUnlockedTheme = BackgroundThemes.all.firstOrNull {
+            it.unlockStreakDays > 0 && it.isUnlocked(bestStreakDays) && it.id !in announcedIds
+        }
+    }
+
+    newlyUnlockedTheme?.let { theme ->
+        fun close() {
+            themeStorage.saveAnnounced(theme.id)
+            newlyUnlockedTheme = null
+        }
+        FocusConfirmDialog(
+            title = "New background unlocked!",
+            message = "You reached your daily goal ${theme.unlockStreakDays} days in a row. " +
+                "\"${theme.name}\" is now yours - ${theme.intro.replaceFirstChar { it.lowercase() }}.",
+            confirmLabel = "Use it now",
+            dismissLabel = "Later",
+            onConfirm = {
+                backgroundTheme = theme
+                themeStorage.saveSelectedId(theme.id)
+                close()
+            },
+            onDismiss = ::close,
+        )
+    }
 
     Scaffold(containerColor = FocusTheme.colors.background) { innerPadding ->
         NavHost(
@@ -355,6 +401,13 @@ fun FocusAppNavGraph(
             composable(Destinations.THEME_PICKER, enterTransition = slideUpEnter, exitTransition = slideDownExit) {
                 ThemePickerScreen(
                     selectedId = backgroundTheme.id,
+                    bestStreakDays = bestStreakDays,
+                    codeUnlockedIds = codeUnlockedThemeIds,
+                    onUnlockWithCode = { theme ->
+                        themeStorage.saveCodeUnlocked(theme.id)
+                        themeStorage.saveAnnounced(theme.id) // Already unlocked: no "unlocked" dialog later.
+                        codeUnlockedThemeIds = themeStorage.getCodeUnlockedIds()
+                    },
                     onSelect = { theme ->
                         backgroundTheme = theme
                         themeStorage.saveSelectedId(theme.id)
