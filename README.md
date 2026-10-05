@@ -622,3 +622,12 @@ streak now unlocks a new background theme.
 
 - Password reset via security questions:
 The password is encrypted using a "key calculated from the answer" and stored in Firebase (PasswordRecovery.kt); security questions (set during registration with a question and answer; if you forget your password, answering correctly resets it). If you forget your password, answering the question correctly decrypts the password, retrieves the original password, logs in normally, and then calls Firebase's native updatePassword() to change the password.
+
+## 05/10/2026 Update (Victor Munacoha)
+- Bug where Focus Location was deleted after toggling it was fixed
+- Added Button to add more Time Frames for Schedule Focus Times
+- Daily Opens open the app unrestricted for the set Open Time
+- Interruption Screen shows how many opens are left
+- Daily opens for one app is shared between different Time Frames and Groups (e.g., a total of 3 opens for the whole day within the Scheduled times, not each time frame)
+- Slider in the ScheduleDial.kt wheel was adjusted to only change if the orange part itself is touched, none of the other parts
+- Search bar was added in the Location Tab
