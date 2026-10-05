@@ -92,35 +92,40 @@ fun getGeofencePendingIntent(context: Context): PendingIntent {
 }
 
 /**
- * Completely deletes a geofence and removes its app locks and database/storage records.
+ * Unregisters a geofence from Android OS and clears its active app restrictions
+ * WITHOUT deleting the zone from the database or SharedPreferences storage.
  */
-fun removeFocusZoneGeofence(context: Context, id: String) {
+fun unregisterGeofence(context: Context, id: String) {
     val geofencingClient = LocationServices.getGeofencingClient(context)
 
-    // 1. Remove registered geofence from Android OS
     geofencingClient.removeGeofences(listOf(id))
         .addOnSuccessListener {
-            Log.d(TAG, "Successfully removed OS geofence: $id")
+            Log.d(TAG, "Successfully unregistered OS geofence: $id")
         }
         .addOnFailureListener { exception ->
             if (exception is ApiException) {
                 when (exception.statusCode) {
                     GeofenceStatusCodes.GEOFENCE_NOT_AVAILABLE -> {
-                        Log.e(TAG, "Geofence $id not found. It may have already been removed.")
+                        Log.e(TAG, "Geofence $id not found in OS. It may have already been unregistered.")
                     }
                     else -> {
-                        Log.e(TAG, "API Error removing $id: ${GeofenceStatusCodes.getStatusCodeString(exception.statusCode)}")
+                        Log.e(TAG, "API Error unregistering OS geofence $id: ${GeofenceStatusCodes.getStatusCodeString(exception.statusCode)}")
                     }
                 }
             } else {
-                Log.e(TAG, "Failed to remove OS geofence $id: ${exception.message}")
+                Log.e(TAG, "Failed to unregister OS geofence $id: ${exception.message}")
             }
         }
 
-    // 2. Clear removed zone from active state and recalculate active restrictions
     GeofenceBroadcastReceiver.onGeofenceRemoved(context, id)
+}
 
-    // 3. Remove zone and its blocked app configuration from database and SharedPreferences
+/**
+ * Completely deletes a geofence from OS, database, and SharedPreferences storage.
+ */
+fun deleteFocusZoneGeofence(context: Context, id: String) {
+    unregisterGeofence(context, id)
+
     CoroutineScope(Dispatchers.IO).launch {
         val localDataSource = RoomLocalDataSource(context)
         localDataSource.deleteFocusZone(id)
@@ -130,7 +135,12 @@ fun removeFocusZoneGeofence(context: Context, id: String) {
         if (existingGroups != null) {
             val updatedGroups = existingGroups.filterNot { it.id == id }
             locationStorage.saveGroups(updatedGroups)
-            Log.d(TAG, "Successfully deleted location group and app locks for zone: $id")
+            Log.d(TAG, "Successfully deleted location group for zone: $id")
         }
     }
+}
+
+@Deprecated("Use unregisterGeofence or deleteFocusZoneGeofence explicitly.")
+fun removeFocusZoneGeofence(context: Context, id: String) {
+    deleteFocusZoneGeofence(context, id)
 }

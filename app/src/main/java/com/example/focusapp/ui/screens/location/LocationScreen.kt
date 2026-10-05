@@ -34,10 +34,11 @@ import androidx.compose.ui.unit.dp
 import com.example.focusapp.data.blocking.AppItem
 import com.example.focusapp.data.repository.FocusRepositoryProvider
 import com.example.focusapp.data.sensor.currentLocationFlow
+import com.example.focusapp.data.sensor.deleteFocusZoneGeofence
 import com.example.focusapp.data.sensor.registerGeofenceForZone
-import com.example.focusapp.data.sensor.removeFocusZoneGeofence
 import com.example.focusapp.data.sensor.startGPSUpdates
 import com.example.focusapp.data.sensor.stopGPSUpdates
+import com.example.focusapp.data.sensor.unregisterGeofence
 import com.example.focusapp.domain.model.FocusZone
 import com.example.focusapp.ui.common.ErrorBanner
 import com.example.focusapp.ui.common.fetchLastKnownLocation
@@ -88,7 +89,9 @@ private data class LocationDraft(
 fun LocationScreen(
     onTabClick: (MainTab) -> Unit,
     blockedAppsFor: (zoneId: String) -> List<AppItem> = { emptyList() },
+    isZoneEnabled: (zoneId: String) -> Boolean = { true },
     onZoneBlockedAppsChange: (zone: FocusZone, apps: List<AppItem>) -> Unit = { _, _ -> },
+    onZoneEnabledToggle: (zoneId: String, enabled: Boolean) -> Unit = { _, _ -> },
     onZoneDeleted: (zoneId: String) -> Unit = {},
     onZonesLoaded: (zoneIds: Set<String>) -> Unit = {},
 ) {
@@ -196,7 +199,7 @@ fun LocationScreen(
         scope.launch {
             try {
                 withContext(Dispatchers.IO) { FocusRepositoryProvider.get(context).deleteFocusZone(zone.id) }
-                removeFocusZoneGeofence(context, zone.id)
+                deleteFocusZoneGeofence(context, zone.id)
                 enabledZoneIds.remove(zone.id)
                 placeNames.remove(zone.id)
                 onZoneDeleted(zone.id)
@@ -223,7 +226,13 @@ fun LocationScreen(
                 withContext(Dispatchers.IO) { FocusRepositoryProvider.get(context).saveFocusZone(zone) }
                 if (current.editingZoneId == null) enabledZoneIds[zone.id] = true
                 onZoneBlockedAppsChange(zone, current.blockedApps)
-                registerGeofenceForZone(context, zone)
+                val isEnabled = enabledZoneIds[zone.id] ?: isZoneEnabled(zone.id)
+                onZoneEnabledToggle(zone.id, isEnabled)
+                if (isEnabled) {
+                    registerGeofenceForZone(context, zone)
+                } else {
+                    unregisterGeofence(context, zone.id)
+                }
                 placeNames.remove(zone.id)
                 reloadZones()
                 draft = null
@@ -239,13 +248,14 @@ fun LocationScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         LocationContent(
             zones = zones,
-            isZoneEnabled = { zone -> enabledZoneIds[zone.id] ?: true },
+            isZoneEnabled = { zone -> enabledZoneIds[zone.id] ?: isZoneEnabled(zone.id) },
             onZoneEnabledChange = { zone, enabled ->
                 enabledZoneIds[zone.id] = enabled
+                onZoneEnabledToggle(zone.id, enabled)
                 if (enabled) {
                     registerGeofenceForZone(context, zone)
                 } else {
-                    removeFocusZoneGeofence(context, zone.id)
+                    unregisterGeofence(context, zone.id)
                 }
             },
             placeNameFor = { zone -> placeNames[zone.id] },

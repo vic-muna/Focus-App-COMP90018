@@ -110,7 +110,16 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
                 return@launch
             }
 
-            val geofenceList = savedZones.map { zone ->
+            val locationGroups = BlockedAppGroupStorage.forLocationGroups(context).getGroupsWithoutIcons() ?: emptyList()
+            val disabledZoneIds = locationGroups.filter { !it.enabled }.map { it.id }.toSet()
+            val zonesToRestore = savedZones.filter { it.id !in disabledZoneIds }
+
+            if (zonesToRestore.isEmpty()) {
+                Log.d(TAG, "Boot restore: No active enabled zones to restore.")
+                return@launch
+            }
+
+            val geofenceList = zonesToRestore.map { zone ->
                 Geofence.Builder()
                     .setRequestId(zone.id)
                     .setCircularRegion(zone.latitude, zone.longitude, zone.radiusMeters)
@@ -128,7 +137,7 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
 
             geofencingClient.addGeofences(geofencingRequest, pendingIntent)
                 .addOnSuccessListener {
-                    Log.d(TAG, "Successfully restored ${savedZones.size} Focus Zones on boot.")
+                    Log.d(TAG, "Successfully restored ${zonesToRestore.size} Focus Zones on boot.")
                 }
                 .addOnFailureListener { exception ->
                     Log.e(TAG, "Failed to restore Focus Zones on boot: ${exception.message}")
