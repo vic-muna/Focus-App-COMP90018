@@ -58,6 +58,7 @@ object AppOpenAllowanceManager {
      * Returns null if no `maxOpensPerApp` limit is configured for [packageName].
      */
     fun getOpensRemainingToday(context: Context, packageName: String): Int? {
+        if (AccessibilityBridge.isLocationBlocked(packageName)) return null
         val group = findGroupForPackage(context, packageName) ?: return null
         val maxOpens = group.maxOpensPerApp ?: return null
         val used = getUsedOpensToday(context, packageName)

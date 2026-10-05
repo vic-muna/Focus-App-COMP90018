@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.mutableStateOf
+import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.data.accessibility.AppOpenAllowanceManager
 import com.example.focusapp.data.apps.getAppLabel
 import com.example.focusapp.data.blocking.formatClockTime
@@ -38,7 +39,8 @@ class BlockedActivity : ComponentActivity() {
         setContent {
             FocusAppTheme {
                 val pkg = blockedPackageNameState.value
-                val maxOpensLeft = pkg?.let { AppOpenAllowanceManager.getOpensRemainingToday(this, it) }
+                val isLocationBlocked = pkg?.let { AccessibilityBridge.isLocationBlocked(it) } ?: false
+                val maxOpensLeft = if (isLocationBlocked) null else pkg?.let { AppOpenAllowanceManager.getOpensRemainingToday(this, it) }
                 val unlockMinutes = pkg?.let { AppOpenAllowanceManager.getUnlockMinutesForPackage(this, it) }
 
                 // Back does the same as "Got it".
@@ -76,15 +78,20 @@ class BlockedActivity : ComponentActivity() {
         if (!extraReason.isNullOrBlank()) {
             blockReasonState.value = extraReason
         } else if (blockedPackageName != null) {
-            val group = AppOpenAllowanceManager.findGroupForPackage(this, blockedPackageName)
-            if (group != null) {
-                val groupName = group.name.ifBlank { "Focus Schedule" }
-                val timeRangeStr = group.schedule.timeRanges.joinToString(", ") { range ->
-                    "${formatClockTime(range.start)} to ${formatClockTime(range.end)}"
-                }
-                blockReasonState.value = "Blocked based on the schedule $groupName from $timeRangeStr"
+            val bridgeReason = AccessibilityBridge.getReasonFor(blockedPackageName)
+            if (bridgeReason != null) {
+                blockReasonState.value = bridgeReason
             } else {
-                blockReasonState.value = null
+                val group = AppOpenAllowanceManager.findGroupForPackage(this, blockedPackageName)
+                if (group != null) {
+                    val groupName = group.name.ifBlank { "Focus Schedule" }
+                    val timeRangeStr = group.schedule.timeRanges.joinToString(", ") { range ->
+                        "${formatClockTime(range.start)} to ${formatClockTime(range.end)}"
+                    }
+                    blockReasonState.value = "Blocked based on the schedule $groupName from $timeRangeStr"
+                } else {
+                    blockReasonState.value = null
+                }
             }
         } else {
             blockReasonState.value = null
