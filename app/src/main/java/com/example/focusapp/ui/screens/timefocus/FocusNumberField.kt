@@ -24,6 +24,7 @@ import com.example.focusapp.ui.theme.FocusTheme
 /**
  * Figma: the dark square you type a small count into ("Unfrozen Times").
  * Digits only, at most [maxDigits]; [value] is null while it's empty.
+ * If [enabled] is false, greys out and displays "--".
  */
 @Composable
 fun FocusNumberField(
@@ -32,16 +33,24 @@ fun FocusNumberField(
     modifier: Modifier = Modifier,
     boxSize: Dp = 96.dp,
     maxDigits: Int = 2,
+    enabled: Boolean = true,
 ) {
     val colors = FocusTheme.colors
-    val textStyle = FocusTheme.typography.timer.copy(color = colors.onSurface, textAlign = TextAlign.Center)
+    val textColor = if (enabled) colors.onSurface else colors.onSurfaceMuted
+    val textStyle = FocusTheme.typography.timer.copy(color = textColor, textAlign = TextAlign.Center)
+
+    val displayValue = value?.toString() ?: if (!enabled) "--" else ""
 
     BasicTextField(
-        value = value?.toString().orEmpty(),
+        value = displayValue,
         onValueChange = { text ->
-            val digits = text.filter { it.isDigit() }.take(maxDigits)
-            onValueChange(digits.toIntOrNull())
+            if (enabled) {
+                val digits = text.filter { it.isDigit() }.take(maxDigits)
+                onValueChange(digits.toIntOrNull())
+            }
         },
+        enabled = enabled,
+        readOnly = !enabled,
         singleLine = true,
         textStyle = textStyle,
         cursorBrush = SolidColor(colors.accent),
@@ -51,7 +60,10 @@ fun FocusNumberField(
             Box(
                 modifier = Modifier
                     .size(boxSize)
-                    .background(colors.surfaceSunken, RoundedCornerShape(12.dp))
+                    .background(
+                        if (enabled) colors.surfaceSunken else colors.surfaceSunken.copy(alpha = 0.5f),
+                        RoundedCornerShape(12.dp)
+                    )
                     .padding(8.dp),
                 contentAlignment = Alignment.Center,
             ) {

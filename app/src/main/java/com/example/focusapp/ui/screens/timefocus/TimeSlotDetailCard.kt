@@ -99,15 +99,17 @@ fun TimeSlotDetailCard(
         Column(
             modifier = panel.padding(horizontal = 16.dp, vertical = 18.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            val start = group.schedule.start.hour * 60 + group.schedule.start.minute
-            val end = group.schedule.end.hour * 60 + group.schedule.end.minute
-            Text(
-                text = "${formatClock(start)} - ${formatClock(end)}",
-                style = typography.tileTitle,
-                color = colors.onSurface,
-            )
+            group.schedule.timeRanges.forEach { range ->
+                val start = range.start.hour * 60 + range.start.minute
+                val end = range.end.hour * 60 + range.end.minute
+                Text(
+                    text = "${formatClock(start)} - ${formatClock(end)}",
+                    style = typography.tileTitle,
+                    color = colors.onSurface,
+                )
+            }
             DayIndicators(activeDays = group.schedule.activeDays)
         }
 
