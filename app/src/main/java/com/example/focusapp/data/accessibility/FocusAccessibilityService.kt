@@ -71,7 +71,9 @@ class FocusAccessibilityService : AccessibilityService() {
         updateWifiBlocks()
 
         if (packageName in AccessibilityBridge.restrictedPackages.value) {
-            if (AppOpenAllowanceManager.isTemporarilyUnlocked(packageName)) return
+            val isLocationBlocked = AccessibilityBridge.isLocationBlocked(packageName)
+            // Location based blocking takes precedence over schedule allowance unlocks.
+            if (!isLocationBlocked && AppOpenAllowanceManager.isTemporarilyUnlocked(packageName)) return
             AccessibilityBridge.recordBlockedOpen(packageName) // Only counted during a focus session.
             launchBlockedScreen(packageName, AccessibilityBridge.getReasonFor(packageName))
             return
