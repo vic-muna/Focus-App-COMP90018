@@ -3,7 +3,7 @@ package com.example.focusapp.domain.model
 /**
  * Every number that decides how rewards work, in one place.
  * Change the game rules here - the Rewards page, Settings, the theme picker
- * and the "unlocked" dialog all read from this file.
+ * and the focus music all read from this file.
  */
 object RewardRules {
 
@@ -14,25 +14,19 @@ object RewardRules {
 
     // --- Daily streak (a day counts once its focus time reaches the daily goal) ---
 
-    /** The daily goal before the user changes it in Settings. */
+    /** The focus time a day needs to count for the streak (used by the Focus Coach summary). */
     const val DEFAULT_STREAK_GOAL_MINUTES = 120
 
-    /** Settings lets the goal move in these steps, between the smallest and largest goal. */
-    const val GOAL_STEP_MINUTES = 30
-    const val MIN_GOAL_MINUTES = 30
-    const val MAX_GOAL_MINUTES = 8 * 60
+    // --- Points (earned by focusing, spent in the Rewards shop) ---
 
-    // --- Reward backgrounds (unlocked by the best daily streak so far) ---
+    /** Points earned for every whole minute of focus. */
+    const val POINTS_PER_MINUTE = 1
 
-    /** Days in a row reaching the daily goal to unlock the Valley background. */
-    const val VALLEY_UNLOCK_STREAK_DAYS = 7
+    // TODO(rewards): every price is 1 point for testing - set the real prices before release.
 
-    // --- Testing shortcut ---
+    /** Price of each reward background (see BackgroundThemes). */
+    const val BACKGROUND_PRICE_POINTS = 1
 
-    /**
-     * For testing and demos: tap a locked background [TEST_UNLOCK_TAPS] times in the
-     * theme picker, then type this code to unlock it without the streak.
-     */
-    const val TEST_UNLOCK_CODE = "Unimelb_90018"
-    const val TEST_UNLOCK_TAPS = 3
+    /** Price of each paid focus music track (see FocusMusics). */
+    const val MUSIC_PRICE_POINTS = 1
 }

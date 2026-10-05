@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,6 +24,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.focusapp.R
 import com.example.focusapp.ui.theme.BackgroundTheme
 import com.example.focusapp.ui.theme.BackgroundThemes
 import com.example.focusapp.ui.theme.FocusAppTheme
@@ -34,13 +37,15 @@ private val BarcodePattern = listOf(1, 2, 1, 1, 3, 1, 2, 2, 1, 3, 1, 1, 2, 1)
  * The dashboard's "ID card" for the current background theme: its art on
  * the left (with a "Change" button), its name and intro on the right, and
  * a decorative "identified card" footer. Tapping anywhere calls
- * [onChangeClick] (opens the theme picker).
+ * [onChangeClick] (opens the theme picker); the music note in the bottom-right
+ * corner calls [onMusicClick] (opens the music picker).
  */
 @Composable
 fun ThemeIdCard(
     theme: BackgroundTheme,
     onChangeClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onMusicClick: () -> Unit = {},
 ) {
     val colors = FocusTheme.colors
     val typography = FocusTheme.typography
@@ -79,26 +84,43 @@ fun ThemeIdCard(
             )
         }
 
-        Column(
+        Box(
             modifier = Modifier
                 .weight(0.58f)
-                .fillMaxHeight()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .fillMaxHeight(),
         ) {
-            Text(
-                text = theme.name,
-                style = typography.timer,
-                color = colors.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = theme.intro,
-                style = typography.caption,
-                color = colors.onSurface,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 4.dp),
+            Column(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+            ) {
+                Text(
+                    text = theme.name,
+                    style = typography.timer,
+                    color = colors.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = theme.intro,
+                    style = typography.caption,
+                    color = colors.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            Image(
+                painter = painterResource(R.drawable.ic_music),
+                contentDescription = "Change music",
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(10.dp)
+                    .clip(CircleShape)
+                    .background(colors.surfaceSunken)
+                    .clickable(role = Role.Button, onClick = onMusicClick)
+                    .padding(8.dp)
+                    .size(22.dp),
             )
         }
     }

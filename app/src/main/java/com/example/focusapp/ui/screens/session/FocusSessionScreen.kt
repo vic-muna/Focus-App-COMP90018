@@ -15,9 +15,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,6 +31,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -38,8 +44,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.focusapp.R
 import com.example.focusapp.data.accessibility.AccessibilityBridge
+import com.example.focusapp.data.audio.FocusMusicPlayer
+import com.example.focusapp.data.preferences.FocusMusicStorage
 import com.example.focusapp.data.repository.FocusRepositoryProvider
 import com.example.focusapp.data.sensor.MotionSensorDataSource
+import com.example.focusapp.domain.model.FocusMusics
 import com.example.focusapp.domain.model.FocusSession
 import com.example.focusapp.domain.usecase.ShakeDetector
 import com.example.focusapp.ui.common.ErrorBanner
@@ -52,11 +61,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.annotation.DrawableRes
+import androidx.annotation.RawRes
 import com.example.focusapp.ui.components.button.InfoButton
 
-// Matches the hint bubble's "Hold for 5 seconds" copy - change both together.
-private const val CANCEL_HOLD_DURATION_MILLIS = 5_000L
-private const val EXIT_HINT = "Hold for 5 seconds or shake\nthe phone to exit the focus mode"
+// Matches the hint bubble's "Hold for 3 seconds" copy - change both together.
+private const val CANCEL_HOLD_DURATION_MILLIS = 3_000L
+private const val EXIT_HINT = "Hold for 3 seconds or shake\nthe phone to exit the focus mode"
 private const val CANCEL_HOLD_STEP_MILLIS = 50L
 private const val HINT_AUTO_HIDE_MILLIS = 5_000L
 
@@ -78,7 +88,7 @@ data class ActiveFocusSession(
 
 /**
  * The focus timer screen: the background art, the elapsed time, and an "i"
- * button that shows how to leave. Holding anywhere for 5 seconds, shaking the
+ * button that shows how to leave. Holding anywhere for 3 seconds, shaking the
  * phone (or pressing Back) ends the session, which is saved first.
  */
 @Composable
@@ -87,6 +97,10 @@ fun FocusSessionScreen(
     onEndSessionClick: () -> Unit,
     // The picked background theme's Focus Mode art (see BackgroundThemes).
     @DrawableRes backgroundArt: Int = R.drawable.img_focus_background,
+    // Its looping video, if it has one - plays over [backgroundArt].
+    @RawRes backgroundVideo: Int? = null,
+    // The timer and noise label colour for that background (BackgroundTheme.focusTextColor).
+    textColor: Color = FocusTheme.colors.sessionTimer,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -117,6 +131,19 @@ fun FocusSessionScreen(
     val colors = FocusTheme.colors
 
     val lifecycleOwner = LocalLifecycleOwner.current
+
+    // Focus Music: plays the picked track while this screen is open. The note under the "i"
+    // turns it on or off - saved, so it's the same switch as in Settings.
+    val musicSettings = remember { FocusMusicStorage(context) }
+    var musicOn by remember { mutableStateOf(musicSettings.isEnabled()) }
+    DisposableEffect(musicOn) {
+        val player = if (musicOn) {
+            FocusMusicPlayer(context, FocusMusics.byId(musicSettings.getSelectedId())).also { it.start() }
+        } else {
+            null
+        }
+        onDispose { player?.stop() }
+    }
 
     fun saveAndFinish() {
         scope.launch {
@@ -206,6 +233,9 @@ fun FocusSessionScreen(
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
         )
+        if (backgroundVideo != null) {
+            VideoBackground(video = backgroundVideo, modifier = Modifier.fillMaxSize())
+        }
 
         Row(
             modifier = Modifier
@@ -219,18 +249,37 @@ fun FocusSessionScreen(
             InfoButton(onClick = { showExitHint = !showExitHint })
         }
 
-        Column(
+        // Under the "i": 56 dp from the top + the 43 dp "i" + a small gap. A bit bigger than the
+        // "i" (its art has a transparent margin) and centred under it: 24 dp end - (48 - 43) / 2.
+        Image(
+            painter = painterResource(if (musicOn) R.drawable.ic_music_on else R.drawable.ic_music_off),
+            contentDescription = if (musicOn) "Mute music" else "Play music",
             modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 150.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = elapsedLabel,
-                style = FocusTheme.typography.timer,
-                color = colors.sessionTimer
-            )
-            NoiseAlert()
+                .align(Alignment.TopEnd)
+                .padding(top = 56.dp + 43.dp + 10.dp, end = 21.5.dp)
+                .size(48.dp)
+                .clip(CircleShape)
+                .clickable(role = Role.Button) {
+                    musicOn = !musicOn
+                    musicSettings.saveEnabled(musicOn)
+                },
+        )
+
+        // NoiseAlert reads sessionTimer too, so swap it in for this background.
+        FocusAppTheme(colors = colors.copy(sessionTimer = textColor)) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 150.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = elapsedLabel,
+                    style = FocusTheme.typography.timer,
+                    color = textColor
+                )
+                NoiseAlert()
+            }
         }
 
         if (saveError != null) {

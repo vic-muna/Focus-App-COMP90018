@@ -61,12 +61,15 @@ import com.example.focusapp.R
 import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.data.account.AccountManager
 import com.example.focusapp.data.blocking.AppItem
+import com.example.focusapp.data.preferences.FocusMusicStorage
 import com.example.focusapp.data.preferences.NoiseAlertStorage
 import com.example.focusapp.data.preferences.RewardSettingsStorage
+import com.example.focusapp.data.repository.FocusRepositoryProvider
 import com.example.focusapp.data.usagestats.hasUsageAccessPermission
 import com.example.focusapp.data.wifi.hasLocationPermissionForWifi
-import com.example.focusapp.domain.model.RewardRules
+import com.example.focusapp.domain.model.RewardProgress
 import com.example.focusapp.domain.model.formatMinutes
+import com.example.focusapp.domain.usecase.CalculateFocusRewardUseCase
 import com.example.focusapp.ui.common.AccessibilityPermissionDialog
 import com.example.focusapp.ui.common.hasMicrophonePermission
 import com.example.focusapp.ui.common.rememberMicrophonePermissionState
@@ -111,12 +114,12 @@ private fun settingsIntentFor(context: Context, permission: AppPermission): Inte
  * that closes it ([onClose]).
  *  - Account: who is signed in; a guest can create an account
  *    ([onCreateAccountClick]); Log out returns to the login screen
- *  - Rewards: the daily focus time a day needs to count for the streak
+ *  - Rewards: total focus time so far and the points left to spend
  *  - Noise Alert: the "too loud" banner in Focus Mode, and its threshold
  *  - Flip to Focus: lying the phone face-down starts a session; its own
  *    list of apps to block (kept in NavGraph.kt, like Quick Focus's)
- *  - Music: Focus Music / Home Music switches (TODO: no music player yet -
- *    they only remember their position while the screen is open)
+ *  - Music: Focus Music plays the track picked in Rewards during Focus Mode;
+ *    Home Music (TODO: no home player yet - only remembered while the screen is open)
  *  - Permissions: whether each permission is on; tapping a row opens the
  *    system page to change it, and the switches refresh on coming back
  */
@@ -153,8 +156,17 @@ fun SettingsScreen(
         }
     }
 
-    val rewardSettings = remember { RewardSettingsStorage(context) }
-    var streakGoalMinutes by remember { mutableIntStateOf(rewardSettings.getStreakGoalMinutes()) }
+    // Total focus time and points, re-read on coming back (e.g. from Rewards after buying something).
+    var rewardProgress by remember { mutableStateOf(RewardProgress()) }
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            val rewardSettings = RewardSettingsStorage(context)
+            val sessions = runCatching { FocusRepositoryProvider.get(context).getSessionHistory() }.getOrNull()
+                ?: return@repeatOnLifecycle
+            rewardProgress = CalculateFocusRewardUseCase()
+                .execute(sessions, rewardSettings.getStreakGoalMinutes(), rewardSettings.getSpentPoints())
+        }
+    }
 
     val noiseAlertSettings = remember { NoiseAlertStorage(context) }
     var noiseAlertOn by remember { mutableStateOf(noiseAlertSettings.isEnabled()) }
@@ -164,8 +176,9 @@ fun SettingsScreen(
     var showAccessibilityPermissionDialog by remember { mutableStateOf(false) }
     BackHandler(enabled = showFlipFocusAppsPicker) { showFlipFocusAppsPicker = false }
 
-    // TODO(music): wire to the music player once the app has one (and persist these).
-    var focusMusicOn by rememberSaveable { mutableStateOf(false) }
+    val focusMusicSettings = remember { FocusMusicStorage(context) }
+    var focusMusicOn by remember { mutableStateOf(focusMusicSettings.isEnabled()) }
+    // TODO(music): wire to a home music player once the app has one (and persist it).
     var homeMusicOn by rememberSaveable { mutableStateOf(false) }
 
     // Logging out swaps the whole app for the login screen (see MainActivity).
@@ -209,11 +222,8 @@ fun SettingsScreen(
                 }
             },
             onPermissionClick = { context.startActivity(settingsIntentFor(context, it)) },
-            streakGoalMinutes = streakGoalMinutes,
-            onStreakGoalChange = {
-                streakGoalMinutes = it
-                rewardSettings.saveStreakGoalMinutes(it)
-            },
+            totalFocusMinutes = rewardProgress.totalFocusMinutes,
+            points = rewardProgress.points,
             noiseAlertOn = noiseAlertOn,
             onNoiseAlertChange = {
                 noiseAlertOn = it
@@ -234,7 +244,10 @@ fun SettingsScreen(
             flipFocusAppCount = flipFocusApps.size,
             onFlipFocusAppsClick = { showFlipFocusAppsPicker = true },
             focusMusicOn = focusMusicOn,
-            onFocusMusicChange = { focusMusicOn = it },
+            onFocusMusicChange = {
+                focusMusicOn = it
+                focusMusicSettings.saveEnabled(it)
+            },
             homeMusicOn = homeMusicOn,
             onHomeMusicChange = { homeMusicOn = it },
             onClose = onClose,
@@ -266,8 +279,8 @@ private fun SettingsContent(
     onLogOutClick: () -> Unit,
     isPermissionOn: (AppPermission) -> Boolean,
     onPermissionClick: (AppPermission) -> Unit,
-    streakGoalMinutes: Int,
-    onStreakGoalChange: (Int) -> Unit,
+    totalFocusMinutes: Long,
+    points: Long,
     noiseAlertOn: Boolean,
     onNoiseAlertChange: (Boolean) -> Unit,
     noiseThresholdDb: Int,
@@ -339,10 +352,21 @@ private fun SettingsContent(
                 ) { RowArrow() }
             }
 
-            // A day counts for the Rewards streak once it has this much focus time.
+            // 1 point per minute of focus; points are spent on backgrounds and music in Rewards.
             SettingsSection(title = "Rewards", icon = Icons.Filled.EmojiEvents) {
-                SettingsRow(label = "Daily streak goal") {
-                    GoalStepper(minutes = streakGoalMinutes, onMinutesChange = onStreakGoalChange)
+                SettingsRow(label = "Total focus time") {
+                    Text(
+                        text = formatMinutes(totalFocusMinutes),
+                        style = FocusTheme.typography.rowLabel,
+                        color = colors.accent,
+                    )
+                }
+                SettingsRow(label = "Points") {
+                    Text(
+                        text = "$points pts",
+                        style = FocusTheme.typography.rowLabel,
+                        color = colors.accent,
+                    )
                 }
             }
 
@@ -401,19 +425,6 @@ private fun SettingsContent(
 
         SettingsTopBar(onSettingsClick = onClose, isOpen = true)
     }
-}
-
-/** "−  2h  +": changes the streak goal in [RewardRules.GOAL_STEP_MINUTES] steps. */
-@Composable
-private fun GoalStepper(minutes: Int, onMinutesChange: (Int) -> Unit) {
-    ValueStepper(
-        text = formatMinutes(minutes.toLong()),
-        what = "goal",
-        value = minutes,
-        step = RewardRules.GOAL_STEP_MINUTES,
-        range = RewardRules.MIN_GOAL_MINUTES..RewardRules.MAX_GOAL_MINUTES,
-        onValueChange = onMinutesChange,
-    )
 }
 
 /** "−  55 dB  +": changes the noise threshold in [NoiseAlertStorage.THRESHOLD_STEP_DB] steps. */
@@ -501,8 +512,8 @@ private fun SettingsContentPreview() {
             onLogOutClick = {},
             isPermissionOn = { it == AppPermission.PRECISE_LOCATION || it == AppPermission.NOTIFICATIONS },
             onPermissionClick = {},
-            streakGoalMinutes = 120,
-            onStreakGoalChange = {},
+            totalFocusMinutes = 420,
+            points = 180,
             noiseAlertOn = true,
             onNoiseAlertChange = {},
             noiseThresholdDb = NoiseAlertStorage.DEFAULT_THRESHOLD_DB,
