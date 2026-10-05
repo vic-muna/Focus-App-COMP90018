@@ -52,6 +52,25 @@ internal fun buildMapHtml(centerLat: Double, centerLng: Double): String {
                 var hasCenteredOnUser = false;
                 var zoneLayers = [];
 
+                function setViewUpperQuarter(latLng) {
+                    map.setView(latLng, 16, { animate: false });
+                    var height = map.getSize().y;
+                    if (height > 0) {
+                        map.panBy([0, height * 0.25], { animate: false });
+                    } else {
+                        setTimeout(function() {
+                            var h = map.getSize().y;
+                            if (h > 0) {
+                                map.panBy([0, h * 0.25], { animate: false });
+                            }
+                        }, 100);
+                    }
+                }
+
+                map.whenReady(function() {
+                    setViewUpperQuarter([$centerLat, $centerLng]);
+                });
+
                 function setLocation(lat, lng) {
                     var latLng = [lat, lng];
                     if (!currentMarker) {
@@ -66,7 +85,7 @@ internal fun buildMapHtml(centerLat: Double, centerLng: Double): String {
                     }
 
                     if (!hasCenteredOnUser) {
-                        map.setView(latLng, 16);
+                        setViewUpperQuarter(latLng);
                         hasCenteredOnUser = true;
                     }
                 }
@@ -78,6 +97,7 @@ internal fun buildMapHtml(centerLat: Double, centerLng: Double): String {
                     } else {
                         pinMarker.setLatLng(latLng);
                     }
+                    map.setView(latLng, 16);
 
                     if (radiusMeters && radiusMeters > 0) {
                         if (!pinCircle) {

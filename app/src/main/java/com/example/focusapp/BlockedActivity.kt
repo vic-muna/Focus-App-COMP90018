@@ -6,7 +6,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.mutableStateOf
+import com.example.focusapp.data.accessibility.AccessibilityBridge
+import com.example.focusapp.data.accessibility.AppOpenAllowanceManager
 import com.example.focusapp.data.apps.getAppLabel
+import com.example.focusapp.data.blocking.formatClockTime
 import com.example.focusapp.ui.screens.blocked.BlockedScreen
 import com.example.focusapp.ui.theme.FocusAppTheme
 
@@ -23,6 +26,7 @@ import com.example.focusapp.ui.theme.FocusAppTheme
 class BlockedActivity : ComponentActivity() {
 
     // Kept outside Compose so onNewIntent can update it while the screen is showing.
+    private val blockedPackageNameState = mutableStateOf<String?>(null)
     private val blockedAppLabelState = mutableStateOf("This app")
 
     // Why it was blocked (e.g. "You've reached your limit of 3 times ..."), or null for the default message.
@@ -34,12 +38,25 @@ class BlockedActivity : ComponentActivity() {
 
         setContent {
             FocusAppTheme {
+                val pkg = blockedPackageNameState.value
+                val isLocationBlocked = pkg?.let { AccessibilityBridge.isLocationBlocked(it) } ?: false
+                val maxOpensLeft = if (isLocationBlocked) null else pkg?.let { AppOpenAllowanceManager.getOpensRemainingToday(this, it) }
+                val unlockMinutes = pkg?.let { AppOpenAllowanceManager.getUnlockMinutesForPackage(this, it) }
+
                 // Back does the same as "Got it".
                 BackHandler { leave() }
                 BlockedScreen(
                     appLabel = blockedAppLabelState.value,
                     reason = blockReasonState.value,
-                    onGotItClick = { leave() }
+                    maxOpensLeft = maxOpensLeft,
+                    onGotItClick = { leave() },
+                    onUseOpenClick = {
+                        pkg?.let { packageName ->
+                            val mins = unlockMinutes ?: 5
+                            AppOpenAllowanceManager.startTemporaryUnlock(this, packageName, mins)
+                            finish()
+                        }
+                    }
                 )
             }
         }
@@ -54,8 +71,31 @@ class BlockedActivity : ComponentActivity() {
 
     private fun updateBlockedLabelFrom(intent: Intent) {
         val blockedPackageName = intent.getStringExtra(EXTRA_BLOCKED_PACKAGE)
+        blockedPackageNameState.value = blockedPackageName
         blockedAppLabelState.value = blockedPackageName?.let { getAppLabel(this, it) } ?: "This app"
-        blockReasonState.value = intent.getStringExtra(EXTRA_BLOCK_REASON)
+
+        val extraReason = intent.getStringExtra(EXTRA_BLOCK_REASON)
+        if (!extraReason.isNullOrBlank()) {
+            blockReasonState.value = extraReason
+        } else if (blockedPackageName != null) {
+            val bridgeReason = AccessibilityBridge.getReasonFor(blockedPackageName)
+            if (bridgeReason != null) {
+                blockReasonState.value = bridgeReason
+            } else {
+                val group = AppOpenAllowanceManager.findGroupForPackage(this, blockedPackageName)
+                if (group != null) {
+                    val groupName = group.name.ifBlank { "Focus Schedule" }
+                    val timeRangeStr = group.schedule.timeRanges.joinToString(", ") { range ->
+                        "${formatClockTime(range.start)} to ${formatClockTime(range.end)}"
+                    }
+                    blockReasonState.value = "Blocked based on the schedule $groupName from $timeRangeStr"
+                } else {
+                    blockReasonState.value = null
+                }
+            }
+        } else {
+            blockReasonState.value = null
+        }
     }
 
     /** Leaves this screen: closes the interruption screen and redirects the user to the phone's home screen. */

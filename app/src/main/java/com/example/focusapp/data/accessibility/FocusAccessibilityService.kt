@@ -71,6 +71,9 @@ class FocusAccessibilityService : AccessibilityService() {
         updateWifiBlocks()
 
         if (packageName in AccessibilityBridge.restrictedPackages.value) {
+            val isLocationBlocked = AccessibilityBridge.isLocationBlocked(packageName)
+            // Location based blocking takes precedence over schedule allowance unlocks.
+            if (!isLocationBlocked && AppOpenAllowanceManager.isTemporarilyUnlocked(packageName)) return
             AccessibilityBridge.recordBlockedOpen(packageName) // Only counted during a focus session.
             launchBlockedScreen(packageName, AccessibilityBridge.getReasonFor(packageName))
             return
@@ -87,6 +90,7 @@ class FocusAccessibilityService : AccessibilityService() {
         updateWifiBlocks()
         val onScreen = foregroundPackage ?: return
         if (onScreen != packageName && onScreen in AccessibilityBridge.restrictedPackages.value) {
+            if (AppOpenAllowanceManager.isTemporarilyUnlocked(onScreen)) return
             launchBlockedScreen(onScreen, AccessibilityBridge.getReasonFor(onScreen))
         }
     }
@@ -133,7 +137,8 @@ class FocusAccessibilityService : AccessibilityService() {
 
         val result = evaluateUsageLimit.execute(
             groups = groups,
-            usageInWindow = { start, end -> queryAppUsageInWindow(this, start, end) }
+            usageInWindow = { start, end -> queryAppUsageInWindow(this, start, end) },
+            getUsedOpensToday = { pkg -> AppOpenAllowanceManager.getUsedOpensToday(this, pkg) }
         )
         updateTimeFocusNotifications(groups)
 
@@ -141,6 +146,7 @@ class FocusAccessibilityService : AccessibilityService() {
         result.violations
             .filter { it.packageName != packageName }        // never block Focus itself
             .filter { it.packageName !in sessionBlocked }    // the session's block (and reason) wins
+            .filter { !AppOpenAllowanceManager.isTemporarilyUnlocked(it.packageName) }
             .forEach { violation -> launchBlockedScreen(violation.packageName, violation.reason) }
         return result.nextCheckInMillis
     }
@@ -149,13 +155,11 @@ class FocusAccessibilityService : AccessibilityService() {
     private fun updateTimeFocusNotifications(groups: List<BlockedAppGroup>) {
         val now = System.currentTimeMillis()
         limitedPackages = groups
-            .filter { it.maxOpensPerApp != null || it.maxMinutesPerApp != null }
             .flatMap { group -> group.apps.map { it.packageName } }
             .toSet()
         for (group in groups) {
-            val hasLimits = group.maxOpensPerApp != null || group.maxMinutesPerApp != null
             val window = group.schedule.windowOn()
-            val isOn = group.enabled && hasLimits && window != null && now >= window.startMillis && now < window.endMillis
+            val isOn = group.enabled && window != null && now >= window.startMillis && now < window.endMillis
             if (isOn && window != null) {
                 val usage = queryAppUsageInWindow(this, window.startMillis, now)
                 TimeFocusNotification.show(this, group, usage, lastOpenedPackage, window.endMillis)

@@ -2,7 +2,8 @@ package com.example.focusapp.ui.screens.timefocus
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -90,43 +91,57 @@ fun ScheduleDial(
                 contentDescription = "Quiet time from ${formatClock(startMinutes)} to ${formatClock(endMinutes)}"
             }
             .pointerInput(Unit) {
-                var target = DragTarget.BOTH
-                var lastMinutes = 0
-                // Unsnapped positions, so slow drags still add up across snap steps.
-                var rawStart = 0f
-                var rawEnd = 0f
-                detectDragGestures(
-                    onDragStart = { offset ->
-                        val touched = offsetToMinutes(offset, size.width / 2f, size.height / 2f)
-                        val degToStart = angularDistance(touched, currentStart) * 360f / MINUTES_PER_DAY
-                        val degToEnd = angularDistance(touched, currentEnd) * 360f / MINUTES_PER_DAY
-                        target = when {
-                            degToStart <= HANDLE_GRAB_DEGREES && degToStart <= degToEnd -> DragTarget.START
-                            degToEnd <= HANDLE_GRAB_DEGREES -> DragTarget.END
-                            isWithinArc(touched, currentStart, currentEnd) -> DragTarget.BOTH
-                            degToStart <= degToEnd -> DragTarget.START
-                            else -> DragTarget.END
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val cx = size.width / 2f
+                    val cy = size.height / 2f
+                    val ringPx = ringWidth.toPx()
+                    val radius = (minOf(size.width, size.height) - ringPx) / 2f
+                    val center = Offset(cx, cy)
+
+                    val touched = offsetToMinutes(down.position, cx, cy)
+                    val distFromCenter = (down.position - center).getDistance()
+                    val isNearRing = abs(distFromCenter - radius) <= ringPx * 1.2f
+
+                    val degToStart = angularDistance(touched, currentStart) * 360f / MINUTES_PER_DAY
+                    val degToEnd = angularDistance(touched, currentEnd) * 360f / MINUTES_PER_DAY
+
+                    val target: DragTarget? = when {
+                        isNearRing && degToStart <= HANDLE_GRAB_DEGREES && degToStart <= degToEnd -> DragTarget.START
+                        isNearRing && degToEnd <= HANDLE_GRAB_DEGREES -> DragTarget.END
+                        isNearRing && isWithinArc(touched, currentStart, currentEnd) -> DragTarget.BOTH
+                        else -> null
+                    }
+
+                    if (target != null) {
+                        down.consume()
+                        var lastMinutes = touched
+                        var rawStart = currentStart.toFloat()
+                        var rawEnd = currentEnd.toFloat()
+                        val pointerId = down.id
+
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == pointerId } ?: break
+                            if (change.pressed) {
+                                change.consume()
+                                val now = offsetToMinutes(change.position, cx, cy)
+                                var delta = now - lastMinutes
+                                if (delta > MINUTES_PER_DAY / 2) delta -= MINUTES_PER_DAY
+                                if (delta < -MINUTES_PER_DAY / 2) delta += MINUTES_PER_DAY
+                                lastMinutes = now
+                                when (target) {
+                                    DragTarget.START -> rawStart += delta
+                                    DragTarget.END -> rawEnd += delta
+                                    DragTarget.BOTH -> { rawStart += delta; rawEnd += delta }
+                                }
+                                currentOnChange(snap(rawStart), snap(rawEnd))
+                            } else {
+                                break
+                            }
                         }
-                        lastMinutes = touched
-                        rawStart = currentStart.toFloat()
-                        rawEnd = currentEnd.toFloat()
-                    },
-                    onDrag = { change, _ ->
-                        change.consume()
-                        val now = offsetToMinutes(change.position, size.width / 2f, size.height / 2f)
-                        // Shortest signed step around the dial, so crossing midnight doesn't jump.
-                        var delta = now - lastMinutes
-                        if (delta > MINUTES_PER_DAY / 2) delta -= MINUTES_PER_DAY
-                        if (delta < -MINUTES_PER_DAY / 2) delta += MINUTES_PER_DAY
-                        lastMinutes = now
-                        when (target) {
-                            DragTarget.START -> rawStart += delta
-                            DragTarget.END -> rawEnd += delta
-                            DragTarget.BOTH -> { rawStart += delta; rawEnd += delta }
-                        }
-                        currentOnChange(snap(rawStart), snap(rawEnd))
-                    },
-                )
+                    }
+                }
             },
     ) {
         val ringPx = ringWidth.toPx()

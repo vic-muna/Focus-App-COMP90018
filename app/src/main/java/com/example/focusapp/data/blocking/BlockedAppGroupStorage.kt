@@ -69,6 +69,18 @@ class BlockedAppGroupStorage(
                 put("startMinute", group.schedule.start.minute)
                 put("endHour", group.schedule.end.hour)
                 put("endMinute", group.schedule.end.minute)
+                put("timeRanges", JSONArray().apply {
+                    group.schedule.timeRanges.forEach { range ->
+                        put(
+                            JSONObject().apply {
+                                put("startHour", range.start.hour)
+                                put("startMinute", range.start.minute)
+                                put("endHour", range.end.hour)
+                                put("endMinute", range.end.minute)
+                            }
+                        )
+                    }
+                })
             }
         )
         // Omitted (not stored as JSON null) when there's no limit.
@@ -93,10 +105,26 @@ class BlockedAppGroupStorage(
         val scheduleObj = obj.getJSONObject("schedule")
         val activeDaysJson = scheduleObj.getJSONArray("activeDays")
         val activeDays = (0 until activeDaysJson.length()).map { activeDaysJson.getString(it) }.toSet()
+        val timeRanges = if (scheduleObj.has("timeRanges")) {
+            val array = scheduleObj.getJSONArray("timeRanges")
+            (0 until array.length()).map { index ->
+                val rangeObj = array.getJSONObject(index)
+                TimeRange(
+                    start = ClockTime(rangeObj.getInt("startHour"), rangeObj.getInt("startMinute")),
+                    end = ClockTime(rangeObj.getInt("endHour"), rangeObj.getInt("endMinute"))
+                )
+            }
+        } else {
+            listOf(
+                TimeRange(
+                    start = ClockTime(scheduleObj.getInt("startHour"), scheduleObj.getInt("startMinute")),
+                    end = ClockTime(scheduleObj.getInt("endHour"), scheduleObj.getInt("endMinute"))
+                )
+            )
+        }
         val schedule = TimeSlot(
             activeDays = activeDays,
-            start = ClockTime(scheduleObj.getInt("startHour"), scheduleObj.getInt("startMinute")),
-            end = ClockTime(scheduleObj.getInt("endHour"), scheduleObj.getInt("endMinute"))
+            timeRanges = timeRanges
         )
         return BlockedAppGroup(
             id = obj.getString("id"),

@@ -60,7 +60,7 @@ object TimeFocusNotification {
 
         val cardColor = BackgroundThemes.byId(BackgroundThemeStorage(context).getSelectedId()).timeFocusColor.toArgb()
         val title = group.name
-        val timeRange = "${clock(group.schedule.start)} - ${clock(group.schedule.end)}"
+        val timeRange = group.schedule.timeRanges.joinToString(", ") { "${clock(it.start)} - ${clock(it.end)}" }
         val lastOpenedText = lastOpenedText(group, usage, lastOpenedPackage)
 
         // Collapsed card

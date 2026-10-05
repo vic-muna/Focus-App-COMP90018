@@ -90,3 +90,97 @@ private suspend fun fetchNominatimPlaceName(latitude: Double, longitude: Double)
         place?.trim()
     }.getOrNull()
 }
+
+/**
+ * Result representing a found location from forward geocoding search.
+ */
+data class SearchLocationResult(
+    val name: String,
+    val address: String,
+    val latitude: Double,
+    val longitude: Double,
+)
+
+/**
+ * Best-effort forward geocoding: converts a query string (place name / address) into lat/lng results.
+ * Uses Android's built-in Geocoder with a direct OpenStreetMap Nominatim search fallback.
+ */
+suspend fun searchLocationByName(context: Context, query: String): List<SearchLocationResult> {
+    val trimmed = query.trim()
+    if (trimmed.isBlank()) return emptyList()
+
+    val systemResults = runCatching {
+        if (!Geocoder.isPresent()) emptyList()
+        else {
+            val geocoder = Geocoder(context, Locale.getDefault())
+            val addresses = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                suspendCancellableCoroutine { continuation ->
+                    geocoder.getFromLocationName(trimmed, 5, object : Geocoder.GeocodeListener {
+                        override fun onGeocode(addresses: MutableList<Address>) {
+                            continuation.resume(addresses)
+                        }
+
+                        override fun onError(errorMessage: String?) {
+                            continuation.resume(emptyList())
+                        }
+                    })
+                }
+            } else {
+                withContext(Dispatchers.IO) {
+                    @Suppress("DEPRECATION")
+                    geocoder.getFromLocationName(trimmed, 5) ?: emptyList()
+                }
+            }
+            addresses.mapNotNull { address ->
+                val lat = address.latitude
+                val lng = address.longitude
+                val name = extractPlaceFromAddress(address) ?: trimmed
+                val fullAddress = if (address.maxAddressLineIndex >= 0) {
+                    (0..address.maxAddressLineIndex).mapNotNull { address.getAddressLine(it) }.joinToString(", ")
+                } else name
+                SearchLocationResult(name = name, address = fullAddress, latitude = lat, longitude = lng)
+            }
+        }
+    }.getOrDefault(emptyList())
+
+    if (systemResults.isNotEmpty()) {
+        return systemResults
+    }
+
+    return fetchNominatimSearch(trimmed)
+}
+
+private suspend fun fetchNominatimSearch(query: String): List<SearchLocationResult> = withContext(Dispatchers.IO) {
+    runCatching {
+        val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
+        val url = URL("https://nominatim.openstreetmap.org/search?q=$encodedQuery&format=json&limit=5&addressdetails=1")
+        val connection = url.openConnection() as HttpURLConnection
+        connection.setRequestProperty("User-Agent", "FocusApp/1.0 (com.example.focusapp; contact@example.com)")
+        connection.connectTimeout = 4000
+        connection.readTimeout = 4000
+        if (connection.responseCode != 200) return@withContext emptyList()
+
+        val jsonStr = connection.inputStream.bufferedReader().use { it.readText() }
+        val array = org.json.JSONArray(jsonStr)
+        val results = mutableListOf<SearchLocationResult>()
+
+        for (i in 0 until array.length()) {
+            val item = array.getJSONObject(i)
+            val lat = item.optDouble("lat", 0.0)
+            val lon = item.optDouble("lon", 0.0)
+            val displayName = item.optString("display_name", "")
+            val name = item.optString("name", displayName.split(",").firstOrNull() ?: query)
+            if (lat != 0.0 || lon != 0.0) {
+                results.add(
+                    SearchLocationResult(
+                        name = name.ifBlank { query },
+                        address = displayName,
+                        latitude = lat,
+                        longitude = lon,
+                    )
+                )
+            }
+        }
+        results
+    }.getOrDefault(emptyList())
+}

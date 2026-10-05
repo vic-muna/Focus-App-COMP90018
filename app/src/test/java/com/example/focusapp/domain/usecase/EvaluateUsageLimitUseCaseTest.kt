@@ -45,14 +45,14 @@ class EvaluateUsageLimitUseCaseTest {
         val allowed = useCase.execute(
             listOf(group(maxOpens = 3)),
             usage("facebook" to AppWindowUsage(3, 0, isInForeground = true)),
-            todayAt(17)
+            now = todayAt(17)
         )
         assertTrue(allowed.violations.isEmpty())
 
         val blocked = useCase.execute(
             listOf(group(maxOpens = 3)),
             usage("facebook" to AppWindowUsage(4, 0, isInForeground = true)),
-            todayAt(17)
+            now = todayAt(17)
         )
         assertEquals(listOf("facebook"), blocked.violations.map { it.packageName })
     }
@@ -65,7 +65,7 @@ class EvaluateUsageLimitUseCaseTest {
                 "facebook" to AppWindowUsage(3, 0, isInForeground = true),
                 "instagram" to AppWindowUsage(3, 0, isInForeground = true)
             ),
-            todayAt(17)
+            now = todayAt(17)
         )
         assertTrue(result.violations.isEmpty())
     }
@@ -75,7 +75,7 @@ class EvaluateUsageLimitUseCaseTest {
         val result = useCase.execute(
             listOf(group(maxMinutes = 30)),
             usage("facebook" to AppWindowUsage(1, 30 * 60_000L, isInForeground = true)),
-            todayAt(17)
+            now = todayAt(17)
         )
         assertEquals(listOf("facebook"), result.violations.map { it.packageName })
     }
@@ -85,7 +85,7 @@ class EvaluateUsageLimitUseCaseTest {
         val result = useCase.execute(
             listOf(group(maxMinutes = 30)),
             usage("facebook" to AppWindowUsage(1, 29 * 60_000L + 30_000L, isInForeground = true)),
-            todayAt(17)
+            now = todayAt(17)
         )
         assertTrue(result.violations.isEmpty())
         assertEquals(30_000L, result.nextCheckInMillis)
@@ -96,7 +96,7 @@ class EvaluateUsageLimitUseCaseTest {
         val result = useCase.execute(
             listOf(group(maxOpens = 1)),
             usage("facebook" to AppWindowUsage(5, 0, isInForeground = false)),
-            todayAt(17)
+            now = todayAt(17)
         )
         assertTrue(result.violations.isEmpty())
     }
@@ -104,24 +104,27 @@ class EvaluateUsageLimitUseCaseTest {
     @Test
     fun outsideWindow_isNotBlocked() {
         val overLimit = usage("facebook" to AppWindowUsage(5, 99 * 60_000L, isInForeground = true))
-        assertTrue(useCase.execute(listOf(group(maxOpens = 1)), overLimit, todayAt(18, 30)).violations.isEmpty())
+        assertTrue(useCase.execute(listOf(group(maxOpens = 1)), overLimit, now = todayAt(18, 30)).violations.isEmpty())
 
-        val beforeWindow = useCase.execute(listOf(group(maxOpens = 1)), overLimit, todayAt(15, 30))
+        val beforeWindow = useCase.execute(listOf(group(maxOpens = 1)), overLimit, now = todayAt(15, 30))
         assertTrue(beforeWindow.violations.isEmpty())
         // Wakes up when the window opens, in case an app is already on screen then.
         assertEquals(30 * 60_000L, beforeWindow.nextCheckInMillis)
     }
 
     @Test
-    fun notAnActiveDay_orNoLimits_doesNothing() {
-        val overLimit = usage("facebook" to AppWindowUsage(5, 99 * 60_000L, isInForeground = true))
+    fun scheduleWithoutLimits_blocksForegroundAppsDuringActiveWindow() {
+        val activeWindowUsage = usage("facebook" to AppWindowUsage(1, 0, isInForeground = true))
         val now = todayAt(17)
         val today = DAY_KEYS[(now.get(Calendar.DAY_OF_WEEK) + 5) % 7]
 
-        val otherDay = useCase.execute(listOf(group(maxOpens = 1, days = DAY_KEYS.toSet() - today)), overLimit, now)
+        // During active window: apps in schedule without limits are blocked
+        val blocked = useCase.execute(listOf(group(days = setOf(today))), activeWindowUsage, now = now)
+        assertEquals(listOf("facebook"), blocked.violations.map { it.packageName })
+
+        // Not active day: not blocked
+        val otherDay = useCase.execute(listOf(group(days = DAY_KEYS.toSet() - today)), activeWindowUsage, now = now)
         assertTrue(otherDay.violations.isEmpty())
         assertNull(otherDay.nextCheckInMillis)
-
-        assertTrue(useCase.execute(listOf(group()), overLimit, now).violations.isEmpty())
     }
 }

@@ -61,6 +61,11 @@ object AccessibilityBridge {
     fun getReasonFor(packageName: String): String? =
         BlockSource.entries.firstNotNullOfOrNull { blocks[it]?.get(packageName) }
 
+    /** Whether [packageName] is currently blocked specifically by location (GPS focus zone). */
+    @Synchronized
+    fun isLocationBlocked(packageName: String): Boolean =
+        blocks[BlockSource.LOCATION]?.containsKey(packageName) == true
+
     // --- Distracting app opens: how often the user tried to open a blocked app during a focus session. ---
 
     // null = no focus session running, so nothing is counted.

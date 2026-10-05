@@ -277,11 +277,20 @@ fun FocusAppNavGraph(
                 LocationScreen(
                     onTabClick = ::navigateToTab,
                     blockedAppsFor = { zoneId -> location.groups.find { it.id == zoneId }?.apps.orEmpty() },
+                    isZoneEnabled = { zoneId -> location.groups.find { it.id == zoneId }?.enabled ?: true },
                     onZoneBlockedAppsChange = { zone, apps ->
                         if (location.groups.any { it.id == zone.id }) {
                             location.updateGroup(zone.id) { it.copy(name = zone.name, apps = apps) }
                         } else {
                             val newGroup = BlockedAppGroup(id = zone.id, name = zone.name, apps = apps, schedule = defaultTimeSlot())
+                            location.groups = location.groups + newGroup
+                        }
+                    },
+                    onZoneEnabledToggle = { zoneId, enabled ->
+                        if (location.groups.any { it.id == zoneId }) {
+                            location.updateGroup(zoneId) { it.copy(enabled = enabled) }
+                        } else {
+                            val newGroup = BlockedAppGroup(id = zoneId, name = "", apps = emptyList(), schedule = defaultTimeSlot(), enabled = enabled)
                             location.groups = location.groups + newGroup
                         }
                     },

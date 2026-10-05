@@ -57,8 +57,13 @@ fun TimeSlotLimitsCard(
                 .padding(top = 16.dp, bottom = 8.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
+            val isMinutesSet = maxMinutes != null
             LabeledColumn(title = "Max Open\nTimes") {
-                FocusNumberField(value = maxOpens, onValueChange = onMaxOpensChange)
+                FocusNumberField(
+                    value = maxOpens,
+                    onValueChange = onMaxOpensChange,
+                    enabled = isMinutesSet,
+                )
             }
             LabeledColumn(title = "Max\nMinutes") {
                 WheelPicker(
@@ -71,7 +76,7 @@ fun TimeSlotLimitsCard(
         }
 
         Text(
-            text = "Per app, per day. Leave empty or \"--\" for no limit.",
+            text = if (maxMinutes != null) "Per app, per day. Leave empty for no limit." else "Select Max Minutes to enable Max Open Times.",
             style = FocusTheme.typography.caption,
             color = colors.onSurfaceMuted,
             textAlign = TextAlign.Center,

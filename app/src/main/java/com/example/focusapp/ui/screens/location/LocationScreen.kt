@@ -31,33 +31,45 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.text.style.TextOverflow
 import com.example.focusapp.data.blocking.AppItem
 import com.example.focusapp.data.repository.FocusRepositoryProvider
 import com.example.focusapp.data.sensor.currentLocationFlow
+import com.example.focusapp.data.sensor.deleteFocusZoneGeofence
 import com.example.focusapp.data.sensor.registerGeofenceForZone
-import com.example.focusapp.data.sensor.removeFocusZoneGeofence
 import com.example.focusapp.data.sensor.startGPSUpdates
 import com.example.focusapp.data.sensor.stopGPSUpdates
+import com.example.focusapp.data.sensor.unregisterGeofence
 import com.example.focusapp.domain.model.FocusZone
 import com.example.focusapp.ui.common.ErrorBanner
+import com.example.focusapp.ui.common.SearchLocationResult
 import com.example.focusapp.ui.common.fetchLastKnownLocation
 import com.example.focusapp.ui.common.friendlyErrorMessage
 import com.example.focusapp.ui.common.pickedApps
 import com.example.focusapp.ui.common.rememberInstalledApps
 import com.example.focusapp.ui.common.rememberLocationPermissionState
 import com.example.focusapp.ui.common.resolveApproxPlaceName
+import com.example.focusapp.ui.common.searchLocationByName
 import com.example.focusapp.ui.common.toggle
 import com.example.focusapp.ui.components.button.ConfirmButton
 import com.example.focusapp.ui.components.card.AppSelectCard
 import com.example.focusapp.ui.components.card.DeleteDialog
 import com.example.focusapp.ui.components.card.FlyCardOverlay
+import com.example.focusapp.ui.components.card.FocusCard
 import com.example.focusapp.ui.components.card.consumeTaps
+import com.example.focusapp.ui.components.input.FocusSearchField
 import com.example.focusapp.ui.navigation.MainTab
 import com.example.focusapp.ui.navigation.MainTabBar
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusSpacing
 import com.example.focusapp.ui.theme.FocusTheme
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -88,7 +100,9 @@ private data class LocationDraft(
 fun LocationScreen(
     onTabClick: (MainTab) -> Unit,
     blockedAppsFor: (zoneId: String) -> List<AppItem> = { emptyList() },
+    isZoneEnabled: (zoneId: String) -> Boolean = { true },
     onZoneBlockedAppsChange: (zone: FocusZone, apps: List<AppItem>) -> Unit = { _, _ -> },
+    onZoneEnabledToggle: (zoneId: String, enabled: Boolean) -> Unit = { _, _ -> },
     onZoneDeleted: (zoneId: String) -> Unit = {},
     onZonesLoaded: (zoneIds: Set<String>) -> Unit = {},
 ) {
@@ -196,7 +210,7 @@ fun LocationScreen(
         scope.launch {
             try {
                 withContext(Dispatchers.IO) { FocusRepositoryProvider.get(context).deleteFocusZone(zone.id) }
-                removeFocusZoneGeofence(context, zone.id)
+                deleteFocusZoneGeofence(context, zone.id)
                 enabledZoneIds.remove(zone.id)
                 placeNames.remove(zone.id)
                 onZoneDeleted(zone.id)
@@ -223,7 +237,13 @@ fun LocationScreen(
                 withContext(Dispatchers.IO) { FocusRepositoryProvider.get(context).saveFocusZone(zone) }
                 if (current.editingZoneId == null) enabledZoneIds[zone.id] = true
                 onZoneBlockedAppsChange(zone, current.blockedApps)
-                registerGeofenceForZone(context, zone)
+                val isEnabled = enabledZoneIds[zone.id] ?: isZoneEnabled(zone.id)
+                onZoneEnabledToggle(zone.id, isEnabled)
+                if (isEnabled) {
+                    registerGeofenceForZone(context, zone)
+                } else {
+                    unregisterGeofence(context, zone.id)
+                }
                 placeNames.remove(zone.id)
                 reloadZones()
                 draft = null
@@ -239,13 +259,14 @@ fun LocationScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         LocationContent(
             zones = zones,
-            isZoneEnabled = { zone -> enabledZoneIds[zone.id] ?: true },
+            isZoneEnabled = { zone -> enabledZoneIds[zone.id] ?: isZoneEnabled(zone.id) },
             onZoneEnabledChange = { zone, enabled ->
                 enabledZoneIds[zone.id] = enabled
+                onZoneEnabledToggle(zone.id, enabled)
                 if (enabled) {
                     registerGeofenceForZone(context, zone)
                 } else {
-                    removeFocusZoneGeofence(context, zone.id)
+                    unregisterGeofence(context, zone.id)
                 }
             },
             placeNameFor = { zone -> placeNames[zone.id] },
@@ -330,6 +351,37 @@ private fun LocationContent(
 ) {
     val colors = FocusTheme.colors
     val density = LocalDensity.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    var searchQuery by remember { mutableStateOf("") }
+    var searchResults by remember { mutableStateOf<List<SearchLocationResult>>(emptyList()) }
+    var isSearching by remember { mutableStateOf(false) }
+    var showSearchResults by remember { mutableStateOf(false) }
+
+    val performSearch: () -> Unit = {
+        if (searchQuery.isNotBlank()) {
+            scope.launch {
+                isSearching = true
+                searchResults = searchLocationByName(context, searchQuery)
+                isSearching = false
+                showSearchResults = true
+            }
+        }
+    }
+
+    LaunchedEffect(searchQuery) {
+        if (searchQuery.trim().length >= 3) {
+            delay(500)
+            isSearching = true
+            searchResults = searchLocationByName(context, searchQuery)
+            isSearching = false
+            showSearchResults = true
+        } else if (searchQuery.isBlank()) {
+            searchResults = emptyList()
+            showSearchResults = false
+        }
+    }
 
     var addCardHeight by remember { mutableStateOf(0.dp) }
     val hiddenBottom = if (draft != null) addCardHeight + FocusSpacing.ScreenBottom else 0.dp
@@ -361,6 +413,108 @@ private fun LocationContent(
                     diameter = ringDiameter,
                     modifier = Modifier.align(Alignment.Center),
                 )
+            }
+        }
+
+        val searchBarTopPadding = (WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 2.dp) / 4
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = searchBarTopPadding, start = 16.dp, end = 16.dp)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            FocusSearchField(
+                value = searchQuery,
+                onValueChange = { query ->
+                    searchQuery = query
+                    if (query.isBlank()) {
+                        searchResults = emptyList()
+                        showSearchResults = false
+                    }
+                },
+                placeholder = "Search location or address…",
+                onSearch = performSearch,
+            )
+
+            if (isSearching) {
+                FocusCard(
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .fillMaxWidth(),
+                ) {
+                    Text(
+                        text = "Searching location…",
+                        style = FocusTheme.typography.caption,
+                        color = colors.onSurfaceMuted,
+                        modifier = Modifier.padding(12.dp),
+                    )
+                }
+            } else if (showSearchResults && searchResults.isNotEmpty()) {
+                FocusCard(
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .fillMaxWidth(),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                    ) {
+                        searchResults.forEachIndexed { index, result ->
+                            if (index > 0) {
+                                HorizontalDivider(color = colors.onSurfaceMuted.copy(alpha = 0.2f))
+                            }
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onMapClickLocation(result.latitude, result.longitude)
+                                        val currentDraft = draft ?: LocationDraft()
+                                        onDraftChange(
+                                            currentDraft.copy(
+                                                latitude = result.latitude,
+                                                longitude = result.longitude,
+                                                name = result.name,
+                                            )
+                                        )
+                                        showSearchResults = false
+                                        searchQuery = ""
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                            ) {
+                                Text(
+                                    text = result.name,
+                                    style = FocusTheme.typography.body,
+                                    color = colors.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                if (result.address.isNotBlank() && result.address != result.name) {
+                                    Text(
+                                        text = result.address,
+                                        style = FocusTheme.typography.caption,
+                                        color = colors.onSurfaceMuted,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if (showSearchResults && searchQuery.isNotBlank()) {
+                FocusCard(
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .fillMaxWidth(),
+                ) {
+                    Text(
+                        text = "No locations found",
+                        style = FocusTheme.typography.caption,
+                        color = colors.onSurfaceMuted,
+                        modifier = Modifier.padding(12.dp),
+                    )
+                }
             }
         }
 
