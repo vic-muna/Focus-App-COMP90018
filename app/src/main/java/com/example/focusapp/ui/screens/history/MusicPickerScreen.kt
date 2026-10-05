@@ -122,6 +122,8 @@ fun MusicPickerScreen(
                     },
                     onClose = { musicToUnlock = null },
                     modifier = Modifier.consumeTaps(),
+                    // Try before you buy: a 15-second clip, stopped when the card closes.
+                    preview = music.audio?.let { audio -> { MusicPreview(audio = audio) } },
                 )
             }
         }

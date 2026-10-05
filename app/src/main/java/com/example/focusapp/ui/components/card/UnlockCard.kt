@@ -18,7 +18,8 @@ import com.example.focusapp.ui.theme.FocusTheme
 /**
  * Fly card opened by tapping a locked background or music track ([itemName]) in its picker:
  * the user's [points], the [pricePoints] it costs (in red), and a tick that buys it
- * ([onConfirm]) - disabled while there aren't enough points.
+ * ([onConfirm]) - disabled while there aren't enough points. [preview] (e.g. a music
+ * preview player) shows above the title.
  */
 @Composable
 fun UnlockCard(
@@ -28,6 +29,7 @@ fun UnlockCard(
     onConfirm: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    preview: (@Composable () -> Unit)? = null,
 ) {
     val colors = FocusTheme.colors
     val canAfford = points >= pricePoints
@@ -37,6 +39,7 @@ fun UnlockCard(
             left = { RejectButton(onClick = onClose) },
             right = { ConfirmButton(onClick = onConfirm, contentDescription = "Unlock", enabled = canAfford) },
         )
+        preview?.invoke()
         CardTitle("Unlock \"$itemName\"")
         UnlockRow(label = "Your points", value = "$points pts", valueColor = colors.onSurface)
         UnlockRow(label = "Cost", value = "-$pricePoints pts", valueColor = colors.rejection)
