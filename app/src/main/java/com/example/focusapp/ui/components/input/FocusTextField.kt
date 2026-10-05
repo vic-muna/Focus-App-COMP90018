@@ -1,6 +1,7 @@
 package com.example.focusapp.ui.components.input
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,6 +16,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -143,6 +145,17 @@ fun FocusSearchField(
                         Text(text = placeholder, style = textStyle.copy(color = colors.onSurfaceMuted))
                     }
                     innerTextField()
+                }
+                if (value.isNotEmpty()) {
+                    Spacer(Modifier.width(8.dp))
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = "Clear search",
+                        tint = colors.onSurfaceMuted,
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clickable { onValueChange("") },
+                    )
                 }
             }
         },
