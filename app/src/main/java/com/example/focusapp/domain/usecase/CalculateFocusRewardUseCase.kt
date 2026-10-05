@@ -15,8 +15,8 @@ import java.util.concurrent.TimeUnit
  *    number of such days in a row, ending today - or yesterday, while today hasn't reached the
  *    goal yet (today can still save the streak until midnight).
  *  - Best streak: the longest run of such days at any time. Unlike the daily streak it
- *    doesn't drop after a missed day, and it unlocks backgrounds
- *    (see BackgroundTheme.unlockStreakDays).
+ *    doesn't drop after a missed day.
+ *  - Points: [RewardRules.POINTS_PER_MINUTE] for every minute of focus ever, minus [spentPoints].
  * A session that runs past midnight is split between the two days.
  * Days follow the phone's time zone. Nothing is stored: everything is worked out from the
  * sessions, so changing the goal applies to past days too.
@@ -26,9 +26,11 @@ class CalculateFocusRewardUseCase {
     fun execute(
         sessions: List<FocusSession>,
         streakGoalMinutes: Int,
+        spentPoints: Long = 0,
         now: Calendar = Calendar.getInstance()
     ): RewardProgress {
         val minutesByDay = focusMinutesByDay(sessions, now.timeInMillis)
+        val totalMinutes = minutesByDay.values.sum()
 
         val day = startOfDay(now)
         val todayMinutes = minutesByDay[day.timeInMillis] ?: 0L
@@ -47,6 +49,8 @@ class CalculateFocusRewardUseCase {
             currentStreakDays = streak,
             streakGoalMinutes = streakGoalMinutes,
             bestStreakDays = bestStreakDays(minutesByDay, streakGoalMinutes),
+            totalFocusMinutes = totalMinutes,
+            points = (totalMinutes * RewardRules.POINTS_PER_MINUTE - spentPoints).coerceAtLeast(0),
         )
     }
 

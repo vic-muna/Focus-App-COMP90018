@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,7 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Stars
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -28,6 +27,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,39 +40,69 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.focusapp.domain.model.DailyMilestone
+import com.example.focusapp.domain.model.FocusMusics
 import com.example.focusapp.domain.model.RewardProgress
 import com.example.focusapp.domain.model.formatMinutes
 import com.example.focusapp.ui.components.bar.CloseTopBar
+import com.example.focusapp.ui.components.button.FocusPillButton
+import com.example.focusapp.ui.components.card.FocusConfirmDialog
 import com.example.focusapp.ui.theme.BackgroundThemes
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusSpacing
 import com.example.focusapp.ui.theme.FocusTheme
 
+/** Something the shop sells: a background or a focus music track. */
+private data class ShopItem(val id: String, val name: String, val intro: String, val pricePoints: Int)
+
 /**
  * Rewards, opened from the dashboard's trophy:
- *  - the daily streak and how close today is to counting for it
+ *  - points: 1 for every minute of focus, spent in the shop below
  *  - today's focus-time milestones (back to zero at midnight)
- *  - backgrounds unlocked by the best daily streak so far
+ *  - the shop: backgrounds and focus music bought with points
  */
 @Composable
 fun RewardsScreen(
     onClose: () -> Unit,
     viewModel: RewardsViewModel = viewModel(),
 ) {
-    val progress by viewModel.progress.collectAsState()
+    val state by viewModel.state.collectAsState()
     val lifecycleOwner = LocalLifecycleOwner.current
+    var itemToBuy by remember { mutableStateOf<ShopItem?>(null) }
 
     // Re-read every time the screen comes back - it may be a new day by now.
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) { viewModel.load() }
     }
 
-    RewardsContent(progress = progress, onClose = onClose)
+    itemToBuy?.let { item ->
+        FocusConfirmDialog(
+            title = "Buy \"${item.name}\"?",
+            message = "This uses ${item.pricePoints} of your ${state?.progress?.points ?: 0} points.",
+            confirmLabel = "Buy",
+            onConfirm = {
+                viewModel.buy(item.id, item.pricePoints)
+                itemToBuy = null
+            },
+            onDismiss = { itemToBuy = null },
+        )
+    }
+
+    RewardsContent(
+        state = state,
+        onBuyClick = { itemToBuy = it },
+        onUseMusicClick = { id -> viewModel.selectMusic(FocusMusics.byId(id)) },
+        onClose = onClose,
+    )
 }
 
-/** Stateless layout of [RewardsScreen]. [progress] is null while loading. */
+/** Stateless layout of [RewardsScreen]. [state] is null while loading. */
 @Composable
-private fun RewardsContent(progress: RewardProgress?, onClose: () -> Unit) {
+private fun RewardsContent(
+    state: RewardsState?,
+    onBuyClick: (ShopItem) -> Unit,
+    onUseMusicClick: (String) -> Unit,
+    onClose: () -> Unit,
+) {
     val colors = FocusTheme.colors
 
     Box(
@@ -95,14 +127,28 @@ private fun RewardsContent(progress: RewardProgress?, onClose: () -> Unit) {
                 Text(text = "Rewards", style = FocusTheme.typography.primaryActionLabel, color = colors.onSurface)
             }
 
-            if (progress == null) {
+            if (state == null) {
                 Box(modifier = Modifier.fillMaxWidth().padding(top = 24.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = colors.accent)
                 }
             } else {
-                StreakCard(progress)
-                MilestonesCard(progress)
-                BackgroundsCard(bestStreakDays = progress.bestStreakDays)
+                PointsCard(state.progress)
+                MilestonesCard(state.progress)
+                ShopCard(
+                    title = "Backgrounds",
+                    items = BackgroundThemes.all.filter { it.pricePoints > 0 }
+                        .map { ShopItem(it.id, it.name, it.intro, it.pricePoints) },
+                    state = state,
+                    onBuyClick = onBuyClick,
+                )
+                ShopCard(
+                    title = "Focus music",
+                    items = FocusMusics.all.map { ShopItem(it.id, it.name, it.intro, it.pricePoints) },
+                    state = state,
+                    onBuyClick = onBuyClick,
+                    selectedId = state.selectedMusicId ?: FocusMusics.default.id,
+                    onUseClick = onUseMusicClick,
+                )
             }
         }
 
@@ -111,52 +157,29 @@ private fun RewardsContent(progress: RewardProgress?, onClose: () -> Unit) {
 }
 
 @Composable
-private fun StreakCard(progress: RewardProgress) {
+private fun PointsCard(progress: RewardProgress) {
     val colors = FocusTheme.colors
     val typography = FocusTheme.typography
-    val goal = progress.streakGoalMinutes
 
     RewardCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
-                imageVector = Icons.Filled.LocalFireDepartment,
+                imageVector = Icons.Filled.Stars,
                 contentDescription = null,
-                tint = if (progress.currentStreakDays > 0) colors.accent else colors.onSurfaceMuted,
+                tint = if (progress.points > 0) colors.accent else colors.onSurfaceMuted,
                 modifier = Modifier.size(48.dp),
             )
             Spacer(Modifier.width(12.dp))
             Column {
-                Text(
-                    text = formatDays(progress.currentStreakDays),
-                    style = typography.statValue,
-                    color = colors.onSurface,
-                )
-                Text(text = "Daily streak", style = typography.caption, color = colors.onSurfaceMuted)
+                Text(text = formatPoints(progress.points), style = typography.statValue, color = colors.onSurface)
+                Text(text = "1 point for every minute of focus", style = typography.caption, color = colors.onSurfaceMuted)
             }
         }
-
         Spacer(Modifier.height(16.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(text = "Today", style = typography.listLabel, color = colors.onSurface)
-            Text(
-                text = "${formatMinutes(progress.todayFocusMinutes)} / ${formatMinutes(goal.toLong())}",
-                style = typography.listLabel,
-                color = colors.onSurface,
-            )
+            Text(text = "Total focus time", style = typography.listLabel, color = colors.onSurface)
+            Text(text = formatMinutes(progress.totalFocusMinutes), style = typography.listLabel, color = colors.onSurface)
         }
-        Spacer(Modifier.height(6.dp))
-        ProgressBar(fraction = progress.todayFocusMinutes.toFloat() / goal)
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = if (progress.todayCountsForStreak) {
-                "Goal reached - today counts for your streak!"
-            } else {
-                "Focus ${formatMinutes(goal - progress.todayFocusMinutes)} more today to " +
-                    if (progress.currentStreakDays > 0) "keep your streak." else "start a streak."
-            },
-            style = typography.caption,
-            color = if (progress.todayCountsForStreak) colors.accent else colors.onSurfaceMuted,
-        )
     }
 }
 
@@ -188,49 +211,59 @@ private fun MilestonesCard(progress: RewardProgress) {
     }
 }
 
-/** Reward backgrounds: each one unlocks once the best daily streak reaches its goal. */
+/**
+ * A shop section: each item shows a Buy button with its price until it's owned.
+ * With [onUseClick], owned items can be picked too ([selectedId] is the one in use).
+ */
 @Composable
-private fun BackgroundsCard(bestStreakDays: Int) {
+private fun ShopCard(
+    title: String,
+    items: List<ShopItem>,
+    state: RewardsState,
+    onBuyClick: (ShopItem) -> Unit,
+    selectedId: String? = null,
+    onUseClick: ((String) -> Unit)? = null,
+) {
     val colors = FocusTheme.colors
     val typography = FocusTheme.typography
-    val rewardThemes = BackgroundThemes.all.filter { it.unlockStreakDays > 0 }
 
     RewardCard {
-        Text(text = "Backgrounds", style = typography.tileTitle, color = colors.onSurface)
-        Text(
-            text = "Reach your daily goal several days in a row",
-            style = typography.caption,
-            color = colors.onSurfaceMuted,
-        )
+        Text(text = title, style = typography.tileTitle, color = colors.onSurface)
         Spacer(Modifier.height(12.dp))
-        Text(text = formatDays(bestStreakDays), style = typography.statValue, color = colors.onSurface)
-        Text(text = "best streak so far", style = typography.caption, color = colors.onSurfaceMuted)
-        Spacer(Modifier.height(16.dp))
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            rewardThemes.forEach { theme ->
-                val unlocked = theme.isUnlocked(bestStreakDays)
-                MilestoneRow(
-                    milestone = DailyMilestone(theme.unlockStreakDays, reached = unlocked),
-                    toGoLabel = if (unlocked) null else "${formatDays(theme.unlockStreakDays - bestStreakDays)} to go",
-                    label = "${theme.name} - ${theme.unlockStreakDays}-day streak",
-                    reachedLabel = "Unlocked",
-                )
+            items.forEach { item ->
+                val owned = item.pricePoints == 0 || item.id in state.ownedIds
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = item.name, style = typography.body, color = colors.onSurface)
+                        Text(text = item.intro, style = typography.caption, color = colors.onSurfaceMuted)
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    when {
+                        !owned -> FocusPillButton(
+                            label = formatPoints(item.pricePoints.toLong()),
+                            containerColor = colors.accent,
+                            enabled = state.progress.points >= item.pricePoints,
+                            onClick = { onBuyClick(item) },
+                        )
+                        onUseClick == null -> Text(text = "Owned", style = typography.caption, color = colors.accent)
+                        item.id == selectedId -> Text(text = "In use", style = typography.caption, color = colors.accent)
+                        else -> FocusPillButton(
+                            label = "Use",
+                            containerColor = colors.surfaceSunken,
+                            contentColor = colors.onSurface,
+                            onClick = { onUseClick(item.id) },
+                        )
+                    }
+                }
             }
         }
     }
 }
 
-/**
- * One milestone: a ticked accent circle once reached; [toGoLabel] says how far off the next one is.
- * [label] and [reachedLabel] let the Backgrounds card reuse the row with its own words.
- */
+/** One milestone: a ticked accent circle once reached; [toGoLabel] says how far off the next one is. */
 @Composable
-private fun MilestoneRow(
-    milestone: DailyMilestone,
-    toGoLabel: String?,
-    label: String = formatMilestone(milestone.minutes),
-    reachedLabel: String = "Reached",
-) {
+private fun MilestoneRow(milestone: DailyMilestone, toGoLabel: String?) {
     val colors = FocusTheme.colors
     val typography = FocusTheme.typography
 
@@ -256,13 +289,13 @@ private fun MilestoneRow(
         }
         Spacer(Modifier.width(12.dp))
         Text(
-            text = label,
+            text = formatMilestone(milestone.minutes),
             style = typography.body,
             color = if (milestone.reached || toGoLabel != null) colors.onSurface else colors.onSurfaceMuted,
             modifier = Modifier.weight(1f),
         )
         when {
-            milestone.reached -> Text(text = reachedLabel, style = typography.caption, color = colors.accent)
+            milestone.reached -> Text(text = "Reached", style = typography.caption, color = colors.accent)
             toGoLabel != null -> Text(
                 text = toGoLabel,
                 style = typography.caption,
@@ -286,27 +319,8 @@ private fun RewardCard(content: @Composable () -> Unit) {
     }
 }
 
-@Composable
-private fun ProgressBar(fraction: Float) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(10.dp)
-            .clip(RoundedCornerShape(5.dp))
-            .background(FocusTheme.colors.surfaceSunken),
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(fraction.coerceIn(0f, 1f))
-                .clip(RoundedCornerShape(5.dp))
-                .background(FocusTheme.colors.accent),
-        )
-    }
-}
-
-/** "1 day", "3 days". */
-private fun formatDays(days: Int): String = if (days == 1) "1 day" else "$days days"
+/** "1 pt", "120 pts". */
+private fun formatPoints(points: Long): String = if (points == 1L) "1 pt" else "$points pts"
 
 /** "5 minutes", "1 hour", "10 hours". */
 private fun formatMilestone(minutes: Int): String = when {
@@ -320,12 +334,18 @@ private fun formatMilestone(minutes: Int): String = when {
 private fun RewardsContentPreview() {
     FocusAppTheme {
         RewardsContent(
-            progress = RewardProgress(
-                todayFocusMinutes = 80,
-                milestones = listOf(5, 30, 60, 300, 600).map { DailyMilestone(it, reached = 80 >= it) },
-                currentStreakDays = 3,
-                bestStreakDays = 4,
+            state = RewardsState(
+                progress = RewardProgress(
+                    todayFocusMinutes = 80,
+                    milestones = listOf(5, 30, 60, 300, 600).map { DailyMilestone(it, reached = 80 >= it) },
+                    totalFocusMinutes = 420,
+                    points = 180,
+                ),
+                ownedIds = setOf(FocusMusics.all[1].id),
+                selectedMusicId = FocusMusics.all[1].id,
             ),
+            onBuyClick = {},
+            onUseMusicClick = {},
             onClose = {},
         )
     }

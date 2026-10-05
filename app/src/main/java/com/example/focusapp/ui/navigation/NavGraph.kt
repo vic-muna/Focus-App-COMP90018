@@ -12,11 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
-import com.example.focusapp.data.preferences.RewardSettingsStorage
-import com.example.focusapp.data.repository.FocusRepositoryProvider
-import com.example.focusapp.domain.usecase.CalculateFocusRewardUseCase
-import com.example.focusapp.ui.components.card.FocusConfirmDialog
-import com.example.focusapp.ui.theme.BackgroundTheme
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -46,11 +42,13 @@ import com.example.focusapp.data.sensor.MotionSensorDataSource
 import com.example.focusapp.ui.common.vibrateShort
 import com.example.focusapp.ui.screens.account.AccountScreen
 import com.example.focusapp.ui.screens.history.HistoryScreen
+import com.example.focusapp.ui.screens.history.MusicPickerScreen
 import com.example.focusapp.ui.screens.history.ThemePickerScreen
 import com.example.focusapp.ui.screens.home.HomeScreenWithSheet
 import com.example.focusapp.ui.screens.location.LocationScreen
 import com.example.focusapp.ui.screens.party.FriendsScreen
 import com.example.focusapp.ui.screens.rewards.RewardsScreen
+import com.example.focusapp.ui.screens.rewards.RewardsViewModel
 import com.example.focusapp.ui.screens.session.ActiveFocusSession
 import com.example.focusapp.ui.screens.session.FocusSessionScreen
 import com.example.focusapp.ui.screens.session.FocusSessionSource
@@ -58,6 +56,7 @@ import com.example.focusapp.ui.screens.settings.SettingsScreen
 import com.example.focusapp.ui.screens.timefocus.TimeFocusScreen
 import com.example.focusapp.ui.screens.wififocus.WifiFocusScreen
 import com.example.focusapp.ui.theme.BackgroundThemes
+import com.example.focusapp.domain.model.FocusMusics
 import com.example.focusapp.ui.theme.FocusTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -153,12 +152,6 @@ fun FocusAppNavGraph(
     // The picked background theme - shown on the dashboard, Home and Focus Mode.
     val themeStorage = remember { BackgroundThemeStorage(context) }
     var backgroundTheme by remember { mutableStateOf(BackgroundThemes.byId(themeStorage.getSelectedId())) }
-    // Longest daily streak so far - reward backgrounds unlock as it grows.
-    var bestStreakDays by remember { mutableStateOf(0) }
-    // Backgrounds unlocked with the test code instead of a streak.
-    var codeUnlockedThemeIds by remember { mutableStateOf(themeStorage.getCodeUnlockedIds()) }
-    // A background that has just unlocked: shown once in a dialog.
-    var newlyUnlockedTheme by remember { mutableStateOf<BackgroundTheme?>(null) }
 
     fun saveQuickFocusApps(apps: List<AppItem>) {
         quickFocus.groups = listOf(
@@ -252,41 +245,6 @@ fun FocusAppNavGraph(
     // A slot to show on the Time Focus tab (from a Time Focus notification).
     var timeSlotToShow by remember { mutableStateOf<String?>(null) }
 
-    // Re-read when the app opens and every time a session ends: the session that just
-    // finished may have unlocked a background.
-    val isSessionRunning = activeFocusSession != null
-    LaunchedEffect(isSessionRunning) {
-        if (isSessionRunning) return@LaunchedEffect
-        val sessions = runCatching { FocusRepositoryProvider.get(context).getSessionHistory() }.getOrNull()
-            ?: return@LaunchedEffect
-        val streakGoalMinutes = RewardSettingsStorage(context).getStreakGoalMinutes()
-        bestStreakDays = CalculateFocusRewardUseCase().execute(sessions, streakGoalMinutes).bestStreakDays
-        val announcedIds = themeStorage.getAnnouncedIds()
-        newlyUnlockedTheme = BackgroundThemes.all.firstOrNull {
-            it.unlockStreakDays > 0 && it.isUnlocked(bestStreakDays) && it.id !in announcedIds
-        }
-    }
-
-    newlyUnlockedTheme?.let { theme ->
-        fun close() {
-            themeStorage.saveAnnounced(theme.id)
-            newlyUnlockedTheme = null
-        }
-        FocusConfirmDialog(
-            title = "New background unlocked!",
-            message = "You reached your daily goal ${theme.unlockStreakDays} days in a row. " +
-                "\"${theme.name}\" is now yours - ${theme.intro.replaceFirstChar { it.lowercase() }}.",
-            confirmLabel = "Use it now",
-            dismissLabel = "Later",
-            onConfirm = {
-                backgroundTheme = theme
-                themeStorage.saveSelectedId(theme.id)
-                close()
-            },
-            onDismiss = ::close,
-        )
-    }
-
     Scaffold(containerColor = FocusTheme.colors.background) { innerPadding ->
         NavHost(
             navController = navController,
@@ -301,6 +259,7 @@ fun FocusAppNavGraph(
                     userName = account?.username,
                     groups = schedule.groups,
                     dashboardArt = backgroundTheme.homeArt,
+                    dashboardArtHasFrame = backgroundTheme.homeArtHasFrame,
                     wifiSsids = wifi.groups.filter { it.enabled }.flatMap { it.watchedSsids }.distinct(),
                     quickFocusApps = quickFocus.groups.firstOrNull()?.apps.orEmpty(),
                     onQuickFocusAppsChange = ::saveQuickFocusApps,
@@ -376,6 +335,8 @@ fun FocusAppNavGraph(
                     FocusSessionScreen(
                         session = session,
                         backgroundArt = backgroundTheme.focusArt,
+                        backgroundVideo = backgroundTheme.focusVideo,
+                        textColor = backgroundTheme.focusTextColor,
                         onEndSessionClick = ::endFocusSession
                     )
                 }
@@ -405,7 +366,8 @@ fun FocusAppNavGraph(
                     theme = backgroundTheme,
                     onChangeThemeClick = { navController.navigate(Destinations.THEME_PICKER) },
                     onRewardsClick = { navController.navigate(Destinations.REWARDS) },
-                    onClose = { navController.popBackStack() }
+                    onClose = { navController.popBackStack() },
+                    onMusicClick = { navController.navigate(Destinations.MUSIC_PICKER) },
                 )
             }
 
@@ -414,21 +376,36 @@ fun FocusAppNavGraph(
             }
 
             composable(Destinations.THEME_PICKER, enterTransition = slideUpEnter, exitTransition = slideDownExit) {
+                // Same points and purchases as the Rewards page.
+                val rewards: RewardsViewModel = viewModel()
+                val rewardsState by rewards.state.collectAsState()
+                LaunchedEffect(Unit) { rewards.load() }
                 ThemePickerScreen(
                     selectedId = backgroundTheme.id,
-                    bestStreakDays = bestStreakDays,
-                    codeUnlockedIds = codeUnlockedThemeIds,
-                    onUnlockWithCode = { theme ->
-                        themeStorage.saveCodeUnlocked(theme.id)
-                        themeStorage.saveAnnounced(theme.id) // Already unlocked: no "unlocked" dialog later.
-                        codeUnlockedThemeIds = themeStorage.getCodeUnlockedIds()
-                    },
+                    ownedIds = rewardsState?.ownedIds.orEmpty(),
+                    points = rewardsState?.progress?.points,
+                    onUnlock = { theme -> rewards.buy(theme.id, theme.pricePoints) },
                     onSelect = { theme ->
                         backgroundTheme = theme
                         themeStorage.saveSelectedId(theme.id)
                         navController.popBackStack()
                     },
                     onClose = { navController.popBackStack() }
+                )
+            }
+
+            composable(Destinations.MUSIC_PICKER, enterTransition = slideUpEnter, exitTransition = slideDownExit) {
+                // Same points and purchases as the Rewards page.
+                val rewards: RewardsViewModel = viewModel()
+                val rewardsState by rewards.state.collectAsState()
+                LaunchedEffect(Unit) { rewards.load() }
+                MusicPickerScreen(
+                    selectedId = rewardsState?.selectedMusicId ?: FocusMusics.default.id,
+                    ownedIds = rewardsState?.ownedIds.orEmpty(),
+                    points = rewardsState?.progress?.points,
+                    onSelect = { music -> rewards.selectMusic(music) },
+                    onUnlock = { music -> rewards.buy(music.id, music.pricePoints) },
+                    onClose = { navController.popBackStack() },
                 )
             }
         }

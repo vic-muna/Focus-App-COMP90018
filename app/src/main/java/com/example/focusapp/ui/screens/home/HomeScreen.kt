@@ -51,6 +51,8 @@ fun HomeScreen(
     userName: String = "User",
     // The picked background theme's Home art (see BackgroundThemes).
     @DrawableRes dashboardArt: Int = R.drawable.img_home_dashboard,
+    // False for art without its own frame (the shop backgrounds' thumbnails) - see BackgroundTheme.homeArtHasFrame.
+    dashboardArtHasFrame: Boolean = true,
     selectedTab: MainTab = MainTab.HOME,
     onSettingsClick: () -> Unit = {},
     onPartyClick: () -> Unit = {},
@@ -80,15 +82,25 @@ fun HomeScreen(
                 .clickable(onClick = onDashboardClick),
             contentAlignment = Alignment.Center,
         ) {
-            Image(
-                painter = painterResource(dashboardArt),
-                contentDescription = "Focus history",
-                contentScale = ContentScale.FillBounds,
-                modifier = Modifier
-                    // requiredSize lets the image overflow the box; clipToBounds trims the margin.
-                    .requiredSize(width = DashboardImageWidth, height = DashboardImageHeight)
-                    .offset(y = DashboardArtOffsetY),
-            )
+            if (dashboardArtHasFrame) {
+                Image(
+                    painter = painterResource(dashboardArt),
+                    contentDescription = "Focus history",
+                    contentScale = ContentScale.FillBounds,
+                    modifier = Modifier
+                        // requiredSize lets the image overflow the box; clipToBounds trims the margin.
+                        .requiredSize(width = DashboardImageWidth, height = DashboardImageHeight)
+                        .offset(y = DashboardArtOffsetY),
+                )
+            } else {
+                // A shop thumbnail: it has its own dark frame and rounded corners, so show it whole.
+                Image(
+                    painter = painterResource(dashboardArt),
+                    contentDescription = "Focus history",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
 
             // [Claude, 2026-10-04] On the artwork itself now, centered, bigger - a caption
             // underneath read as part of the layout, not as a label FOR the picture above it.

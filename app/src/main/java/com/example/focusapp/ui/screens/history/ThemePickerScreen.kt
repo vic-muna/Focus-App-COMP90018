@@ -24,7 +24,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -37,7 +36,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.focusapp.domain.model.RewardRules
 import com.example.focusapp.ui.theme.BackgroundTheme
 import com.example.focusapp.ui.theme.BackgroundThemes
 import com.example.focusapp.ui.theme.FocusAppTheme
@@ -45,6 +43,7 @@ import com.example.focusapp.ui.theme.FocusSpacing
 import com.example.focusapp.ui.theme.FocusTheme
 import com.example.focusapp.ui.components.button.RejectButton
 import com.example.focusapp.ui.components.card.FlyCardOverlay
+import com.example.focusapp.ui.components.card.UnlockCard
 import com.example.focusapp.ui.components.card.consumeTaps
 
 private val TileShape = RoundedCornerShape(20.dp)
@@ -52,44 +51,25 @@ private val TileShape = RoundedCornerShape(20.dp)
 /**
  * Picks the background theme: a 3-column grid of portrait tiles, the
  * current one outlined. Tapping a theme picks it right away ([onSelect]);
- * a reward theme stays locked until [bestStreakDays] reaches its goal.
- * For testing: tapping a locked tile three times asks for the unlock code,
- * and the right one unlocks it ([onUnlockWithCode]) - see [RewardRules.TEST_UNLOCK_CODE].
+ * a reward theme stays locked until it's bought ([ownedIds]). Tapping a locked
+ * theme opens a card showing the user's [points] and its price, and buys it
+ * on confirm ([onUnlock]). [points] shows on the right of the title; null while loading.
  * X or back leaves without changing anything ([onClose]). Slots without a
  * theme yet are "Coming soon" tiles.
  */
 @Composable
 fun ThemePickerScreen(
     selectedId: String,
-    bestStreakDays: Int,
+    ownedIds: Set<String>,
+    points: Long?,
     onSelect: (BackgroundTheme) -> Unit,
+    onUnlock: (BackgroundTheme) -> Unit,
     onClose: () -> Unit,
-    codeUnlockedIds: Set<String> = emptySet(),
-    onUnlockWithCode: (BackgroundTheme) -> Unit = {},
 ) {
-    // The locked theme being tapped and how many times, then the one the code card is open for.
-    var tappedLockedId by remember { mutableStateOf<String?>(null) }
-    var lockedTapCount by remember { mutableIntStateOf(0) }
+    // The locked theme the unlock card is open for.
     var themeToUnlock by remember { mutableStateOf<BackgroundTheme?>(null) }
-    var code by remember { mutableStateOf("") }
-    var showCodeError by remember { mutableStateOf(false) }
 
-    fun closeCodeCard() {
-        themeToUnlock = null
-        code = ""
-        showCodeError = false
-    }
-
-    fun onLockedTileTap(theme: BackgroundTheme) {
-        lockedTapCount = if (tappedLockedId == theme.id) lockedTapCount + 1 else 1
-        tappedLockedId = theme.id
-        if (lockedTapCount >= RewardRules.TEST_UNLOCK_TAPS) {
-            lockedTapCount = 0
-            themeToUnlock = theme
-        }
-    }
-
-    BackHandler(onBack = { if (themeToUnlock != null) closeCodeCard() else onClose() })
+    BackHandler(onBack = { if (themeToUnlock != null) themeToUnlock = null else onClose() })
 
     val colors = FocusTheme.colors
     // The real themes, then empty "Coming soon" slots (null) to fill the grid.
@@ -110,6 +90,14 @@ fun ThemePickerScreen(
                     style = FocusTheme.typography.primaryActionLabel,
                     color = colors.onSurface,
                 )
+                if (points != null) {
+                    Text(
+                        text = "$points pts",
+                        style = FocusTheme.typography.listLabel,
+                        color = colors.accent,
+                        modifier = Modifier.align(Alignment.CenterEnd),
+                    )
+                }
             }
 
             LazyVerticalGrid(
@@ -120,37 +108,28 @@ fun ThemePickerScreen(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 items(slots) { theme ->
-                    val locked = theme != null &&
-                        !theme.isUnlocked(bestStreakDays) && theme.id !in codeUnlockedIds
+                    val locked = theme != null && !theme.isUnlocked(ownedIds)
                     ThemeTile(
                         theme = theme,
                         selected = theme != null && theme.id == selectedId,
                         locked = locked,
-                        onClick = { theme?.let { if (locked) onLockedTileTap(it) else onSelect(it) } },
+                        onClick = { theme?.let { if (locked) themeToUnlock = it else onSelect(it) } },
                     )
                 }
             }
         }
 
         themeToUnlock?.let { theme ->
-            FlyCardOverlay(onOutsideClick = ::closeCodeCard) {
-                ThemeUnlockCodeCard(
-                    themeName = theme.name,
-                    code = code,
-                    onCodeChange = {
-                        code = it
-                        showCodeError = false
-                    },
-                    showError = showCodeError,
+            FlyCardOverlay(onOutsideClick = { themeToUnlock = null }) {
+                UnlockCard(
+                    itemName = theme.name,
+                    points = points ?: 0,
+                    pricePoints = theme.pricePoints,
                     onConfirm = {
-                        if (code.trim() == RewardRules.TEST_UNLOCK_CODE) {
-                            onUnlockWithCode(theme)
-                            closeCodeCard()
-                        } else {
-                            showCodeError = true
-                        }
+                        onUnlock(theme)
+                        themeToUnlock = null
                     },
-                    onClose = ::closeCodeCard,
+                    onClose = { themeToUnlock = null },
                     modifier = Modifier.consumeTaps(),
                 )
             }
@@ -160,7 +139,7 @@ fun ThemePickerScreen(
 
 /**
  * One picker tile - the theme's art and name, or a "Coming soon" tile when [theme] is null.
- * A [locked] tile is dimmed and says how long a streak unlocks it.
+ * A [locked] tile is dimmed and says how many points unlock it.
  */
 @Composable
 private fun ThemeTile(
@@ -189,7 +168,7 @@ private fun ThemeTile(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
-                if (locked) LockedOverlay(unlockStreakDays = theme.unlockStreakDays)
+                if (locked) LockedOverlay(pricePoints = theme.pricePoints)
             } else {
                 Text(
                     text = "Coming\nsoon",
@@ -216,9 +195,9 @@ private fun ThemeTile(
     }
 }
 
-/** Dims a locked theme's art and says how long a daily streak unlocks it. */
+/** Dims a locked theme's art and says how many points unlock it. */
 @Composable
-private fun LockedOverlay(unlockStreakDays: Int) {
+private fun LockedOverlay(pricePoints: Int) {
     val colors = FocusTheme.colors
 
     Column(
@@ -230,7 +209,7 @@ private fun LockedOverlay(unlockStreakDays: Int) {
     ) {
         Icon(imageVector = Icons.Filled.Lock, contentDescription = "Locked", tint = colors.onSurface)
         Text(
-            text = "$unlockStreakDays-day streak\nto unlock",
+            text = "$pricePoints pts\ntap to unlock",
             style = FocusTheme.typography.caption,
             color = colors.onSurface,
             textAlign = TextAlign.Center,
@@ -243,7 +222,14 @@ private fun LockedOverlay(unlockStreakDays: Int) {
 @Composable
 private fun ThemePickerScreenPreview() {
     FocusAppTheme {
-        // No streak yet: Forest is free, Valley is still locked.
-        ThemePickerScreen(selectedId = BackgroundThemes.Scene.id, bestStreakDays = 0, onSelect = {}, onClose = {})
+        // Nothing bought yet: Forest is free.
+        ThemePickerScreen(
+            selectedId = BackgroundThemes.Scene.id,
+            ownedIds = emptySet(),
+            points = 42,
+            onSelect = {},
+            onUnlock = {},
+            onClose = {},
+        )
     }
 }

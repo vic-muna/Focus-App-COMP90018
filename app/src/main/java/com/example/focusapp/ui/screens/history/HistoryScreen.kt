@@ -71,6 +71,7 @@ fun HistoryScreen(
     onChangeThemeClick: () -> Unit,
     onRewardsClick: () -> Unit,
     onClose: () -> Unit,
+    onMusicClick: () -> Unit = {},
     viewModel: HistoryViewModel = viewModel(),
     coachViewModel: FocusCoachViewModel = viewModel(),
 ) {
@@ -99,6 +100,7 @@ fun HistoryScreen(
     HistoryContent(
         theme = theme,
         onChangeThemeClick = onChangeThemeClick,
+        onMusicClick = onMusicClick,
         sessions = sessions,
         isLoading = isLoading,
         weekBuckets = weekBuckets,
@@ -121,6 +123,7 @@ fun HistoryScreen(
 private fun HistoryContent(
     theme: BackgroundTheme,
     onChangeThemeClick: () -> Unit,
+    onMusicClick: () -> Unit,
     sessions: List<FocusSession>,
     isLoading: Boolean,
     weekBuckets: List<WeekBucket>,
@@ -150,7 +153,7 @@ private fun HistoryContent(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                ThemeIdCard(theme = theme, onChangeClick = onChangeThemeClick)
+                ThemeIdCard(theme = theme, onChangeClick = onChangeThemeClick, onMusicClick = onMusicClick)
             }
 
             item {
@@ -493,6 +496,7 @@ private fun HistoryContentPreview() {
         HistoryContent(
             theme = BackgroundThemes.Scene,
             onChangeThemeClick = {},
+            onMusicClick = {},
             sessions = previewSessions,
             isLoading = false,
             weekBuckets = listOf(

@@ -78,6 +78,8 @@ fun HomeScreenWithSheet(
     onQuickFocusAppsChange: (List<AppItem>) -> Unit = {},
     // The picked background theme's Home art (see BackgroundThemes).
     @DrawableRes dashboardArt: Int = R.drawable.img_home_dashboard,
+    // False for art without its own frame (the shop backgrounds' thumbnails) - see BackgroundTheme.homeArtHasFrame.
+    dashboardArtHasFrame: Boolean = true,
     // [Claude, 2026-10-04] The signed-in username (null for a guest, or while it's still
     // loading) - see NavGraph.kt's call site, which is the only thing that reads
     // AccountManager.account. "Hi! User" used to be literal - GreetingHeader always took the
@@ -196,6 +198,7 @@ fun HomeScreenWithSheet(
         HomeScreen(
             userName = userName ?: "Guest",
             dashboardArt = dashboardArt,
+            dashboardArtHasFrame = dashboardArtHasFrame,
             selectedTab = MainTab.HOME,
             onSettingsClick = onSettingsClick,
             onPartyClick = onPartyModeClick,

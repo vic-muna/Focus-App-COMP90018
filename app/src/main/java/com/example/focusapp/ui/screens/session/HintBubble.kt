@@ -82,7 +82,7 @@ private fun HintBubblePreview() {
                 .background(FocusTheme.colors.surface)
                 .padding(12.dp),
         ) {
-            HintBubble(text = "Hold for 5 seconds to exit\nthe focus mode")
+            HintBubble(text = "Hold for 3 seconds to exit\nthe focus mode")
             InfoButton(onClick = {}, modifier = Modifier.padding(start = 4.dp))
         }
     }
