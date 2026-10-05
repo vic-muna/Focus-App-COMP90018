@@ -54,16 +54,16 @@ object BackgroundThemes {
     )
 
     // TODO(copy): intros are placeholders - replace with the final text.
-    val Desert = videoTheme("desert", "Desert", "Warm dunes under a wide sky", R.drawable.img_thumb_desert, R.raw.bg_desert, Palette.Truffle, Color(0xff2e1220))
-    val East = videoTheme("east", "East", "Quiet temples and soft light", R.drawable.img_thumb_east, R.raw.bg_east, Palette.Rejection, Color(0xfff4f1de))
-    val Europe = videoTheme("europe", "Europe", "Old streets and rooftops", R.drawable.img_thumb_europe, R.raw.bg_europe, Palette.Fantastic, Color(0xffffebd0))
-    val Fantasy = videoTheme("fantasy", "Fantasy", "A world full of magic", R.drawable.img_thumb_fantasy, R.raw.bg_fantasy, Palette.Fantastic, Color(0xffece3ff))
-    val Ocean = videoTheme("ocean", "Ocean", "Calm waves by the lighthouse", R.drawable.img_thumb_ocean, R.raw.bg_ocean, Palette.Fantastic, Color(0xff14304f))
-    val Rock = videoTheme("rock", "Rock", "Turn it up and focus", R.drawable.img_thumb_rock, R.raw.bg_rock, Palette.Rejection, Color(0xffffe0f0))
-    val SciFi = videoTheme("scifi", "Sci-Fi", "Focus among the stars", R.drawable.img_thumb_scifi, R.raw.bg_scifi, Palette.AbyssalBlue, Color(0xffb5f5ec))
-    val Spring = videoTheme("spring", "Spring", "Fresh blossoms and green fields", R.drawable.img_thumb_spring, R.raw.bg_spring, Palette.Confirm, Color(0xff3e2148))
-    val Western = videoTheme("western", "Western", "Sunset over the frontier", R.drawable.img_thumb_western, R.raw.bg_western, Palette.Truffle, Color(0xffffe2bc))
-    val Winter = videoTheme("winter", "Winter", "Snow falling softly", R.drawable.img_thumb_winter, R.raw.bg_winter, Palette.AbyssalBlue, Color(0xffeef3ff))
+    val Desert = videoTheme("desert", "Desert", "Warm dunes under a wide sky", R.drawable.img_thumb_desert, R.drawable.img_header_desert, R.raw.bg_desert, Palette.Truffle, Color(0xff2e1220))
+    val East = videoTheme("east", "East", "Quiet temples and soft light", R.drawable.img_thumb_east, R.drawable.img_header_east, R.raw.bg_east, Palette.Rejection, Color(0xfff4f1de))
+    val Europe = videoTheme("europe", "Europe", "Old streets and rooftops", R.drawable.img_thumb_europe, R.drawable.img_header_europe, R.raw.bg_europe, Palette.Fantastic, Color(0xffffebd0))
+    val Fantasy = videoTheme("fantasy", "Fantasy", "A world full of magic", R.drawable.img_thumb_fantasy, R.drawable.img_header_fantasy, R.raw.bg_fantasy, Palette.Fantastic, Color(0xffece3ff))
+    val Ocean = videoTheme("ocean", "Ocean", "Calm waves by the lighthouse", R.drawable.img_thumb_ocean, R.drawable.img_header_ocean, R.raw.bg_ocean, Palette.Fantastic, Color(0xff14304f))
+    val Rock = videoTheme("rock", "Rock", "Turn it up and focus", R.drawable.img_thumb_rock, R.drawable.img_header_rock, R.raw.bg_rock, Palette.Rejection, Color(0xffffe0f0))
+    val SciFi = videoTheme("scifi", "Sci-Fi", "Focus among the stars", R.drawable.img_thumb_scifi, R.drawable.img_header_scifi, R.raw.bg_scifi, Palette.AbyssalBlue, Color(0xffb5f5ec))
+    val Spring = videoTheme("spring", "Spring", "Fresh blossoms and green fields", R.drawable.img_thumb_spring, R.drawable.img_header_spring, R.raw.bg_spring, Palette.Confirm, Color(0xff3e2148))
+    val Western = videoTheme("western", "Western", "Sunset over the frontier", R.drawable.img_thumb_western, R.drawable.img_header_western, R.raw.bg_western, Palette.Truffle, Color(0xffffe2bc))
+    val Winter = videoTheme("winter", "Winter", "Snow falling softly", R.drawable.img_thumb_winter, R.drawable.img_header_winter, R.raw.bg_winter, Palette.AbyssalBlue, Color(0xffeef3ff))
 
     val all: List<BackgroundTheme> =
         listOf(Scene, Desert, East, Europe, Fantasy, Ocean, Rock, SciFi, Spring, Western, Winter)
@@ -76,12 +76,13 @@ object BackgroundThemes {
     /** The theme with [id], or [default] if there's none (e.g. nothing picked yet). */
     fun byId(id: String?): BackgroundTheme = all.find { it.id == id } ?: default
 
-    /** A shop theme with a thumbnail ([thumbnail]) and a looping Focus Mode [video]. */
+    /** A shop theme with a thumbnail ([thumbnail]), a Time Focus [header] and a looping Focus Mode [video]. */
     private fun videoTheme(
         id: String,
         name: String,
         intro: String,
         @DrawableRes thumbnail: Int,
+        @DrawableRes header: Int,
         @RawRes video: Int,
         timeFocusColor: Color,
         focusTextColor: Color,
@@ -91,7 +92,7 @@ object BackgroundThemes {
         intro = intro,
         homeArt = thumbnail,
         focusArt = thumbnail, // Shown until the video's first frame.
-        timeFocusArt = thumbnail,
+        timeFocusArt = header,
         timeFocusColor = timeFocusColor,
         pricePoints = RewardRules.BACKGROUND_PRICE_POINTS,
         focusVideo = video,
