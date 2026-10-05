@@ -3,8 +3,7 @@ package com.example.focusapp.domain.usecase
 import com.example.focusapp.data.usagestats.AppWindowUsage
 import java.util.Calendar
 import com.example.focusapp.data.blocking.BlockedAppGroup
-import com.example.focusapp.data.blocking.formatLimitMinutes
-import com.example.focusapp.data.blocking.formatOpenTimes
+import com.example.focusapp.data.blocking.formatClockTime
 import com.example.focusapp.data.blocking.windowOn
 
 /** One app that is on screen right now and over one of its group's limits. */
@@ -36,6 +35,7 @@ class EvaluateUsageLimitUseCase {
     fun execute(
         groups: List<BlockedAppGroup>,
         usageInWindow: (startMillis: Long, endMillis: Long) -> Map<String, AppWindowUsage>,
+        getUsedOpensToday: (packageName: String) -> Int = { 0 },
         now: Calendar = Calendar.getInstance()
     ): UsageLimitCheckResult {
         val nowMillis = now.timeInMillis
@@ -52,35 +52,44 @@ class EvaluateUsageLimitUseCase {
             if (!group.enabled) continue
             val maxOpens = group.maxOpensPerApp
             val maxMillis = group.maxMinutesPerApp?.let { it * 60_000L }
-            if (maxOpens == null && maxMillis == null) continue
 
-            val window = group.schedule.windowOn(now) ?: continue
-            if (nowMillis < window.startMillis) {
-                checkWithin(window.startMillis - nowMillis)
-                continue
-            }
-            if (nowMillis >= window.endMillis) continue
-
-            val usage = usageCache.getOrPut(window.startMillis) { usageInWindow(window.startMillis, nowMillis) }
-            for (app in group.apps) {
-                val appUsage = usage[app.packageName] ?: continue
-                if (!appUsage.isInForeground || app.packageName in violations) continue
-
-                val reason = when {
-                    maxOpens != null && appUsage.openCount > maxOpens ->
-                        "You've reached your limit of ${formatOpenTimes(maxOpens)} " +
-                            "during ${group.name}'s scheduled time today."
-                    maxMillis != null && appUsage.foregroundMillis >= maxMillis ->
-                        "You've used your ${formatLimitMinutes(group.maxMinutesPerApp!!)} " +
-                            "during ${group.name}'s scheduled time today."
-                    else -> null
+            val windows = group.schedule.timeRanges.mapNotNull { it.windowOn(now, group.schedule.activeDays) }
+            for (window in windows) {
+                if (nowMillis < window.startMillis) {
+                    checkWithin(window.startMillis - nowMillis)
+                    continue
                 }
-                if (reason != null) {
-                    violations[app.packageName] = UsageLimitViolation(app.packageName, reason)
-                } else if (maxMillis != null) {
-                    // Re-check exactly when the time runs out - capped so an
-                    // edge case (e.g. a missed app-switch event) is caught soon.
-                    checkWithin(minOf(maxMillis - appUsage.foregroundMillis, MAX_CHECK_DELAY_MILLIS))
+                if (nowMillis >= window.endMillis) continue
+
+                val usage = usageCache.getOrPut(window.startMillis) { usageInWindow(window.startMillis, nowMillis) }
+                for (app in group.apps) {
+                    val appUsage = usage[app.packageName]
+                        ?: if (usage.isEmpty()) AppWindowUsage(openCount = 1, foregroundMillis = 0L, isInForeground = true)
+                        else continue
+                    if (!appUsage.isInForeground || app.packageName in violations) continue
+
+                    val groupName = group.name.ifBlank { "Focus Schedule" }
+                    val timeRangeStr = group.schedule.timeRanges.joinToString(", ") { range ->
+                        "${formatClockTime(range.start)} to ${formatClockTime(range.end)}"
+                    }
+                    val scheduleReason = "Blocked based on the schedule $groupName from $timeRangeStr"
+
+                    val usedOpens = getUsedOpensToday(app.packageName)
+                    val isNoLimitsConfigured = maxOpens == null && maxMillis == null
+                    val isOverOpens = maxOpens != null && (usedOpens >= maxOpens || appUsage.openCount > maxOpens)
+                    val isOverMinutes = maxMillis != null && appUsage.foregroundMillis >= maxMillis
+
+                    val reason = when {
+                        isNoLimitsConfigured -> scheduleReason
+                        isOverOpens -> scheduleReason
+                        isOverMinutes -> scheduleReason
+                        else -> null
+                    }
+                    if (reason != null) {
+                        violations[app.packageName] = UsageLimitViolation(app.packageName, reason)
+                    } else if (maxMillis != null) {
+                        checkWithin(minOf(maxMillis - appUsage.foregroundMillis, MAX_CHECK_DELAY_MILLIS))
+                    }
                 }
             }
         }

@@ -19,12 +19,38 @@ data class ClockTime(val hour: Int, val minute: Int) {
     }
 }
 
-/** A weekly schedule: which days, and from [start] to [end]. */
-data class TimeSlot(
-    val activeDays: Set<String>,
+/** Formats [ClockTime] into "04:00 PM" / "09:30 AM". */
+fun formatClockTime(time: ClockTime): String {
+    val (formattedTime, suffix) = time.formatted()
+    return "$formattedTime $suffix"
+}
+
+/** A single time range within a schedule from [start] to [end]. */
+data class TimeRange(
     val start: ClockTime,
     val end: ClockTime
 )
+
+/** Draft representing a start/end time range in minutes after midnight for UI editing. */
+data class TimeRangeDraft(
+    val startMinutes: Int,
+    val endMinutes: Int
+)
+
+/** A weekly schedule: which days, and one or more time frames ([timeRanges]). */
+data class TimeSlot(
+    val activeDays: Set<String>,
+    val timeRanges: List<TimeRange>
+) {
+    val start: ClockTime get() = timeRanges.firstOrNull()?.start ?: ClockTime(16, 0)
+    val end: ClockTime get() = timeRanges.firstOrNull()?.end ?: ClockTime(18, 0)
+
+    constructor(
+        activeDays: Set<String>,
+        start: ClockTime,
+        end: ClockTime
+    ) : this(activeDays, listOf(TimeRange(start, end)))
+}
 
 /** The schedule a new group starts with (Location and Wi-Fi groups don't use it). */
 fun defaultTimeSlot(): TimeSlot = TimeSlot(
@@ -42,10 +68,9 @@ private fun ClockTime.toMinutes(): Int = hour * 60 + minute
 private fun dayIndexOf(calendar: Calendar): Int = (calendar.get(Calendar.DAY_OF_WEEK) + 5) % 7
 
 /**
- * Today's window for this slot, or null if the slot isn't active today.
- * Also null for an overnight slot (start after end), which limits skip.
+ * Calculates a window for [range] on [now], or null if not active today.
  */
-fun TimeSlot.windowOn(now: Calendar = Calendar.getInstance()): TimeWindow? {
+fun TimeRange.windowOn(now: Calendar = Calendar.getInstance(), activeDays: Set<String>): TimeWindow? {
     if (start.toMinutes() >= end.toMinutes()) return null
     if (DAY_KEYS[dayIndexOf(now)] !in activeDays) return null
 
@@ -62,20 +87,33 @@ fun TimeSlot.windowOn(now: Calendar = Calendar.getInstance()): TimeWindow? {
 }
 
 /**
- * Whether the slot is active at this moment.
- * An overnight slot (e.g. 22:00-06:00) also counts after midnight if it started yesterday.
+ * Today's window for this slot, or null if the slot isn't active today.
+ */
+fun TimeSlot.windowOn(now: Calendar = Calendar.getInstance()): TimeWindow? {
+    val nowMillis = now.timeInMillis
+    val windows = timeRanges.mapNotNull { it.windowOn(now, activeDays) }
+    return windows.find { nowMillis >= it.startMillis && nowMillis < it.endMillis }
+        ?: windows.filter { it.startMillis > nowMillis }.minByOrNull { it.startMillis }
+        ?: windows.firstOrNull()
+}
+
+/**
+ * Whether the slot is active at this moment in any of its [timeRanges].
  */
 fun TimeSlot.isActiveNow(calendar: Calendar = Calendar.getInstance()): Boolean {
     val now = calendar.get(Calendar.HOUR_OF_DAY) * 60 + calendar.get(Calendar.MINUTE)
     val today = DAY_KEYS[dayIndexOf(calendar)]
     val yesterday = DAY_KEYS[(dayIndexOf(calendar) + 6) % 7]
-    val startMinutes = start.toMinutes()
-    val endMinutes = end.toMinutes()
-    return when {
-        startMinutes < endMinutes -> today in activeDays && now >= startMinutes && now < endMinutes
-        startMinutes > endMinutes -> (today in activeDays && now >= startMinutes) ||
-            (yesterday in activeDays && now < endMinutes)
-        else -> false
+
+    return timeRanges.any { range ->
+        val startMinutes = range.start.toMinutes()
+        val endMinutes = range.end.toMinutes()
+        when {
+            startMinutes < endMinutes -> today in activeDays && now >= startMinutes && now < endMinutes
+            startMinutes > endMinutes -> (today in activeDays && now >= startMinutes) ||
+                (yesterday in activeDays && now < endMinutes)
+            else -> false
+        }
     }
 }
 

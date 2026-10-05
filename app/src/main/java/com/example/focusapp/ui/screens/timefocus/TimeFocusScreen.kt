@@ -19,6 +19,8 @@ import com.example.focusapp.R
 import com.example.focusapp.data.apps.InstalledAppInfo
 import com.example.focusapp.data.blocking.BlockedAppGroup
 import com.example.focusapp.data.blocking.ClockTime
+import com.example.focusapp.data.blocking.TimeRange
+import com.example.focusapp.data.blocking.TimeRangeDraft
 import com.example.focusapp.data.blocking.TimeSlot
 import com.example.focusapp.ui.common.pickedApps
 import com.example.focusapp.ui.common.rememberInstalledApps
@@ -47,18 +49,21 @@ private enum class TimeSlotEditStep { APPS, SCHEDULE, LIMITS }
 private data class TimeSlotDraft(
     val selectedPackages: Set<String> = emptySet(),
     val activeDays: Set<String> = emptySet(),
-    val startMinutes: Int = DEFAULT_START_MINUTES,
-    val endMinutes: Int = DEFAULT_END_MINUTES,
+    val timeRanges: List<TimeRangeDraft> = listOf(TimeRangeDraft(DEFAULT_START_MINUTES, DEFAULT_END_MINUTES)),
     val maxOpens: Int? = null,
     val maxMinutes: Int? = null,
     val name: String = "",
-)
+) {
+    val startMinutes: Int get() = timeRanges.firstOrNull()?.startMinutes ?: DEFAULT_START_MINUTES
+    val endMinutes: Int get() = timeRanges.firstOrNull()?.endMinutes ?: DEFAULT_END_MINUTES
+}
 
 private fun BlockedAppGroup.toDraft() = TimeSlotDraft(
     selectedPackages = apps.map { it.packageName }.toSet(),
     activeDays = schedule.activeDays,
-    startMinutes = schedule.start.hour * 60 + schedule.start.minute,
-    endMinutes = schedule.end.hour * 60 + schedule.end.minute,
+    timeRanges = schedule.timeRanges.map {
+        TimeRangeDraft(it.start.hour * 60 + it.start.minute, it.end.hour * 60 + it.end.minute)
+    },
     maxOpens = maxOpensPerApp,
     // Snap to a wheel option (5-minute steps) - older limits may be any minute count.
     maxMinutes = maxMinutesPerApp?.let { minutes ->
@@ -132,10 +137,15 @@ fun TimeFocusScreen(
     fun saveDraft() {
         val original = groups.find { it.id == editingGroupId }
         val apps = pickedApps(installedApps, draft.selectedPackages, original?.apps.orEmpty())
+        val timeRanges = draft.timeRanges.map { range ->
+            TimeRange(
+                start = ClockTime(range.startMinutes / 60, range.startMinutes % 60),
+                end = ClockTime(range.endMinutes / 60, range.endMinutes % 60)
+            )
+        }
         val schedule = TimeSlot(
             activeDays = draft.activeDays,
-            start = ClockTime(draft.startMinutes / 60, draft.startMinutes % 60),
-            end = ClockTime(draft.endMinutes / 60, draft.endMinutes % 60),
+            timeRanges = timeRanges,
         )
         val newGroup = BlockedAppGroup(id = "group_${System.currentTimeMillis()}", name = "", apps = emptyList(), schedule = schedule)
         val saved = (original ?: newGroup).copy(
@@ -270,9 +280,8 @@ private fun TimeFocusContent(
                 TimeSlotEditStep.SCHEDULE -> TimeSlotScheduleCard(
                     activeDays = draft.activeDays,
                     onToggleDay = { day -> onDraftChange(draft.copy(activeDays = draft.activeDays.toggle(day))) },
-                    startMinutes = draft.startMinutes,
-                    endMinutes = draft.endMinutes,
-                    onTimeChange = { start, end -> onDraftChange(draft.copy(startMinutes = start, endMinutes = end)) },
+                    timeRanges = draft.timeRanges,
+                    onTimeRangesChange = { ranges -> onDraftChange(draft.copy(timeRanges = ranges)) },
                     onBack = { onStepChange(TimeSlotEditStep.APPS) },
                     onNext = { onStepChange(TimeSlotEditStep.LIMITS) },
                     modifier = cardModifier,
@@ -308,10 +317,12 @@ private fun TimeFocusContent(
     }
 }
 
-/** e.g. "06:10am-08:00am", as on the Figma cards. */
+/** e.g. "06:10am-08:00am, 02:00pm-05:00pm", as on the Figma cards. */
 private fun formatSlotRange(slot: TimeSlot): String {
     fun ClockTime.label(): String = formatted().let { (time, suffix) -> time + suffix.lowercase() }
-    return "${slot.start.label()}-${slot.end.label()}"
+    return slot.timeRanges.joinToString(", ") { range ->
+        "${range.start.label()}-${range.end.label()}"
+    }
 }
 
 private val previewGroups = listOf(
