@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -111,7 +112,8 @@ private fun settingsIntentFor(context: Context, permission: AppPermission): Inte
 
 /**
  * Figma: "Settings". Reached from Home's gear; the same spot shows an X
- * that closes it ([onClose]).
+ * that closes it ([onClose]). The banner is the theme's picture, same as
+ * the Time Focus tab's header ([headerArt]).
  *  - Account: who is signed in; a guest can create an account
  *    ([onCreateAccountClick]); Log out returns to the login screen
  *  - Rewards: total focus time so far and the points left to spend
@@ -126,6 +128,8 @@ private fun settingsIntentFor(context: Context, permission: AppPermission): Inte
 @Composable
 fun SettingsScreen(
     onClose: () -> Unit,
+    // The picked theme's Time Focus picture (see BackgroundThemes), so both headers match.
+    @DrawableRes headerArt: Int = R.drawable.img_app_focus_header,
     onCreateAccountClick: () -> Unit = {},
     flipFocusOn: Boolean = false,
     onFlipFocusOnChange: (Boolean) -> Unit = {},
@@ -208,6 +212,7 @@ fun SettingsScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         SettingsContent(
+            headerArt = headerArt,
             username = account?.username,
             isLoggingOut = isLoggingOut,
             onCreateAccountClick = onCreateAccountClick,
@@ -273,6 +278,7 @@ fun SettingsScreen(
 /** Stateless layout of [SettingsScreen]. */
 @Composable
 private fun SettingsContent(
+    @DrawableRes headerArt: Int,
     username: String?,
     isLoggingOut: Boolean,
     onCreateAccountClick: () -> Unit,
@@ -323,11 +329,12 @@ private fun SettingsContent(
                 )
             }
 
-            // TODO(design): placeholder art - swap in the Settings banner once it's exported.
+            // The theme's Time Focus picture, same as that tab's header.
             Image(
-                painter = painterResource(R.drawable.img_app_focus_header),
+                painter = painterResource(headerArt),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                alignment = Alignment.TopCenter,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(150.dp)
@@ -506,6 +513,7 @@ private fun RowArrow() {
 private fun SettingsContentPreview() {
     FocusAppTheme {
         SettingsContent(
+            headerArt = R.drawable.img_app_focus_header,
             username = null,
             isLoggingOut = false,
             onCreateAccountClick = {},
