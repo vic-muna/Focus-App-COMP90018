@@ -69,11 +69,11 @@ fun AddLocationCard(
             modifier = Modifier.padding(top = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 Text(
                     text = locationLabel,
@@ -84,7 +84,7 @@ fun AddLocationCard(
                     Text(
                         text = formatCoordinates(latitude, longitude),
                         style = typography.caption,
-                        color = colors.onSurface,
+                        color = colors.onSurfaceMuted,
                     )
                 }
             }
