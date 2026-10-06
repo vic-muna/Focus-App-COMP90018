@@ -42,7 +42,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -121,7 +120,8 @@ private fun settingsIntentFor(context: Context, permission: AppPermission): Inte
  *  - Flip to Focus: lying the phone face-down starts a session; its own
  *    list of apps to block (kept in NavGraph.kt, like Quick Focus's)
  *  - Music: Focus Music plays the track picked in Rewards during Focus Mode;
- *    Home Music (TODO: no home player yet - only remembered while the screen is open)
+ *    Background Music plays res/raw/homemusic on Home, the tabs and Settings (off by
+ *    default; the player is in NavGraph.kt)
  *  - Permissions: whether each permission is on; tapping a row opens the
  *    system page to change it, and the switches refresh on coming back
  */
@@ -135,6 +135,8 @@ fun SettingsScreen(
     onFlipFocusOnChange: (Boolean) -> Unit = {},
     flipFocusApps: List<AppItem> = emptyList(),
     onFlipFocusAppsChange: (List<AppItem>) -> Unit = {},
+    backgroundMusicOn: Boolean = false,
+    onBackgroundMusicChange: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -182,8 +184,6 @@ fun SettingsScreen(
 
     val focusMusicSettings = remember { FocusMusicStorage(context) }
     var focusMusicOn by remember { mutableStateOf(focusMusicSettings.isEnabled()) }
-    // TODO(music): wire to a home music player once the app has one (and persist it).
-    var homeMusicOn by rememberSaveable { mutableStateOf(false) }
 
     // Logging out swaps the whole app for the login screen (see MainActivity).
     if (showLogOutDialog) {
@@ -253,8 +253,8 @@ fun SettingsScreen(
                 focusMusicOn = it
                 focusMusicSettings.saveEnabled(it)
             },
-            homeMusicOn = homeMusicOn,
-            onHomeMusicChange = { homeMusicOn = it },
+            backgroundMusicOn = backgroundMusicOn,
+            onBackgroundMusicChange = onBackgroundMusicChange,
             onClose = onClose,
         )
 
@@ -297,8 +297,8 @@ private fun SettingsContent(
     onFlipFocusAppsClick: () -> Unit,
     focusMusicOn: Boolean,
     onFocusMusicChange: (Boolean) -> Unit,
-    homeMusicOn: Boolean,
-    onHomeMusicChange: (Boolean) -> Unit,
+    backgroundMusicOn: Boolean,
+    onBackgroundMusicChange: (Boolean) -> Unit,
     onClose: () -> Unit,
 ) {
     val colors = FocusTheme.colors
@@ -412,8 +412,8 @@ private fun SettingsContent(
                 SettingsRow(label = "Focus Music") {
                     FocusSwitch(checked = focusMusicOn, onCheckedChange = onFocusMusicChange)
                 }
-                SettingsRow(label = "Home Music") {
-                    FocusSwitch(checked = homeMusicOn, onCheckedChange = onHomeMusicChange)
+                SettingsRow(label = "Background Music") {
+                    FocusSwitch(checked = backgroundMusicOn, onCheckedChange = onBackgroundMusicChange)
                 }
             }
 
@@ -532,8 +532,8 @@ private fun SettingsContentPreview() {
             onFlipFocusAppsClick = {},
             focusMusicOn = false,
             onFocusMusicChange = {},
-            homeMusicOn = true,
-            onHomeMusicChange = {},
+            backgroundMusicOn = true,
+            onBackgroundMusicChange = {},
             onClose = {},
         )
     }
