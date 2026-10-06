@@ -65,13 +65,40 @@ object BackgroundThemes {
     val Western = videoTheme("western", "Western", "Sunset over the frontier", R.drawable.img_thumb_western, R.drawable.img_header_western, R.raw.bg_western, Palette.Truffle, Color(0xffffe2bc))
     val Winter = videoTheme("winter", "Winter", "Snow falling softly", R.drawable.img_thumb_winter, R.drawable.img_header_winter, R.raw.bg_winter, Palette.AbyssalBlue, Color(0xffeef3ff))
 
+    // Run backgrounds: a new video per place, pricier than the ones above. Each reuses its
+    // place's thumbnail, header and colours.
+    // TODO(copy): intros are placeholders - replace with the final text.
+    val ForestRun = BackgroundTheme(
+        id = "run_forest",
+        name = "Forest Run",
+        intro = "Run through the forest",
+        homeArt = R.drawable.img_home_dashboard,
+        focusArt = R.drawable.img_focus_background,
+        timeFocusArt = R.drawable.img_app_focus_header,
+        timeFocusColor = Palette.Fantastic,
+        pricePoints = RewardRules.RUN_BACKGROUND_PRICE_POINTS,
+        focusVideo = R.raw.run_forest,
+        homeArtHasFrame = true,
+    )
+    val DesertRun = runTheme(Desert, "Run across the dunes", R.raw.run_desert)
+    val EastRun = runTheme(East, "Run past the temples", R.raw.run_east)
+    val EuropeRun = runTheme(Europe, "Run through old streets", R.raw.run_europe)
+    val FantasyRun = runTheme(Fantasy, "Run through a magic world", R.raw.run_fantasy)
+    val OceanRun = runTheme(Ocean, "Run along the shore", R.raw.run_ocean)
+    val RockRun = runTheme(Rock, "Run to the beat", R.raw.run_rock)
+    val SciFiRun = runTheme(SciFi, "Run among the stars", R.raw.run_scifi)
+    val SpringRun = runTheme(Spring, "Run through the blossoms", R.raw.run_spring)
+    val WesternRun = runTheme(Western, "Run into the sunset", R.raw.run_western)
+    val WinterRun = runTheme(Winter, "Run through the snow", R.raw.run_winter)
+
     val all: List<BackgroundTheme> =
-        listOf(Scene, Desert, East, Europe, Fantasy, Ocean, Rock, SciFi, Spring, Western, Winter)
+        listOf(Scene, Desert, East, Europe, Fantasy, Ocean, Rock, SciFi, Spring, Western, Winter) +
+            listOf(ForestRun, DesertRun, EastRun, EuropeRun, FantasyRun, OceanRun, RockRun, SciFiRun, SpringRun, WesternRun, WinterRun)
 
     val default: BackgroundTheme = Scene
 
     /** How many tiles the picker shows - slots without a theme yet say "Coming soon". */
-    const val PICKER_SLOTS = 12
+    const val PICKER_SLOTS = 24
 
     /** The theme with [id], or [default] if there's none (e.g. nothing picked yet). */
     fun byId(id: String?): BackgroundTheme = all.find { it.id == id } ?: default
@@ -97,5 +124,14 @@ object BackgroundThemes {
         pricePoints = RewardRules.BACKGROUND_PRICE_POINTS,
         focusVideo = video,
         focusTextColor = focusTextColor,
+    )
+
+    /** [base]'s Run version: the same art and colours, a new [video], and the Run price. */
+    private fun runTheme(base: BackgroundTheme, intro: String, @RawRes video: Int) = base.copy(
+        id = "run_${base.id}",
+        name = "${base.name} Run",
+        intro = intro,
+        pricePoints = RewardRules.RUN_BACKGROUND_PRICE_POINTS,
+        focusVideo = video,
     )
 }
