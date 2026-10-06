@@ -345,6 +345,7 @@ fun FocusAppNavGraph(
             composable(Destinations.SETTINGS, enterTransition = slideUpEnter, exitTransition = slideDownExit) {
                 SettingsScreen(
                     onClose = { navController.popBackStack() },
+                    headerArt = backgroundTheme.timeFocusArt,
                     onCreateAccountClick = { navController.navigate(Destinations.CREATE_ACCOUNT) },
                     flipFocusOn = flipFocusGroup.enabled,
                     onFlipFocusOnChange = { on -> saveFlipFocus { it.copy(enabled = on) } },
