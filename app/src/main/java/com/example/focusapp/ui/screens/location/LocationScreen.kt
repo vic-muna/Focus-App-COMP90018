@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -559,11 +560,15 @@ private fun LocationContent(
         }
 
         if (draft == null) {
+            val navBarHideDistance = 140.dp
+            val navBarOffsetY = navBarHideDistance * panelState.progress
+
             MainTabBar(
                 selectedTab = MainTab.LOCATION,
                 onTabClick = onTabClick,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
+                    .offset(y = navBarOffsetY)
                     .padding(bottom = FocusSpacing.ScreenBottom),
             )
         } else {

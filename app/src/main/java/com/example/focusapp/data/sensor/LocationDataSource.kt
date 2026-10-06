@@ -18,7 +18,7 @@ import kotlinx.coroutines.flow.asStateFlow
 // --- 1. CONSTANTS ---
 private const val TAG = "GpsTracker"
 private const val DEFAULT_UPDATE_INTERVAL_SECONDS = 30L
-private const val FAST_UPDATE_INTERVAL_SECONDS = 5L
+private const val FAST_UPDATE_INTERVAL_SECONDS = 10L
 
 // --- 2. DEFAULT CONFIGURATION ---
 private val defaultLocationRequest: LocationRequest = LocationRequest.Builder(
