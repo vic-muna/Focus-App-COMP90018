@@ -142,7 +142,7 @@ fun FocusSessionScreen(
     var musicOn by remember { mutableStateOf(musicSettings.isEnabled()) }
     DisposableEffect(musicOn) {
         val player = if (musicOn) {
-            FocusMusicPlayer(context, FocusMusics.byId(musicSettings.getSelectedId())).also { it.start() }
+            FocusMusicPlayer(context, FocusMusics.byId(musicSettings.getSelectedId()).audio).also { it.start() }
         } else {
             null
         }

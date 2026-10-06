@@ -113,7 +113,7 @@ private fun SettingsSectionPreview() {
                 .padding(16.dp),
         ) {
             SettingsRow(label = "Focus Music") { FocusSwitch(checked = false, onCheckedChange = {}) }
-            SettingsRow(label = "Home Music") { FocusSwitch(checked = true, onCheckedChange = {}) }
+            SettingsRow(label = "Background Music") { FocusSwitch(checked = true, onCheckedChange = {}) }
         }
     }
 }
