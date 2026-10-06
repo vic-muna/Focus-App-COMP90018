@@ -89,7 +89,8 @@ data class ActiveFocusSession(
 /**
  * The focus timer screen: the background art, the elapsed time, and an "i"
  * button that shows how to leave. Holding anywhere for 3 seconds, shaking the
- * phone (or pressing Back) ends the session, which is saved first.
+ * phone (or pressing Back) ends the session, which is saved first and then summed up
+ * ([SessionSummaryOverlay]) until "Done".
  */
 @Composable
 fun FocusSessionScreen(
@@ -110,6 +111,9 @@ fun FocusSessionScreen(
 
     // Set if saving the session fails; shown with a "Continue" button instead of crashing.
     var saveError by remember { mutableStateOf<String?>(null) }
+
+    // The saved session, once it's saved - shows the summary card until "Done".
+    var summary by remember { mutableStateOf<FocusSession?>(null) }
 
     var tick by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -160,7 +164,7 @@ fun FocusSessionScreen(
                 withContext(Dispatchers.IO) {
                     FocusRepositoryProvider.get(context).saveFocusSession(completed)
                 }
-                onEndSessionClick()
+                summary = completed
             } catch (e: Exception) {
                 // Show the error and wait for "Continue", so the message isn't missed.
                 saveError = friendlyErrorMessage(e, "Saving the session")
@@ -174,7 +178,9 @@ fun FocusSessionScreen(
         saveAndFinish()
     }
 
-    BackHandler(onBack = ::cancelSession)
+    BackHandler {
+        if (summary != null) onEndSessionClick() else cancelSession()
+    }
 
     // Shaking the phone ends the session too, like holding (see ShakeDetector).
     LaunchedEffect(lifecycleOwner) {
@@ -306,6 +312,8 @@ fun FocusSessionScreen(
                 )
             }
         }
+
+        summary?.let { SessionSummaryOverlay(session = it, onDone = onEndSessionClick) }
 
         if (isHolding) {
             Box(
