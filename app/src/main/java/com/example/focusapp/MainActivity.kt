@@ -17,6 +17,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import com.example.focusapp.data.account.AccountManager
@@ -24,6 +25,8 @@ import com.example.focusapp.data.notification.TimeFocusNotification
 import com.example.focusapp.data.sensor.startGPSUpdates
 import com.example.focusapp.ui.navigation.FocusAppNavGraph
 import com.example.focusapp.ui.screens.account.AccountScreen
+import com.example.focusapp.ui.common.BackgroundMusic
+import com.example.focusapp.data.preferences.FocusMusicStorage
 import com.example.focusapp.ui.theme.FocusAppTheme
 
 private const val TAG = "MainActivity"
@@ -82,6 +85,9 @@ class MainActivity : ComponentActivity() {
                     // scratch for each user so nothing from the previous one stays on screen.
                     Crossfade(targetState = account?.uid, animationSpec = tween(300), label = "account") { uid ->
                         if (uid == null) {
+                            // Same switch as in Settings (saved on the phone, so it carries over a log-out).
+                            val backgroundMusicOn = remember { FocusMusicStorage(applicationContext).isBackgroundEnabled() }
+                            BackgroundMusic(play = backgroundMusicOn)
                             AccountScreen()
                         } else {
                             FocusAppNavGraph(

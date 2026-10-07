@@ -80,6 +80,8 @@ fun HomeScreenWithSheet(
     @DrawableRes dashboardArt: Int = R.drawable.img_home_dashboard,
     // False for art without its own frame (the shop backgrounds' thumbnails) - see BackgroundTheme.homeArtHasFrame.
     dashboardArtHasFrame: Boolean = true,
+    // True for a Run background - Home shows a "RUN" badge on its art.
+    dashboardArtIsRun: Boolean = false,
     // [Claude, 2026-10-04] The signed-in username (null for a guest, or while it's still
     // loading) - see NavGraph.kt's call site, which is the only thing that reads
     // AccountManager.account. "Hi! User" used to be literal - GreetingHeader always took the
@@ -199,6 +201,7 @@ fun HomeScreenWithSheet(
             userName = userName ?: "Guest",
             dashboardArt = dashboardArt,
             dashboardArtHasFrame = dashboardArtHasFrame,
+            dashboardArtIsRun = dashboardArtIsRun,
             selectedTab = MainTab.HOME,
             onSettingsClick = onSettingsClick,
             onPartyClick = onPartyModeClick,

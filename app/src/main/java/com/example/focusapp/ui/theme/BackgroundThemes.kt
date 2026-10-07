@@ -35,6 +35,8 @@ data class BackgroundTheme(
     val homeArtHasFrame: Boolean = false,
     /** The Focus Mode timer and noise label colour, picked to stand out on [focusArt] / [focusVideo]. */
     val focusTextColor: Color = Palette.Truffle,
+    /** A Run background (see BackgroundThemes): its art shows a "RUN" badge (RunBadge). */
+    val isRun: Boolean = false,
 ) {
     fun isUnlocked(ownedIds: Set<String>): Boolean = pricePoints == 0 || id in ownedIds
 }
@@ -79,6 +81,7 @@ object BackgroundThemes {
         pricePoints = RewardRules.RUN_BACKGROUND_PRICE_POINTS,
         focusVideo = R.raw.run_forest,
         homeArtHasFrame = true,
+        isRun = true,
     )
     val DesertRun = runTheme(Desert, "Run across the dunes", R.raw.run_desert)
     val EastRun = runTheme(East, "Run past the temples", R.raw.run_east)
@@ -133,5 +136,6 @@ object BackgroundThemes {
         intro = intro,
         pricePoints = RewardRules.RUN_BACKGROUND_PRICE_POINTS,
         focusVideo = video,
+        isRun = true,
     )
 }

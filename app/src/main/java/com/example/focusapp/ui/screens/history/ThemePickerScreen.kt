@@ -43,6 +43,7 @@ import com.example.focusapp.ui.theme.FocusSpacing
 import com.example.focusapp.ui.theme.FocusTheme
 import com.example.focusapp.ui.components.button.RejectButton
 import com.example.focusapp.ui.components.card.FlyCardOverlay
+import com.example.focusapp.ui.components.card.RunBadge
 import com.example.focusapp.ui.components.card.UnlockCard
 import com.example.focusapp.ui.components.card.consumeTaps
 
@@ -169,6 +170,7 @@ private fun ThemeTile(
                     modifier = Modifier.fillMaxSize(),
                 )
                 if (locked) LockedOverlay(pricePoints = theme.pricePoints)
+                if (theme.isRun) RunBadge(Modifier.align(Alignment.TopEnd).padding(6.dp))
             } else {
                 Text(
                     text = "Coming\nsoon",
