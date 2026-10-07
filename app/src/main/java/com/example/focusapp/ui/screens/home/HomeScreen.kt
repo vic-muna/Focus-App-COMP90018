@@ -32,6 +32,7 @@ import androidx.compose.ui.draw.clipToBounds
 import com.example.focusapp.ui.theme.FocusSpacing
 import androidx.annotation.DrawableRes
 import com.example.focusapp.ui.components.bar.SettingsTopBar
+import com.example.focusapp.ui.components.card.RunBadge
 /**
  * img_home_dashboard.png is 960 x 903 px, but the artwork only covers a
  * 692 x 795 px area (the rest is background-colored margin), sitting ~19 px
@@ -53,6 +54,8 @@ fun HomeScreen(
     @DrawableRes dashboardArt: Int = R.drawable.img_home_dashboard,
     // False for art without its own frame (the shop backgrounds' thumbnails) - see BackgroundTheme.homeArtHasFrame.
     dashboardArtHasFrame: Boolean = true,
+    // True for a Run background (BackgroundTheme.isRun): its art gets a "RUN" badge.
+    dashboardArtIsRun: Boolean = false,
     selectedTab: MainTab = MainTab.HOME,
     onSettingsClick: () -> Unit = {},
     onPartyClick: () -> Unit = {},
@@ -118,6 +121,8 @@ fun HomeScreen(
                     .background(FocusTheme.colors.surface.copy(alpha = 0.72f))
                     .padding(horizontal = 16.dp, vertical = 6.dp),
             )
+
+            if (dashboardArtIsRun) RunBadge(Modifier.align(Alignment.TopEnd).padding(16.dp))
         }
 
         Spacer(Modifier.height(40.dp))

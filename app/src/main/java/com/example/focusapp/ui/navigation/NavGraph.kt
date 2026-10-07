@@ -300,6 +300,7 @@ fun FocusAppNavGraph(
                     groups = schedule.groups,
                     dashboardArt = backgroundTheme.homeArt,
                     dashboardArtHasFrame = backgroundTheme.homeArtHasFrame,
+                    dashboardArtIsRun = backgroundTheme.isRun,
                     wifiSsids = wifi.groups.filter { it.enabled }.flatMap { it.watchedSsids }.distinct(),
                     quickFocusApps = quickFocus.groups.firstOrNull()?.apps.orEmpty(),
                     onQuickFocusAppsChange = ::saveQuickFocusApps,
