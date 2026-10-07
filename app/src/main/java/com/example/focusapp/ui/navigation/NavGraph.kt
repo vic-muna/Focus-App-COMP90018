@@ -30,10 +30,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.focusapp.R
-import com.example.focusapp.data.audio.FocusMusicPlayer
 import com.example.focusapp.data.preferences.FocusMusicStorage
-import kotlinx.coroutines.awaitCancellation
 import com.example.focusapp.data.account.AccountManager
 import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.data.accessibility.BlockSource
@@ -44,6 +41,7 @@ import com.example.focusapp.data.blocking.watchedSsids
 import com.example.focusapp.data.notification.FocusTimerService
 import com.example.focusapp.data.preferences.BackgroundThemeStorage
 import com.example.focusapp.data.sensor.MotionSensorDataSource
+import com.example.focusapp.ui.common.BackgroundMusic
 import com.example.focusapp.ui.common.vibrateShort
 import com.example.focusapp.ui.screens.account.AccountScreen
 import com.example.focusapp.ui.screens.history.HistoryScreen
@@ -90,8 +88,9 @@ private val slideDownExit: Exit = {
 }
 
 /**
- * The screens Background Music plays on. Not Focus Mode (it has Focus Music), the music
- * picker (it plays previews), or the dashboard, Rewards, Party Mode and account pages.
+ * The screens Background Music plays on (the login screen plays it too - see MainActivity).
+ * Not Focus Mode (it has Focus Music), the music picker (it plays previews), or the
+ * dashboard and Rewards.
  */
 private val BACKGROUND_MUSIC_ROUTES = setOf(
     Destinations.HOME,
@@ -99,10 +98,9 @@ private val BACKGROUND_MUSIC_ROUTES = setOf(
     Destinations.TIME_FOCUS,
     Destinations.WIFI,
     Destinations.SETTINGS,
+    Destinations.FRIENDS, // Party Mode
+    Destinations.CREATE_ACCOUNT,
 )
-
-/** Background Music plays quieter than Focus Music - it's only a backdrop. */
-private const val BACKGROUND_MUSIC_VOLUME = 0.3f
 
 /** How long the phone must stay face-down before Flip to Focus starts a session. */
 private const val FLIP_HOLD_MILLIS = 2_000L
@@ -268,19 +266,7 @@ fun FocusAppNavGraph(
     val musicStorage = remember { FocusMusicStorage(context) }
     var backgroundMusicOn by remember { mutableStateOf(musicStorage.isBackgroundEnabled()) }
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
-    val playBackgroundMusic = backgroundMusicOn && currentRoute in BACKGROUND_MUSIC_ROUTES
-    LaunchedEffect(playBackgroundMusic, lifecycleOwner) {
-        if (!playBackgroundMusic) return@LaunchedEffect
-        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            val player = FocusMusicPlayer(context, R.raw.homemusic, BACKGROUND_MUSIC_VOLUME)
-            try {
-                player.start()
-                awaitCancellation()
-            } finally {
-                player.stop()
-            }
-        }
-    }
+    BackgroundMusic(play = backgroundMusicOn && currentRoute in BACKGROUND_MUSIC_ROUTES)
 
     // A slot to show on the Time Focus tab (from a Time Focus notification).
     var timeSlotToShow by remember { mutableStateOf<String?>(null) }
