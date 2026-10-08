@@ -59,6 +59,8 @@ object AccountManager {
     // case) and written only by whoever is - or is about to prove themselves to be, via
     // sign-in - that uid; see this class's README/chat notes for the exact rule.
     private const val RECOVERY_PATH = "accountRecovery"
+    // users/{uid}/username - a label for people reading the database, see saveUsername().
+    private const val USERNAME_KEY = "username"
     private const val PREFS_NAME = "focus_account"
     // The uid whose data is in the phone's storage right now.
     private const val KEY_OWNER_UID = "local_data_owner_uid"
@@ -95,6 +97,8 @@ object AccountManager {
             prefs.edit().putString(KEY_OWNER_UID, account.uid).apply()
         }
         if (prefs.getBoolean(KEY_RESTORE_PENDING, false)) restore(context)
+        // Accounts made before the name was saved get it the next time the app opens.
+        account.username?.let { saveUsername(account.uid, it) }
     }
 
     suspend fun continueAsGuest(context: Context) {
@@ -129,6 +133,7 @@ object AccountManager {
             auth.createUserWithEmailAndPassword(email, password).await().user
         } ?: error("Sign-up returned no user")
         saveRecoveryBlob(username, user.uid, password, securityQuestion, securityAnswer)
+        saveUsername(user.uid, username)
         prepareLocalData(context, user.uid, restore = false)
         _account.value = Account(user.uid, username)
     }
@@ -172,6 +177,7 @@ object AccountManager {
         // Re-encrypted under the SAME answer so recovery keeps working after this password
         // change too - otherwise this would be a one-time-use recovery, not a real reset.
         saveRecoveryBlob(normalized, user.uid, newPassword, question, answer)
+        saveUsername(user.uid, normalized)
         prepareLocalData(context, user.uid, restore = true)
         _account.value = Account(user.uid, normalized)
     }
@@ -194,6 +200,17 @@ object AccountManager {
         FirebaseDatabase.getInstance().getReference("$RECOVERY_PATH/${normalizeUsername(username)}").setValue(value).await()
     }
 
+    /**
+     * Writes the username to users/{uid}/username, so the Firebase Console shows whose data
+     * each uid folder is. Only for people reading the database - the app never reads it back.
+     * Not awaited: a failed or offline write must not stop signing in (Firebase retries it).
+     */
+    private fun saveUsername(uid: String, username: String) {
+        FirebaseDatabase.getInstance().getReference("users/$uid/$USERNAME_KEY")
+            .setValue(normalizeUsername(username))
+            .addOnFailureListener { Log.w(TAG, "Saving the username to the database failed.", it) }
+    }
+
     /** Thrown by [recoverPassword] for "that answer (or username) doesn't unlock anything" -
      *  deliberately one exception type for both cases, not two - see that function's doc
      *  comment for why. */
@@ -203,6 +220,7 @@ object AccountManager {
     suspend fun logIn(context: Context, username: String, password: String) {
         val user = auth.signInWithEmailAndPassword(emailFor(username), password).await().user
             ?: error("Log-in returned no user")
+        saveUsername(user.uid, username)
         prepareLocalData(context, user.uid, restore = true)
         _account.value = Account(user.uid, username)
     }
