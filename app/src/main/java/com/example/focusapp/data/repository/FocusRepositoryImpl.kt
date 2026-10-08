@@ -262,7 +262,7 @@ class FocusRepositoryImpl(
      * few seconds per user, which is both a battery and a cost problem. This lets a status
      * through only when:
      *  - it's the first status we've ever pushed for this partyId+uid (always show up), OR
-     *  - isFocusing or displayName changed (a real state change, not just noisy GPS jitter -
+     *  - isFocusing, accessibilityReady, waitingForPermission or displayName changed (a real state change, not just noisy GPS jitter -
      *    friends should see "started focusing" immediately, not up to 30s late), OR
      *  - at least [PARTY_STATUS_MIN_INTERVAL_MILLIS] has passed since the last push, OR
      *  - the device has moved at least [PARTY_STATUS_MIN_DISTANCE_METERS] since the last push.
@@ -276,6 +276,8 @@ class FocusRepositoryImpl(
 
         val shouldPush = previous == null ||
             previous.first.isFocusing != status.isFocusing ||
+            previous.first.accessibilityReady != status.accessibilityReady ||
+            previous.first.waitingForPermission != status.waitingForPermission ||
             previous.first.displayName != status.displayName ||
             now - previous.second >= PARTY_STATUS_MIN_INTERVAL_MILLIS ||
             distanceMetersBetween(previous.first, status) >= PARTY_STATUS_MIN_DISTANCE_METERS

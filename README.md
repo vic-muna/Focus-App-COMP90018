@@ -372,7 +372,9 @@ Quick Focus changes below). David's logic is kept; only the UI and wiring change
 - **Party Mode:** group icon at Home's top-left → friend list with search
   (friend IDs are a TODO) → **Create group** / **Join group** fly cards using
   David's Firebase party logic (the 6-letter code is the party id). The host's
-  start uses the same permission check and app card as Quick Focus.
+  start uses the same permission check and app card as Quick Focus. When the host
+  starts, everyone who joined starts focusing too, and the host can't start until
+  every member has App Blocking on (see the 08/10/2026 update).
 - **Time Focus banner:** the old "today's app usage" page was removed. Tapping
   the banner opens a fly card asking for Usage access if it's off (the daily
   limits need it), otherwise it opens the Time Focus tab.
@@ -631,3 +633,42 @@ The password is encrypted using a "key calculated from the answer" and stored in
 - Daily opens for one app is shared between different Time Frames and Groups (e.g., a total of 3 opens for the whole day within the Scheduled times, not each time frame)
 - Slider in the ScheduleDial.kt wheel was adjusted to only change if the orange part itself is touched, none of the other parts
 - Search bar was added in the Location Tab
+
+## 08/10/2026 Update (Jia-Ying Lee) - Party Mode: everyone starts together
+
+Before, only the host's phone went into focus. Now the group starts together:
+
+- **Members follow the host.** When the host starts, every member who has joined (and
+  is on the join card) starts focusing too, blocking the apps picked in their own Quick
+  Focus card. Without the Accessibility permission they get the permission dialog
+  instead of starting.
+- **The host waits for everyone to be ready.** Each phone says in Firebase whether App
+  Blocking (Accessibility) is on. If a member has it off when the host taps start, the
+  host stays on the group card and sees "Wait for the participant to open the
+  permission." (or "...N participants..."). The message goes away by itself when they
+  turn it on, and the host taps start again. It is checked again after the host picks
+  the apps, in case someone turned it off in between.
+- **Members who aren't ready are notified.** They get a notification ("Your group is
+  waiting for you") and the permission dialog. Both go away once the permission is on.
+- **Fixed: members never saw the host focusing.** The `focusing` value was being read
+  back as `false`, so nothing could follow it. The members are now read key by key in
+  `FirebaseRemoteDataSource.observePartyMembers()`.
+- **Fixed: the "focusing" flag was never reset.** It stayed `true` after a session, so
+  the next person to join would have been pulled straight into focus. It is cleared when
+  a phone leaves the group or the screen closes.
+- **Limits:**
+  - The notification comes from the phone's own Firebase listener, so it only appears
+    while the app is running. A push to a closed app would need a server (Cloud
+    Functions / FCM).
+  - A member who is killed without leaving keeps their last status in the party and can
+    keep blocking the host's start.
+  - Members have to be on the join card when the host starts; ending the host's session
+    does not end theirs.
+- Code: `ui/screens/party/PartyModeViewModel.kt` (`requestStart`, `partyFocusStarted`,
+  `permissionNeeded`, `waitingForMembers`), `ui/screens/party/FriendsScreen.kt`,
+  `data/notification/PartyNotification.kt`, `domain/model/PartyMemberStatus.kt`
+  (`accessibilityReady`, `waitingForPermission`).
+- Firebase: two new keys under `parties/{partyId}/members/{uid}`; no rule change. See
+  `docs/firebase-realtime-database-structure.md`.
+- Known issue: 4 tests in `FocusRepositoryImplTest` (`saveFocusZone...`) still fail; they
+  are not related to this change.

@@ -149,6 +149,20 @@ fun FriendsScreen(
             }
         }
     }
+    // The host tried to start while this phone has App Blocking off: ask for it right away.
+    LaunchedEffect(Unit) {
+        viewModel.permissionNeeded.collect {
+            if (currentJoined) showAccessibilityPermissionDialog = true
+        }
+    }
+
+    // Host: Start is held back while members still need to turn App Blocking on.
+    val waitingForMembers by viewModel.waitingForMembers.collectAsState()
+    val startBlockedMessage = when {
+        waitingForMembers <= 0 -> null
+        waitingForMembers == 1 -> "Wait for the participant to open the permission."
+        else -> "Wait for $waitingForMembers participants to open the permission."
+    }
 
     FriendsContent(
         isGuest = viewModel.isGuest,
@@ -184,12 +198,13 @@ fun FriendsScreen(
             GroupCard.CREATE -> CreateGroupCard(
                 code = createCode,
                 members = memberNames("You (Host)"),
-                errorMessage = errorMessage,
+                errorMessage = startBlockedMessage ?: errorMessage,
                 onClose = ::closeCard,
                 onStart = {
-                    // Permission first, then pick the apps to block (same card as Quick Focus).
-                    if (isAccessibilityEnabled) card = GroupCard.QUICK_FOCUS_APPS
-                    else showAccessibilityPermissionDialog = true
+                    // Own permission first, then everyone else's, then pick the apps to block
+                    // (same card as Quick Focus).
+                    if (!isAccessibilityEnabled) showAccessibilityPermissionDialog = true
+                    else if (viewModel.requestStart()) card = GroupCard.QUICK_FOCUS_APPS
                 },
                 friends = friends,
                 onInviteFriend = viewModel::inviteFriend,
@@ -217,10 +232,13 @@ fun FriendsScreen(
                 confirmDescription = "Start focusing",
                 onConfirm = { apps ->
                     onQuickFocusAppsChange(apps)
-                    card =
-                        GroupCard.CREATE // Coming back after focusing shows the group card again.
-                    viewModel.setFocusing(true)
-                    onStartFocus()
+                    // Coming back after focusing shows the group card again.
+                    card = GroupCard.CREATE
+                    // Checked again: someone may have turned App Blocking off while apps were picked.
+                    if (viewModel.requestStart()) {
+                        viewModel.setFocusing(true)
+                        onStartFocus()
+                    }
                 },
                 onClose = { card = GroupCard.CREATE },
                 modifier = Modifier.consumeTaps(),

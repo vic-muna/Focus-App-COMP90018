@@ -130,7 +130,9 @@ every change under this node).
   "displayName": "Alex",
   "latitude": -37.7963,
   "longitude": 144.9614,
-  "focusing": true
+  "focusing": true,
+  "accessibilityReady": true,
+  "waitingForPermission": false
 }
 ```
 
@@ -138,9 +140,18 @@ Note the JSON key is `focusing`, not `isFocusing` - `PartyMemberStatus.isFocusin
 explicit `@PropertyName("focusing")` to force this. Without it, Firebase's reflection-based
 mapper writes and reads that one property under two *different* keys, so it always reads back as
 `false` no matter what was written (a real bug hit during testing - see that class's doc comment).
+Because of that, `FirebaseRemoteDataSource.observePartyMembers()` does not use the automatic
+mapping at all: it reads each key by hand.
 
 `latitude`/`longitude` are nullable (a member can share focus status
 without location).
+
+`accessibilityReady` is whether that phone has App Blocking (Accessibility) turned on. The host
+can't start the group's session until every member has it. A missing key counts as ready.
+`waitingForPermission` is only ever true on the host's entry: the host tried to start while someone
+wasn't ready. Members who aren't ready react to it with a notification and the permission dialog.
+A member who leaves is written back as ready and not waiting, since their entry stays in the list.
+No rule change is needed - each member writes only their own `members/{uid}`.
 
 ## Security Rules
 
