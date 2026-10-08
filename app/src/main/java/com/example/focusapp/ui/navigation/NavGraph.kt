@@ -219,10 +219,7 @@ fun FocusAppNavGraph(
 
     // Flip to Focus: while the app is open and no session is running, lying the phone
     // face-down for a moment starts a session that blocks the Flip to Focus apps.
-    // Like Quick Focus, it needs App Blocking on and at least one app picked.
-    val isAppBlockingOn by AccessibilityBridge.isServiceConnected.collectAsState()
-    val canFlipToFocus = activeFocusSession == null && isAppBlockingOn &&
-        flipFocusGroup.enabled && flipFocusGroup.apps.isNotEmpty()
+    val canFlipToFocus = activeFocusSession == null && flipFocusGroup.enabled
     val lifecycleOwner = LocalLifecycleOwner.current
     // Keyed on the apps too, so a session started by this effect blocks the latest pick.
     LaunchedEffect(canFlipToFocus, flipFocusGroup.apps, lifecycleOwner) {
