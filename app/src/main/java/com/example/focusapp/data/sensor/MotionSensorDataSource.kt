@@ -44,38 +44,28 @@ class MotionSensorDataSource(context: Context) {
     }
 
     /**
-     * Whether the phone is lying screen-down: gravity points out through the screen,
-     * and the proximity sensor sees something right against it. Phones without a
-     * gravity sensor use the accelerometer (the same thing while the phone is still);
-     * phones without a proximity sensor go by gravity alone.
+     * Whether the phone is lying screen-down: gravity points out through the back of the screen.
+     * Phones without a gravity sensor use the accelerometer (the same thing while the phone is still).
      */
     fun isFaceDownFlow(): Flow<Boolean> = callbackFlow {
         val gravity = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY)
             ?: sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        val proximity = sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY)
         if (gravity == null) {
             close()
             return@callbackFlow
         }
 
-        var isScreenDown = false
-        var isCovered = proximity == null
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent) {
-                when (event.sensor) {
-                    gravity -> isScreenDown = event.values[2] < FACE_DOWN_GRAVITY_Z
-                    // Most proximity sensors only report "near" (0) or "far" (their maximum range).
-                    proximity -> isCovered = event.values[0] < event.sensor.maximumRange
+                if (event.sensor == gravity) {
+                    val isScreenDown = event.values[2] < FACE_DOWN_GRAVITY_Z
+                    trySend(isScreenDown)
                 }
-                trySend(isScreenDown && isCovered)
             }
 
             override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) = Unit
         }
         sensorManager.registerListener(listener, gravity, SensorManager.SENSOR_DELAY_NORMAL)
-        if (proximity != null) {
-            sensorManager.registerListener(listener, proximity, SensorManager.SENSOR_DELAY_NORMAL)
-        }
         awaitClose { sensorManager.unregisterListener(listener) }
     }.distinctUntilChanged()
 }
