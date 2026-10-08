@@ -203,7 +203,20 @@ class FirebaseRemoteDataSource(
         val ref = db.getReference("parties/$partyId/members")
         val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                trySend(snapshot.children.mapNotNull { it.getValue(PartyMemberStatus::class.java) })
+                // Read by hand, not getValue(PartyMemberStatus::class.java): the automatic mapping
+                // can't tell that the stored "focusing" belongs to the isFocusing property, so it
+                // can leave it false - which would stop anyone ever following the host into focus.
+                trySend(snapshot.children.map { child ->
+                    PartyMemberStatus(
+                        uid = child.child("uid").value as? String ?: child.key.orEmpty(),
+                        displayName = child.child("displayName").value as? String ?: "",
+                        latitude = (child.child("latitude").value as? Number)?.toDouble(),
+                        longitude = (child.child("longitude").value as? Number)?.toDouble(),
+                        isFocusing = child.child("focusing").value as? Boolean ?: false,
+                        accessibilityReady = child.child("accessibilityReady").value as? Boolean ?: true,
+                        waitingForPermission = child.child("waitingForPermission").value as? Boolean ?: false
+                    )
+                })
             }
             override fun onCancelled(error: DatabaseError) {
                 close(error.toException())

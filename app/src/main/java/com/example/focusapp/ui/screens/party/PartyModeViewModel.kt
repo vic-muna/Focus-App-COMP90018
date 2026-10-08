@@ -3,6 +3,8 @@ package com.example.focusapp.ui.screens.party
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.focusapp.data.accessibility.AccessibilityBridge
+import com.example.focusapp.data.notification.PartyNotification
 import com.example.focusapp.data.repository.FocusRepositoryProvider
 import com.example.focusapp.data.sensor.SensorDataSource
 import com.example.focusapp.domain.model.Friend
@@ -25,7 +27,11 @@ import com.example.focusapp.data.account.AccountManager
  * The 6-letter group code is the party's id in Firebase. Both the host and
  * the people joining call [joinParty] with that code, which:
  *  1. watches everyone in the party ([members]), and
- *  2. keeps publishing this phone's own status (location, focusing or not).
+ *  2. keeps publishing this phone's own status (location, focusing or not, App Blocking on or off).
+ *
+ * Starting together: the host's Start ([requestStart]) is held back until every member has App
+ * Blocking (Accessibility) on; the members who don't get a notification and the permission
+ * dialog. Once the host is focusing, every joined member follows ([partyFocusStarted]).
  *
  * Every Firebase call is wrapped in try/catch: a failure shows up in
  * [errorMessage] instead of crashing the app.
@@ -163,10 +169,21 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    // --- The party this phone is in right now ---
+
     private var currentPartyId: String? = null
     private var displayName: String = "You"
-    private var isFocusing: Boolean = false
     private var myUid: String? = null
+
+    // --- What this phone says about itself to the party (see PartyMemberStatus) ---
+
+    private var isFocusing: Boolean = false
+
+    /** Host only: Start was tried while some member had App Blocking off. Published, so
+     *  those members get told. Cleared when they are all ready, or when the host leaves. */
+    private var waitingOnMembers: Boolean = false
+
+    // --- What FriendsScreen reacts to ---
 
     private val _partyFocusStarted = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     /** Fires once each time someone else in the party goes from not focusing to focusing - the
@@ -174,8 +191,19 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
      *  back to the screen doesn't replay it. */
     val partyFocusStarted: SharedFlow<Unit> = _partyFocusStarted.asSharedFlow()
 
+    private val _waitingForMembers = MutableStateFlow(0)
+    /** How many other members still need to turn on App Blocking before the host can start;
+     *  0 = nothing is holding the host back (or Start hasn't been tried yet). */
+    val waitingForMembers: StateFlow<Int> = _waitingForMembers.asStateFlow()
+
+    private val _permissionNeeded = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    /** Fires when the host tries to start while this phone has App Blocking off - the cue to
+     *  show the permission dialog (a notification goes out as well). */
+    val permissionNeeded: SharedFlow<Unit> = _permissionNeeded.asSharedFlow()
+
     private var observeJob: Job? = null
     private var publishJob: Job? = null
+    private var accessibilityJob: Job? = null
 
     /**
      * Starts watching [partyId]'s members and publishing this phone's status.
@@ -190,43 +218,102 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
 
         sensorDataSource.startTracking(getApplication())
 
-        observeJob = viewModelScope.launch {
-            val me = try { repository.getMyUid() } catch (e: Exception) { null }
-            myUid = me
-            var othersWereFocusing = false
-            repository.observePartyMembers(partyId)
-                .catch { e -> _errorMessage.value = friendlyPartyErrorMessage(e) }
-                .collect { list ->
-                    _members.value = list
-                    val othersFocusing = list.any { it.isFocusing && it.uid != me }
-                    if (othersFocusing && !othersWereFocusing) _partyFocusStarted.tryEmit(Unit)
-                    othersWereFocusing = othersFocusing
-                }
+        observeJob = viewModelScope.launch { watchMembers(partyId) }
+
+        // Publishes right away and again whenever this phone turns App Blocking on or off, so
+        // the host's Start sees the change without waiting for a GPS fix.
+        accessibilityJob = viewModelScope.launch {
+            AccessibilityBridge.isServiceConnected.collect { publishNow() }
         }
 
-        publishJob = viewModelScope.launch {
-            val uid = try {
-                repository.getMyUid()
+        publishJob = viewModelScope.launch { publishOnEveryLocation(partyId) }
+    }
+
+    /** Keeps [members] current and reacts to what the other members' statuses say. */
+    private suspend fun watchMembers(partyId: String) {
+        val me = try { repository.getMyUid() } catch (e: Exception) { null }
+        myUid = me
+        var othersWereFocusing = false
+        var someoneWasWaiting = false
+        repository.observePartyMembers(partyId)
+            .catch { e -> _errorMessage.value = friendlyPartyErrorMessage(e) }
+            .collect { members ->
+                _members.value = members
+
+                val othersFocusing = members.any { it.isFocusing && it.uid != me }
+                if (othersFocusing && !othersWereFocusing) _partyFocusStarted.tryEmit(Unit)
+                othersWereFocusing = othersFocusing
+
+                refreshWaitingOnMembers(members, me)
+
+                val someoneWaiting = members.any { it.waitingForPermission && it.uid != me }
+                refreshPermissionNotice(someoneWaiting, justStartedWaiting = !someoneWasWaiting)
+                someoneWasWaiting = someoneWaiting
+            }
+    }
+
+    /** Host: keeps the "wait for N members" count current, and stops waiting once all are ready. */
+    private fun refreshWaitingOnMembers(members: List<PartyMemberStatus>, me: String?) {
+        if (!waitingOnMembers) return
+        val notReady = members.count { it.uid != me && !it.accessibilityReady }
+        _waitingForMembers.value = notReady
+        if (notReady == 0) setWaitingOnMembers(false)
+    }
+
+    /**
+     * Member: when the host starts waiting and this phone is the one holding things up, shows
+     * the notification and asks the screen for the permission dialog. Takes the notification
+     * down again once the permission is on or the host stops waiting.
+     */
+    private fun refreshPermissionNotice(someoneWaiting: Boolean, justStartedWaiting: Boolean) {
+        val appBlockingOff = !AccessibilityBridge.isServiceConnected.value
+        if (someoneWaiting && appBlockingOff) {
+            if (justStartedWaiting) {
+                PartyNotification.showPermissionNeeded(getApplication())
+                _permissionNeeded.tryEmit(Unit)
+            }
+        } else {
+            PartyNotification.cancelPermissionNeeded(getApplication())
+        }
+    }
+
+    /** Publishes this phone's status on every new GPS fix (the repository throttles the writes). */
+    private suspend fun publishOnEveryLocation(partyId: String) {
+        val uid = try {
+            repository.getMyUid()
+        } catch (e: Exception) {
+            _errorMessage.value = friendlyPartyErrorMessage(e)
+            return // Without an id we can't publish; watching members still works.
+        }
+        sensorDataSource.locationFlow.collect { location ->
+            try {
+                repository.updateMyPartyStatus(partyId, currentStatus(uid, location))
+            } catch (e: Exception) {
+                // Keep going; the next GPS update tries again.
+                _errorMessage.value = friendlyPartyErrorMessage(e)
+            }
+        }
+    }
+
+    private fun currentStatus(uid: String, location: Pair<Double, Double>?) = PartyMemberStatus(
+        uid = uid,
+        displayName = displayName,
+        latitude = location?.first,
+        longitude = location?.second,
+        isFocusing = isFocusing,
+        accessibilityReady = AccessibilityBridge.isServiceConnected.value,
+        waitingForPermission = waitingOnMembers
+    )
+
+    /** Pushes this phone's status now (not waiting for the next GPS fix). */
+    private fun publishNow() {
+        val partyId = currentPartyId ?: return
+        viewModelScope.launch {
+            try {
+                val uid = repository.getMyUid()
+                repository.updateMyPartyStatus(partyId, currentStatus(uid, sensorDataSource.locationFlow.value))
             } catch (e: Exception) {
                 _errorMessage.value = friendlyPartyErrorMessage(e)
-                return@launch // Without an id we can't publish; watching members still works.
-            }
-            sensorDataSource.locationFlow.collect { location ->
-                try {
-                    repository.updateMyPartyStatus(
-                        partyId,
-                        PartyMemberStatus(
-                            uid = uid,
-                            displayName = this@PartyModeViewModel.displayName,
-                            latitude = location?.first,
-                            longitude = location?.second,
-                            isFocusing = isFocusing
-                        )
-                    )
-                } catch (e: Exception) {
-                    // Keep going; the next GPS update tries again.
-                    _errorMessage.value = friendlyPartyErrorMessage(e)
-                }
             }
         }
     }
@@ -234,25 +321,26 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
     /** Tells the party whether this phone is focusing, right away. */
     fun setFocusing(focusing: Boolean) {
         isFocusing = focusing
-        val partyId = currentPartyId ?: return
-        viewModelScope.launch {
-            try {
-                val uid = repository.getMyUid()
-                val location = sensorDataSource.locationFlow.value
-                repository.updateMyPartyStatus(
-                    partyId,
-                    PartyMemberStatus(
-                        uid = uid,
-                        displayName = displayName,
-                        latitude = location?.first,
-                        longitude = location?.second,
-                        isFocusing = focusing
-                    )
-                )
-            } catch (e: Exception) {
-                _errorMessage.value = friendlyPartyErrorMessage(e)
-            }
-        }
+        if (focusing) waitingOnMembers = false // Starting means nobody is being waited for any more.
+        publishNow()
+    }
+
+    private fun setWaitingOnMembers(waiting: Boolean) {
+        if (waitingOnMembers == waiting) return
+        waitingOnMembers = waiting
+        publishNow()
+    }
+
+    /**
+     * The host's Start: true if every other member has App Blocking on, so the session can begin.
+     * If not, returns false, tells the others the host is waiting (they get a notification) and
+     * counts them in [waitingForMembers]; that count drops by itself as they turn it on.
+     */
+    fun requestStart(): Boolean {
+        val notReady = _members.value.count { it.uid != myUid && !it.accessibilityReady }
+        _waitingForMembers.value = notReady
+        setWaitingOnMembers(notReady > 0)
+        return notReady == 0
     }
 
     /** Invites the friend with id [toUid] to the current party (does nothing if not in one). */
@@ -270,24 +358,37 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
 
     /** Stops watching and publishing, e.g. when a group card is closed. */
     fun leaveParty() {
-        // Not left as "focusing" in the cloud, or the next person to join would be pulled into
-        // a session that ended long ago. A plain write, so it still goes out as the ViewModel clears.
-        val partyId = currentPartyId
-        val uid = myUid
-        if (isFocusing && partyId != null && uid != null) {
-            repository.updateMyPartyStatus(
-                partyId,
-                PartyMemberStatus(uid = uid, displayName = displayName, isFocusing = false)
-            )
-        }
+        announceLeaving()
         isFocusing = false
+        waitingOnMembers = false
+        _waitingForMembers.value = 0
+        PartyNotification.cancelPermissionNeeded(getApplication())
+
         observeJob?.cancel()
         observeJob = null
         publishJob?.cancel()
         publishJob = null
+        accessibilityJob?.cancel()
+        accessibilityJob = null
+
         _members.value = emptyList()
         _errorMessage.value = null
         currentPartyId = null
+    }
+
+    /**
+     * The last status this phone leaves in the party: not focusing and not waiting, or the next
+     * person to join would be pulled into a session that ended long ago. Marked ready too - a
+     * member who has left stays in the party's list, and must not keep blocking the host's Start.
+     * A plain write, so it still goes out as the ViewModel is cleared.
+     */
+    private fun announceLeaving() {
+        val partyId = currentPartyId ?: return
+        val uid = myUid ?: return
+        repository.updateMyPartyStatus(
+            partyId,
+            PartyMemberStatus(uid = uid, displayName = displayName, accessibilityReady = true)
+        )
     }
 
     override fun onCleared() {
