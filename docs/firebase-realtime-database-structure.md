@@ -16,6 +16,16 @@ changes.
 
 ## Paths
 
+### `users/{uid}/username`
+
+The account's username (lowercase), e.g. `"testa1"`. It is only a label for
+people reading the database in the Firebase Console, so a uid folder can be
+matched to a person - the app never reads it back. Written by
+`AccountManager.saveUsername()` when an account is created, logged in to,
+recovered, and each time the app starts while signed in. Guests have no
+username, so their folder has no such child. The existing `users/$uid` rule
+already lets the owner write it - no rule change needed.
+
 ### `users/{uid}/sessions/{sessionId}`
 
 One completed (or in-progress) focus session, pushed after it's saved
