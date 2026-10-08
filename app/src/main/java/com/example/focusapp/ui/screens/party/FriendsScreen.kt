@@ -25,9 +25,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -130,6 +132,23 @@ fun FriendsScreen(
     }
 
     val context = LocalContext.current
+
+    // A joined participant follows the host into focus (the host's own Start never reaches
+    // this branch: only someone else going from not focusing to focusing emits the event).
+    val currentJoined by rememberUpdatedState(joined)
+    val currentAccessibilityEnabled by rememberUpdatedState(isAccessibilityEnabled)
+    val currentOnStartFocus by rememberUpdatedState(onStartFocus)
+    LaunchedEffect(Unit) {
+        viewModel.partyFocusStarted.collect {
+            if (!currentJoined) return@collect
+            if (currentAccessibilityEnabled) {
+                viewModel.setFocusing(true)
+                currentOnStartFocus()
+            } else {
+                showAccessibilityPermissionDialog = true
+            }
+        }
+    }
 
     FriendsContent(
         isGuest = viewModel.isGuest,

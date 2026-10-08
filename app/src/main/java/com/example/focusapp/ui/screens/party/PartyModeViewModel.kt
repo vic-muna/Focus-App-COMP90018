@@ -9,8 +9,11 @@ import com.example.focusapp.domain.model.Friend
 import com.example.focusapp.domain.model.PartyInvite
 import com.example.focusapp.domain.model.PartyMemberStatus
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
@@ -163,6 +166,13 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
     private var currentPartyId: String? = null
     private var displayName: String = "You"
     private var isFocusing: Boolean = false
+    private var myUid: String? = null
+
+    private val _partyFocusStarted = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    /** Fires once each time someone else in the party goes from not focusing to focusing - the
+     *  cue for a joined participant to start focusing too. An event, not a state, so coming
+     *  back to the screen doesn't replay it. */
+    val partyFocusStarted: SharedFlow<Unit> = _partyFocusStarted.asSharedFlow()
 
     private var observeJob: Job? = null
     private var publishJob: Job? = null
@@ -181,9 +191,17 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
         sensorDataSource.startTracking(getApplication())
 
         observeJob = viewModelScope.launch {
+            val me = try { repository.getMyUid() } catch (e: Exception) { null }
+            myUid = me
+            var othersWereFocusing = false
             repository.observePartyMembers(partyId)
                 .catch { e -> _errorMessage.value = friendlyPartyErrorMessage(e) }
-                .collect { _members.value = it }
+                .collect { list ->
+                    _members.value = list
+                    val othersFocusing = list.any { it.isFocusing && it.uid != me }
+                    if (othersFocusing && !othersWereFocusing) _partyFocusStarted.tryEmit(Unit)
+                    othersWereFocusing = othersFocusing
+                }
         }
 
         publishJob = viewModelScope.launch {
@@ -252,6 +270,17 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
 
     /** Stops watching and publishing, e.g. when a group card is closed. */
     fun leaveParty() {
+        // Not left as "focusing" in the cloud, or the next person to join would be pulled into
+        // a session that ended long ago. A plain write, so it still goes out as the ViewModel clears.
+        val partyId = currentPartyId
+        val uid = myUid
+        if (isFocusing && partyId != null && uid != null) {
+            repository.updateMyPartyStatus(
+                partyId,
+                PartyMemberStatus(uid = uid, displayName = displayName, isFocusing = false)
+            )
+        }
+        isFocusing = false
         observeJob?.cancel()
         observeJob = null
         publishJob?.cancel()
