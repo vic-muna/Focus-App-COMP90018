@@ -1,15 +1,17 @@
 # The Focus
- 
+
 **COMP90018 – Mobile Computing Systems Programming**
-**Assignment 1 – Project Plan**
+**Assignment 1 – Project Plan** *(the original plan, kept below and corrected to match the app as it is built now)*
+**Assignment 2 – Implementation** *(this repository)*
 **Group Number:** T01/01 – 04
- 
+
 ---
- 
+
 ## 📋 Table of Contents
- 
+
 - [Group Members](#group-members)
 - [Project Overview](#project-overview)
+- [App Flow (Step by Step)](#app-flow-step-by-step)
 - [Planned System and Technical Approach](#planned-system-and-technical-approach)
 - [System Architecture](#system-architecture)
 - [Data Flow](#data-flow)
@@ -21,10 +23,12 @@
 - [Requirement Coverage and Justification](#requirement-coverage-and-justification)
 - [Group Member Tasks](#group-member-tasks)
 - [Declaration](#declaration)
+- [Dated Updates (changelog)](#dated-updates-changelog)
+
 ---
- 
+
 ## Group Members
- 
+
 | Full Name | Student Number | Email | Primary Responsibility | GitHub Username |
 |---|---|---|---|---|
 | David Shiau | 1688033 | david.shiau@student.unimelb.edu.au | Back-end | DavidShiau1688033 |
@@ -32,129 +36,250 @@
 | YU-HAO LU | 1781474 | ylu13963@student.unimelb.edu.au | Back-End | nicklu356 |
 | Victor Munacoha | 1929045 | victor.munacoha@student.unimelb.edu.au | Back-End | vic-muna |
 | Jia-Ying Lee | 1790130 | jiaying.lee.1@student.unimelb.edu.au | Front-End design | YAME87 |
- 
+
 ---
- 
+
 ## Project Overview
- 
+
 **Problem / motivation:**
 Students are often distracted by social media and phone notifications when studying. Manual screen control setups can be troublesome to manage and may not adapt well to situations where users need to focus.
- 
+
 **Proposed solution:**
-Focus is a context-aware mobile app that automatically helps users enter a focused state based on their location, time and phone activity. Physical behaviours, such as shaking or placing the phone face-down, can be detected using mobile sensors to improve the convenience of control. It also tracks focus sessions and provides feedback and rewards to help users reduce digital distractions.
- 
+Focus is a context-aware mobile app that helps users stay focused by blocking distracting apps based on their **location**, **Wi-Fi network** and **time of day**, or on demand (**Quick Focus**, **Party Mode** with friends). Physical gestures are detected with the phone's motion sensors: lying the phone **face-down starts** a focus session and **shaking it ends** one. The app also tracks focus sessions, turns focus time into points that buy backgrounds and music, and gives AI feedback on the week.
+
 **Novelty:**
 Unlike conventional timers or app blockers, Focus uses mobile sensors and contextual information to understand when and where the user is likely to be focusing, allowing the app to respond and adapt automatically rather than relying entirely on manual control.
- 
+
 ---
- 
+
+## App Flow (Step by Step)
+
+This is the whole journey through the app as it works today, from the first launch to the end of a session and what happens after it.
+
+```mermaid
+flowchart TD
+    A["Open the app"] --> B{"Signed in?"}
+    B -- "No (first launch / logged out)" --> C["Login screen:<br/>Log in · Create account · Continue as guest"]
+    C -- "Forgot password?" --> D["Username → security question → new password"]
+    D --> C
+    C --> E["Home"]
+    B -- "Yes" --> E
+    E --> F["Set up what to block:<br/>Location · Time Focus · Wi-Fi tabs,<br/>Quick Focus apps, Flip to Focus"]
+    F --> G{"What blocks apps?"}
+    G -- "Quick Focus · Flip to Focus ·<br/>Party Mode · banner" --> H["Focus Mode timer<br/>(a focus session)"]
+    G -- "Enter a Location zone ·<br/>join a chosen Wi-Fi ·<br/>Time Focus app over its limit" --> I["Apps blocked automatically<br/>→ Blocked screen when opened"]
+    H --> J["End: hold 3 s · shake · Back"]
+    J --> K["Session saved → summary card<br/>(time, points, blocked attempts)"]
+    K --> L["Dashboard: weekly chart, history,<br/>Rewards shop, Focus Coach (AI)"]
+```
+
+### 1. Open the app and sign in
+- On the first launch (and after logging out) the **login screen** shows three choices:
+  - **Log in** with a username and password.
+  - **Create account:** a username (3–20 characters: `a–z`, `0–9`, `_`), a password (6+ characters), and a **security question** picked from a list with your answer. There is no email.
+  - **Continue as guest** (anonymous). A guest's data can't be recovered after logging out, so Settings warns before it.
+- **Forgot password?** (on the Log in form): type the username, the account's security question appears, answer it and choose a new password. No email is sent: the password is stored encrypted with a key made from the answer (`data/account/PasswordRecovery.kt`).
+- A guest can become an account later in **Settings → Account → Create account**; the user id stays the same, so saved data is kept.
+- Logging in on a new phone restores the account's sessions, Focus Zone and app groups from Firebase. When a different user logs in, the previous user's data on the phone is cleared first.
+
+### 2. Allow the permissions
+- **Asked at launch:** location (and "Allow all the time" for geofences) and, on Android 13+, notifications.
+- **Asked when a feature needs it:** **App Blocking** (the Accessibility service, turned on in Android's settings; every blocking feature needs it), **Usage access** (Time Focus daily limits) and **Microphone** (Noise Alert).
+- **Settings → Permissions** lists Precise Location, App Blocking, Usage Access, Notifications and Microphone and opens the matching Android page.
+
+### 3. Home
+- A greeting (**"Hi! \<username\>"**, "Guest" for guests) and a picture in the chosen background theme. **Tap the picture ("History") to open the Dashboard.**
+- The **Quick Focus** button and the bottom bar: **Home · Location · Time Focus · Wi-Fi**.
+- **Top-left group icon:** Party Mode. **Top-right gear:** Settings.
+- When a trigger is active, a suggestion banner appears for the schedule, the location or the Wi-Fi (they can show together, each is dismissed on its own).
+- Background Music loops on these screens (switch in Settings → Music).
+
+### 4. Choose what gets blocked, and when
+Each way of focusing has its **own list of apps** to block.
+
+| Way to focus | Where you set it up | What happens | Apps blocked |
+|---|---|---|---|
+| **Quick Focus** | Home → Quick Focus | Permission check → pick the apps (your last pick is remembered) → Focus Mode starts | The apps you picked |
+| **Party Mode** | Group icon → Create group | When the host starts, everyone in the group starts too (see step 10) | Each phone's own Quick Focus apps |
+| **Flip to Focus** | Settings → Flip to Focus (off by default) | While the app is open and no session is running, lay the phone face-down for 2 s → short vibration → Focus Mode starts | Its own app list |
+| **Location** tab | Location → add a place on the interactive map, set its range, pick apps | Entering the zone blocks its apps automatically (geofence, works with the app closed); leaving unblocks. The Blocked screen names the zone | That location's apps |
+| **Wi-Fi** tab | Wi-Fi → choose the networks that trigger it, pick apps | While the phone is on one of those networks its apps are blocked, even with Focus closed | That entry's apps |
+| **Time Focus** tab | Time Focus → add slots (days + time frames) with daily limits per app: **Max Open Times** and **Max Minutes** | No session starts. During the slot, an app over its limit is blocked; the Blocked screen shows how many opens are left, and a status-bar card tracks the slot | Apps over their daily limit |
+
+In Time Focus, tap a card for its summary, the pencil to edit, hold to delete. A started Location or Wi-Fi session blocks its apps outright, overriding any Time Focus limit on the same apps.
+
+### 5. During a focus session
+- The **Focus Mode** screen shows the elapsed time over the theme's art (or its looping video). **Focus Music** plays if it is on.
+- A **notification** with a live timer stays in the status bar (tap it to come back).
+- **Noise Alert** (if on): the microphone level is measured (never recorded); above the threshold a banner says "It's too loud for studying".
+- Opening a blocked app shows the full-screen **Blocked screen** with the reason. **Got it** / Back returns to the timer. Every attempt is counted as a "distracting app open".
+- The **i** button shows how to leave.
+
+### 6. End the session
+- **Hold anywhere for 3 seconds**, **shake the phone** (3 jolts), or press **Back**.
+- The session is saved on the phone first (if saving fails an error with *Continue* is shown, not a crash). A **summary card** with confetti then shows the time, the points earned (1 per minute) and the blocked apps tried. **Done** leaves Focus Mode.
+- In the background the session is pushed to Firebase when online. If you have accepted **Focus Coach** and still have AI answers left today, a one-sentence AI comment is created and shown under that session in History.
+
+### 7. Dashboard (tap Home's picture)
+- **ID card:** the current background theme (change it here) and a music note to pick the Focus Mode music.
+- **Focus History:** "This week" bar chart, This week / Last week cards (tap for a day-by-day list) and every session with its start time, duration, completed or not, blocked attempts and the AI comment.
+- **Trophy (top-left):** Rewards. **Sparkle button (bottom-right):** Focus Coach. **X:** close.
+
+### 8. Rewards (points shop)
+- **1 point for every minute of focus.** The Rewards page shows your points, total focus time and **today's milestones** (5 min, 30 min, 1 h, 5 h, 10 h; reset at midnight).
+- Spend points in the **Backgrounds** shop (themes with looping video, plus pricier "Run" versions) and the **Focus music** shop. Bought items show *Owned* / *In use* and can be picked with **Use**. The theme picker and music picker also offer to buy a locked item.
+- All prices are in `domain/model/RewardRules.kt` (small test prices for now). What was bought and the points spent are kept on the phone only.
+
+### 9. Focus Coach (AI feedback)
+- Opened from the Dashboard. A one-time notice asks before anything is sent. The report covers the last 7 days, then you can pick preset follow-up questions.
+- Only a summary worked out on the phone is sent (totals against the week before, minutes per day and time of day, blocked attempts per hour, streak) - no names or ids.
+- **5 AI answers per day** in total (report, follow-ups and the per-session comment share them). Gemini is called through Firebase AI Logic with App Check.
+
+### 10. Party Mode (study together)
+- **Guests** see **Create group** and **Join group** only (a 6-letter group code).
+- **Accounts** also get **My Code** (a short friend code with a copy button), a friend list with search, **Add friend** (type their code and a nickname), remove friend, and an **Invites** section to accept or decline.
+- **Create group:** a group code appears; share it or tap **Invite** next to a friend. When the host taps the check, the app does the App Blocking permission check, then the app picker, and **everyone who has joined starts focusing**. The host can't start until every member has App Blocking on ("Wait for the participant to open the permission."); members who aren't ready get a notification.
+- **Join group:** type the 6-letter code.
+
+### 11. Settings (top-right gear)
+**Account** (signed in as, Create account for guests, Log out) · **Rewards** (total focus time, points) · **Noise Alert** (on/off, threshold 40–85 dB) · **Flip to Focus** (on/off, its apps) · **Music** (Focus Music, Background Music) · **Permissions**.
+
+### 12. Where the data lives
+- **On the phone:** Room (sessions, Focus Zone, app groups, friends) and SharedPreferences (each feature's blocked-app list, Wi-Fi networks, theme, music, shop purchases, Noise Alert / Flip settings, Focus Coach consent and daily count).
+- **Firebase Realtime Database:** sessions, the Focus Zone and app groups (restored at login), parties, friend codes and invites.
+- **Firebase Auth:** accounts and guests. **Firebase AI Logic:** Focus Coach.
+
+---
+
 ## Planned System and Technical Approach
- 
+
 - **Mobile platform:** Android
 - **Development Language:** Kotlin
+
 ### Mechanisms
- 
+
+> The numbered items are the **original plan**. Each one ends with what was actually built.
+
 1. **Application restriction** – Users set up restricted apps. Once Focus Mode is on, opening a restricted app triggers a pop-up to deter usage.
+   **As built:** a full-screen **Blocked screen** that shows the reason. Every feature (Quick Focus, Location, Wi-Fi, Flip to Focus, Time Focus) has its own app list. Needs App Blocking (Accessibility service) to be on.
 2. **User location navigation** – Users set a focus radius (e.g. around the library). Entering the radius auto-activates Focus Mode. Also supports inviting friends to a **study party**.
+   **As built:** the **Location** tab has an interactive map, a range and its own apps; entering a zone **blocks that zone's apps** through a geofence (a Home banner can also start a session). **Party Mode** is built (group code, friend codes, invites, everyone starts together).
 3. **Focusing time slot** – Users define recurring time slots (e.g. 5–7pm weekdays). The system senses the time and auto-activates.
+   **As built:** **Time Focus** (Scheduled Limits): slots by day and time with a daily **Max Open Times** and **Max Minutes** per app. No session starts by itself; during the slot an app over its limit is blocked. There is no `AlarmManager`: the Accessibility service checks on every app switch.
 4. **Screen usage detection** – Detects whether the user is actively using the phone or just glancing (e.g. checking messages).
+   **As built (partly):** per-app opens and minutes from `UsageStatsManager` (for the daily limits), plus the count of blocked-app attempts. Telling "glancing" from active use is **not built**.
 5. **Restrict apps using times** – Users can set a limited number of "tea breaks" per focus session, with a defined break duration. Focus mode resumes automatically after.
+   **As built:** **not built.**
 6. **Calculating screen usage time** – Tracks screen time and interruption frequency to provide customized time suggestions / weekly goals.
+   **As built:** the Dashboard's weekly chart and This/Last week cards, and the AI **Focus Coach** weekly report with written suggestions. The app does not set weekly goals by itself.
 7. **Rewarding system** – Gamified UX (e.g. growing a tree, climbing a mountain). Reward difficulty adapts to user behaviour (harder to distract = harder rewards).
+   **As built:** a **points shop**: 1 point per focused minute, spent on background themes and focus music, plus daily milestones. The tree / mountain idea and adaptive difficulty are **not built**.
 8. **Volume detection** – Monitors ambient sound levels during focus sessions and can generate ambient noise if the environment is too loud (user-configurable preference).
+   **As built:** **Noise Alert**: a "too loud" banner when the 10-second average passes a threshold you set. No ambient noise is generated. (Focus Music and Background Music are separate features.)
 9. **Screen prevention shortcuts** – Physical gesture shortcuts:
    - Flip phone face-down → closes restricted apps + activates Focus Mode
    - Shake phone → closes Focus Mode during a focus period
+
+   **As built:** **Flip to Focus** (opt-in): face-down for 2 s while the app is open starts a session. **Shake to End**: 3 jolts above 2.5 g within 1 s ends one. A shake does not start Focus Mode.
+
+**Added beyond the plan:** a **Wi-Fi** trigger; **user accounts** (log in, guest, security-question password recovery); **friend codes** and invites; the AI **Focus Coach** (weekly report plus a one-line comment per session); background **themes** and **music**; a status-bar card for Time Focus; the session summary card.
+
 ---
- 
+
 ## System Architecture
- 
+
 Following Android's official recommended app architecture, the app is structured into **three layers**:
- 
-- **UI Layer** – Built with Activity/Fragment and ViewModel. Renders focus status, timer, and reward progress.
-- **Domain Layer** – Core business logic as Use Cases (e.g. determining focus activation from location/time, calculating rewards).
+
+- **UI Layer** – One Activity with Jetpack Compose screens and ViewModels. Renders focus status, timer, history and rewards.
+- **Domain Layer** – Core business logic as Use Cases (`EvaluateFocusTriggerUseCase`, `EvaluateUsageLimitUseCase`, `CalculateFocusRewardUseCase`, `BuildWeeklyFocusSummaryUseCase`, `NoiseLevelTracker`, `ShakeDetector`).
 - **Data Layer** – A Repository unifies three data sources:
-  - **Sensor Data Source** – GPS, accelerometer, gyroscope, light sensor, app-usage stats via Android system APIs
-  - **Local Data Source** – Caches session history and settings for offline use
-  - **Remote Data Source** – Cloud database API syncing plans, restrictions, and history (used by Party Study Mode)
+  - **Sensor Data Source** – GPS and geofencing, accelerometer / gravity / proximity (gestures), microphone level, Wi-Fi state, app-usage stats and Accessibility events
+  - **Local Data Source** – Room (sessions, Focus Zone, app groups, friends) and SharedPreferences (blocked-app lists and settings), so the app works offline
+  - **Remote Data Source** – Firebase Realtime Database and Auth (session / zone / app-group sync, accounts, Party Mode, friend codes); Firebase AI Logic for the Focus Coach
+
 ---
- 
+
 ## Data Flow
- 
-1. Sensor Data Source continuously streams raw readings to the Repository.
-2. Repository forwards relevant state to the Domain layer.
-3. Domain layer's Use Cases evaluate rules (e.g. *"inside focus radius" AND "inside time slot"*) and compute the Focus Points score.
-4. Results are exposed to the UI layer via ViewModel (LiveData/StateFlow), updating the interface without blocking the main thread.
-5. Session results are cached locally, then asynchronously synced to the cloud when network is available.
+
+1. Sensor data sources stream raw readings (geofence events, motion, noise level, Wi-Fi state, app-switch events from the Accessibility service).
+2. The repository and `AccessibilityBridge` forward the relevant state. The bridge keeps a **separate blocked-app list per source** (focus session, Location, Wi-Fi), so ending one does not unblock another.
+3. Rules are evaluated **per trigger** - a location zone, a Wi-Fi network, a Time Focus slot with its daily limits. They are independent; they are not combined with AND.
+4. Results are exposed to the UI layer through ViewModels (`StateFlow`) and Compose state, so the interface updates without blocking the main thread.
+5. Session results are saved locally first, then pushed to the cloud in the background when the network is available (and restored from the cloud when you log in on another phone).
 ```
 Sensor Data Source → Repository → Domain Layer → ViewModel → UI Layer
                                         ↓
                                  Local Storage → Cloud (sync when online)
 ```
- 
+
 ---
- 
+
 ## Key Technical Decisions
- 
+
 | Decision | Purpose | Trade-off |
 |---|---|---|
-| **AccessibilityService** | App restriction — tracks usage status even when app is closed | Raises privacy concerns |
-| **Geofencing API + Wi-Fi** | Location zone detection | Higher battery consumption & system complexity, but more accurate localization |
-| **AlarmManager** | Time slot trigger in background | May be delayed by Doze mode; limits max number of slots |
-| **App Category + Touch Frequency** (via UsageStatsManager) | Screen usage detection | Sacrifices gesture-level detail for simplicity & privacy compliance |
-| **Threshold + Debounce** | Shortcut gesture detection | Trade-off between detection accuracy and power consumption |
-| **AudioRecord** | Volume detection (amplitude only) | Requires user permission but lower privacy risk than raw audio |
-| **MediaPlayer/SoundPool (local audio)** | Ambient noise generation | Avoids cost/privacy risk of external AI audio API |
-| **Firebase** | Real-time party mode sync | Cheaper alternative (WebSocket) rejected — Firebase better supports dynamic user sets |
- 
+| **AccessibilityService** | App restriction — sees which app opens, even when Focus is closed, and counts blocked attempts | Raises privacy concerns; the user must turn it on in Android's settings |
+| **Geofencing API + Wi-Fi state** | Location zone detection (geofence) and Wi-Fi trigger (connected network name) | Needs precise and "all the time" location; Wi-Fi name needs precise location on Android 12+ |
+| **Check on app switch (no `AlarmManager`)** | Time Focus slots and daily limits are evaluated when an app opens | Only works while the Accessibility service is on |
+| **UsageStatsManager** (opens and minutes per app) | Daily limits per app inside a Time Focus slot | Needs the special "Usage access" permission |
+| **Threshold + Debounce** | Gesture detection (face-down for 2 s, 3 jolts above 2.5 g within 1 s) | Trade-off between detection accuracy and power consumption |
+| **AudioRecord** | Noise Alert (level only, never recorded; `UNPROCESSED` source, falling back to `VOICE_RECOGNITION`) | Needs the microphone permission; dB is approximate and differs by phone |
+| **MediaPlayer** (mp3 in `res/raw`) | Focus Music and Background Music, looped | Bundled audio and video make the app larger; no external audio API cost or privacy risk |
+| **Leaflet map in a WebView** (Esri tiles) | Interactive map on the Location tab, no Maps SDK key | Needs internet to load the map |
+| **Room + SharedPreferences** | Local storage that works offline | A Room version bump wipes local data (no migrations yet) |
+| **Firebase** (Realtime Database, Auth, App Check, AI Logic) | Party Mode sync, accounts, session backup, Focus Coach with no Gemini key in the app | Cheaper alternative (WebSocket) rejected — Firebase better supports dynamic user sets; a background push to a closed app would need a server |
+
 ---
- 
+
 ## Real-Time, Algorithmic and Integration Design
- 
-- **Sensor fusion / context engine:** Combines GPS, Wi-Fi signal, and clock to determine if the user is at a focus location during a focus time.
-- **Localization:** GPS + user-defined location with configurable radius, supplemented by Wi-Fi source detection for zone entry/exit.
-- **Algorithm:** Analyzes app usage duration and distracting-app open frequency to generate usage statistics and feedback.
-- **Rewarding system:** Tracks streaks based on successful focus periods vs. distraction events, granting points as virtual rewards.
-- **Real-time behaviour:** Background listeners + async processing; UI updates only when necessary to minimize lag.
-- **External integration:** Google Maps/Location Services for location selection and GPS-based focus zones.
+
+- **Context engine:** Location (geofence), Wi-Fi network and Time Focus slot are separate triggers, each with its own app list. A started Location or Wi-Fi session blocks its apps outright, overriding any Time Focus limit on the same apps.
+- **Localization:** GPS plus user-placed zones with a range, registered with the Geofencing API; the Wi-Fi trigger reads the connected network's name (also with a VPN on, or Wi-Fi without internet).
+- **Algorithm:** a Time Focus slot counts each app's opens and minutes inside its window and blocks the app once either limit is passed. A weekly summary (totals against the week before, minutes per day and time of day, blocked attempts per hour, streak) feeds the Focus Coach.
+- **Rewarding system:** points are the whole minutes of focus; daily milestones (5 min – 10 h) reset at midnight; shop prices are in `RewardRules.kt`.
+- **Real-time behaviour:** Background listeners + async processing (coroutines and Flow); UI updates only when necessary to minimize lag.
+- **External integration:** Google Play Services location and geofencing; a Leaflet map in a WebView; Firebase; Gemini through Firebase AI Logic.
+
 ---
- 
+
 ## Privacy & Permissions
- 
-- Only necessary runtime permissions requested (location, usage access).
-- Users can disable focus monitoring at any time.
-- Only **aggregated statistics** are retained long-term — no raw sensor logs.
+
+- Permissions are requested only for features the user uses: precise and background location (geofences), notifications, microphone (sound level only, never recorded), Usage access, and the Accessibility service (App Blocking). Settings → Permissions shows and opens each one.
+- Users can turn Noise Alert, Flip to Focus and the music off, and can turn each permission off in Android's settings.
+- No raw sensor logs are kept. The Focus Coach only sends a summary worked out on the phone, after a one-time notice, with no names or ids.
+- Guests are anonymous; accounts use a username (no email). Friend codes can only be claimed by accounts.
+
 ---
- 
+
 ## Diagrams
- 
+
 - **Run-Time Diagram** – rule evaluation flow (time/location → app group check → block/notify)
-- **User Workflow Diagram** – see high-resolution originals: `UserFlowChart1.png`, `UserFlowChart2.png`
+- **User Workflow Diagram** – see high-resolution originals: `UserFlowChart1.png`, `UserFlowChart2.png`; the current flow is also written out in [App Flow (Step by Step)](#app-flow-step-by-step)
+
 ---
- 
+
 ## UI / UX
- 
-- Prototyped in **Figma**, implemented in Android using **Jetpack Compose** + **Material Design 3**.
-- Custom Canvas drawing may be used for distinctive visuals, time permitting.
-**System language:**
-- English as the main system language, with support for additional languages via Android string resources.
-- Short text labels + clear icons (e.g. "Start Focus", "Take a Break", "Focus Score", "Focus Zone") to reduce reading effort.
+
+- Prototyped in **Figma**, implemented in Android with **Jetpack Compose**, using the app's own design system (`ui/theme`, `ui/components`) with custom-drawn pieces such as the schedule dial and the confetti burst. Backgrounds can be looping videos.
+- **Language:** English only for now; no translations have been added yet.
+- Short text labels + clear icons (e.g. "Quick Focus", "Time Focus", "Focus History", "Rewards") to reduce reading effort.
+
 **Navigation concept:**
-Bottom navigation with four destinations — **Focus Mode, Focus History, Rewards, Settings** — for simple one-tap access.
- 
+Bottom navigation with four destinations — **Home, Location, Time Focus, Wi-Fi**. The Dashboard (history, Rewards, Focus Coach) opens from Home's picture, Party Mode from the group icon (top-left) and Settings from the gear (top-right).
+
 📎 [Figma Prototype](#) *(link in original document)*
- 
+
 ---
- 
+
 ## Requirement Coverage and Justification
- 
+
 ### Material – Report & Video
 - **Screen recording:** Android built-in screen recording, edited in Adobe Premiere Pro.
 - **External recording:** Physical device recorded via external camera to show physical interactions (e.g. shaking, face-down placement).
-- Demonstrates the full user flow: creating a plan → setting restrictions → entering location → activating Focus mode → gestures → reviewing statistics.
+- Demonstrates the full user flow: sign in → set up what to block (Location / Wi-Fi / Time Focus / Quick Focus) → entering a zone or starting a session → blocked screen → ending a session (hold or shake) → points and the Rewards shop → Dashboard and Focus Coach → Party Mode with friends. See [App Flow (Step by Step)](#app-flow-step-by-step).
 - **Editing:** Captions and annotations added in Adobe Premiere Pro.
 > *Note: Final video content may be adjusted according to implemented functions.*
- 
+
 ### Material – Screenshot
 - Android Studio Console showing a successful Gradle build.
 - Application compiled and running on an Android emulator.
@@ -170,37 +295,35 @@ Bottom navigation with four destinations — **Focus Mode, Focus History, Reward
 - Follows Kotlin coding conventions and Android development guidelines.
 - Meaningful naming, comments where necessary, consistent formatting, and modular components/classes.
 ### Innovation – Novelty
-- **Context-aware focus:** Geofencing + time-based rules instead of manual app blocking.
-- **Physical interaction:** Face-down phone detection as a Focus Mode trigger.
-- **Usage-aware focus:** Historical app usage analysis enabling streak-based rewards.
-- **Adaptive focus:** Usage-pattern-based recommendations for focus duration.
-  > *Note: Adaptive recommendations are a potential feature, dependent on available historical data.*
+- **Context-aware focus:** Geofencing, Wi-Fi network and time-slot rules instead of manual app blocking.
+- **Physical interaction:** Face-down phone detection starts a focus session (Flip to Focus).
+- **Usage-aware focus:** Per-app daily open and minute limits from app-usage stats, and points earned from focus history.
+- **Adaptive focus:** The AI Focus Coach reads a summary of the last 7 days and suggests what to change.
 ### Innovation – Surprise
-- **Shake trigger:** Deliberate shake gesture to activate Focus Mode.
-- **Environmental reaction:** Auto mute/reduce notification sounds in noisy environments via microphone-based detection.
-- **Gamified behaviour:** Rewards, achievements, and challenges based on focus behaviour.
-  > *Note: Reward system scope is subject to change based on available data.*
+- **Shake trigger:** A deliberate shake ends a focus session (Shake to End).
+- **Environmental reaction:** Noise Alert measures the room's sound level with the microphone and shows a "too loud" banner (no ambient noise is played).
+- **Gamified behaviour:** Points for every focused minute, daily milestones, a shop for background themes and focus music, and a confetti summary after each session.
 ### Innovation – Tech Knowledge
-- **Mobile sensing:** GPS, Wi-Fi, clock, accelerometer, gyroscope, light sensor, microphone, screen usage.
-- **Android systems:** App access permissions, background services, notifications.
-- **Database systems:** Room/SQLite for local storage.
-- **Cloud systems:** Firebase or REST API for remote sync.
-- **Asynchronous processing:** Threading for concurrency.
-  > *Note: Final storage architecture (Room/Firebase/REST) may be a combination depending on feasibility.*
+- **Mobile sensing:** GPS and geofencing, Wi-Fi state, accelerometer / gravity, proximity, microphone level, app-usage stats, Accessibility events.
+- **Android systems:** AccessibilityService, foreground service and notifications, broadcast receivers (geofences), runtime and special permissions.
+- **Database systems:** Room/SQLite and SharedPreferences for local storage.
+- **Cloud systems:** Firebase Realtime Database, Authentication, App Check and AI Logic (Gemini). No REST API is used.
+- **Asynchronous processing:** Kotlin coroutines and Flow for concurrency.
 ### Innovation – Cross-Disciplinary
 - **Productivity:** Scheduling and database management concepts.
-- **Gamification:** Points, streaks, achievements, virtual rewards.
-- **Behavioural Psychology:** Usage pattern feedback as positive reinforcement.
-- **Human-Computer Interaction:** Physical gestures (e.g. face-down) minimizing manual actions.
+- **Gamification:** Points, daily milestones and shop rewards.
+- **Behavioural Psychology:** Usage feedback (Focus Coach) and the blocked screen's reason as positive reinforcement.
+- **Human-Computer Interaction:** Physical gestures (flip, shake) minimizing manual actions.
 ### Innovation – Impact
-- **Distraction reduction:** Restricts distracting apps during focus periods.
-- **Habit building:** Rewards and streaks encourage consistent study behaviour.
-- **Self-awareness:** Historical usage and focus statistics displayed to users.
-- **Reduced manual effort:** Auto-triggered by location, time, or gesture.
+- **Distraction reduction:** Restricts distracting apps by location, Wi-Fi, schedule or session.
+- **Habit building:** Points and daily milestones encourage consistent study behaviour.
+- **Self-awareness:** Weekly chart, session history and the Focus Coach's report.
+- **Reduced manual effort:** Blocking starts by itself from location or Wi-Fi; gestures start and end sessions.
+- **Social:** Party Mode lets friends focus together.
 ---
- 
+
 ## Group Member Tasks
- 
+
 | Member | Planned Contributions |
 |---|---|
 | **Victor Munacoha** | System architecture design (UI/Domain/Data layers); GPS + Geofencing + Accelerometer sensor integration; Cloud REST API integration |
@@ -208,18 +331,26 @@ Bottom navigation with four destinations — **Focus Mode, Focus History, Reward
 | **David Shiau** | AccessibilityService integration (App Restriction, Screen Usage Detection); Focus Points algorithm & rule engine (Domain layer logic) |
 | **Kai-Jiun Chan** | Reward/Progress UI (animations, progress rings); Reactive UI updates (ViewModel/LiveData binding) |
 | **Jia-Ying Lee** | Figma wireframes & UI screens (Focus Mode, History, Settings); Jetpack Compose implementation of core screens |
- 
+
+> This table is the plan from Assignment 1. What was actually built, and by whom, is in the dated updates below. No REST API is used: the cloud side is Firebase only.
+
 **Shared tasks (whole team):**
 - Report writing – System Architecture & Sensor Integration sections
 - Report writing – Algorithm Design section
 - Video demonstration recording & editing
 ---
- 
+
 ## Declaration
- 
+
 We acknowledge the use of ChatGPT (chatgpt.com) to generate images for this assignment. Prompts such as *"generate a flowchart of [app flowchart bullet points]"* and *"generate an image of [description of prototype of app UI design]"* were entered. The outputs were used as sample demonstration use.
- 
+
 A full record of prompts and outputs is available upon request.
+---
+
+## Dated Updates (changelog)
+
+Everything below is a **history log**, written on the day each change was made. The sections above describe the app **as it is now**. When a later update replaced something, the older entry carries a **Superseded** note.
+
 ---
 
 ## 09172026 Update: Files That Need Change
@@ -268,6 +399,8 @@ changed, so the project still compiles as-is.
 - **Settings**: added a "Check App Usage Duration" button that queries the
   real Android `UsageStatsManager` and displays today's per-app usage
   totals (display-only for now).
+  *(Superseded: Settings no longer has this button. Usage limits now live in the
+  Time Focus tab.)*
 
 ## 21/09/2026 Update (David Shiau)                                                                                                                              
 - **Persistent notification-shade timer**: while a focus session is active,
@@ -285,6 +418,7 @@ changed, so the project still compiles as-is.
 ## 23/09/2026 Update (David Shiau)
 - **Today's Focus Time**: added a Settings button showing total focus time
   for today; `FocusSession` now has real persistence (was in-memory only).
+  *(Superseded: Settings -> Rewards now shows "Total focus time" and "Points".)*
 - **Blocked-app-group persistence fix**: the selected group and its apps/
   schedule now survive an app restart (were only held in memory before).
 - **Auto-suggestion banner permission fix**: accepting the "start a focus
@@ -323,6 +457,11 @@ changed, so the project still compiles as-is.
 ## 26/09/2026 Update (Jia-Ying Lee)
 
 ### Known limitation: one focus location at a time (architecture unchanged)
+
+> **Superseded (01/10 and 05/10):** the Location tab now keeps a list of location groups
+> (`BlockedAppGroupStorage.forLocationGroups`) and registers geofences for them, so several
+> locations can exist at once. The map is no longer a placeholder (interactive map, 01/10).
+> The text below describes the 26/09 state.
 
 The new Location screen shows a *list* of location groups (Figma "Location
 Focuse"), but the data layer still follows its original **single-zone
@@ -370,7 +509,7 @@ Quick Focus changes below). David's logic is kept; only the UI and wiring change
 - **Quick Focus:** tap → accessibility permission check → pick the apps to
   block (last pick is pre-ticked and remembered) → the check starts focusing.
 - **Party Mode:** group icon at Home's top-left → friend list with search
-  (friend IDs are a TODO) → **Create group** / **Join group** fly cards using
+  (friend IDs were a TODO then; **friend codes** came on 03/10) → **Create group** / **Join group** fly cards using
   David's Firebase party logic (the 6-letter code is the party id). The host's
   start uses the same permission check and app card as Quick Focus. When the host
   starts, everyone who joined starts focusing too, and the host can't start until
@@ -387,7 +526,8 @@ Quick Focus changes below). David's logic is kept; only the UI and wiring change
   the focus timer during a session, or to the phone's home screen for a
   daily-limit block.
 - **Dashboard** (tap Home's picture): theme ID card, weekly chart, history,
-  background theme picker, and an X to close.
+  background theme picker, and an X to close. Since then it also has the Rewards
+  trophy, the music picker and the Focus Coach button.
 - **Settings:** permission rows open the matching Android settings page.
 
 ### What each focus session blocks
@@ -399,8 +539,8 @@ Quick Focus changes below). David's logic is kept; only the UI and wiring change
 | Time Focus | no session; apps over their daily limit are blocked during the time slot |
 
 ### Code clean-up (for readability)
-- **Removed** (no entry point any more): the old Home sheets, Apps / Map /
-  Rewards / old Focus Mode / debug screens, the old `PartyModeScreen` and
+- **Removed** (no entry point any more; the Rewards page was rebuilt on 03/10): the old
+  Home sheets, Apps / Map / Rewards / old Focus Mode / debug screens, the old `PartyModeScreen` and
   `FriendListScreen`, `WireframeColors`, and unused test-panel code in
   `AccessibilityBridge`. Room, Firebase and `WifiTriggerStorage` are kept.
 - **Moved:** `BlockedAppGroup`, `BlockedAppGroupStorage`, `TimeSlot`, `AppItem`
@@ -445,7 +585,7 @@ Quick Focus changes below). David's logic is kept; only the UI and wiring change
   during a focus session.
 
 ### Still open
-- Friend ID system (search and friend list are placeholders).
+- ~~Friend ID system (search and friend list are placeholders).~~ Done on 03/10 (friend codes).
 - A break ("tea break") during a focus session is not built yet.
 
 ## 02/10/2026 Update (David Shiau) - User accounts
@@ -467,12 +607,18 @@ Quick Focus changes below). David's logic is kept; only the UI and wiring change
   **Email/Password** (keep **Anonymous** on for guests).
 
 ### Known limitations
-- No email, so a forgotten password can't be reset.
+- No email. ~~So a forgotten password can't be reset.~~ Since 04/10 it can be recovered with a
+  security question (see the 04/10 update by Yu-Hao Lu).
 - Only sessions, the Focus Zone and app groups sync. Per-feature blocked-app lists,
   Wi-Fi networks, friends and the theme are still phone-only.
 - Firebase keeps one `zone` per user, so only the last saved location is restored.
 
 ## 03/10/2026 Update (David Shiau) - Rewards
+
+> **Superseded:** Rewards is now a **points shop** (1 point per focused minute, spent on
+> backgrounds and focus music) - see step 8 of the App Flow above. The **daily streak goal
+> setting was removed from Settings**, and the streak is no longer shown on the Rewards page
+> (the Focus Coach summary still uses it). Today's milestones are still on the Rewards page.
 - **Rewards page:** the trophy at the dashboard's top-left opens it. Two independent parts,
   both worked out from the saved sessions (`domain/usecase/CalculateFocusRewardUseCase.kt`):
   - **Today's milestones:** today's total focus time against 5 min, 30 min, 1 h, 5 h and
@@ -491,7 +637,8 @@ Quick Focus changes below). David's logic is kept; only the UI and wiring change
   day and time of day, distracting-app attempts per hour, streak - no names or ids
   (`domain/usecase/BuildWeeklyFocusSummaryUseCase.kt`). A one-time notice asks first.
 - **5 AI answers per day** (report and follow-ups), counted on the phone; failed requests
-  don't count. Today's report is saved, so reopening doesn't ask again.
+  don't count. Today's report is saved, so reopening doesn't ask again. (Since 04/10 the
+  one-line comment under each session in History uses the same 5 per day.)
 - Gemini is called through **Firebase AI Logic** (`data/ai/FocusCoach.kt`, model
   `gemini-3.5-flash`), so no Gemini key is in the app. Firebase BOM updated to 34.19.0.
 - **App Check:** debug builds use debug tokens, release builds Play Integrity
@@ -585,11 +732,18 @@ No behaviour changed; the code was reorganised so it is easier to read:
   `NoiseAlert()`.
 - **Settings:** the microphone check is one helper, `hasMicrophonePermission()` in
   `ui/common/MicrophonePermission.kt`.
-- Note: `app/google-services.json` is still tracked in git on `main`.
+- Note: `app/google-services.json` is now in `.gitignore`: the build generates it
+  (`generateGoogleServicesJson`, using `FIREBASE_API_KEY` from `gradle.properties` or
+  `local.properties`). *(This replaces the earlier "still tracked" note.)*
 - Known issue: 4 tests in `FocusRepositoryImplTest` (`saveFocusZone...`) already fail on
   `main`; they are not related to this change.
 
 ## 04/10/2026 Update (Jia-Ying Lee) - Reward backgrounds
+
+> **Superseded:** backgrounds are no longer unlocked by a 7-day streak or the test code
+> (`ThemeUnlockCodeCard.kt`, the "Valley" theme and the streak rules are gone). Reward
+> backgrounds are now **bought with points** in the Rewards shop - see step 8 of the App Flow
+> above, `domain/model/RewardRules.kt` (prices) and `ui/theme/BackgroundThemes.kt` (the themes).
 
 Kevin's idea (focus to unlock rewards), built on David's Rewards data: keeping a daily
 streak now unlocks a new background theme.
