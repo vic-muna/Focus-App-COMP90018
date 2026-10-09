@@ -56,7 +56,7 @@ private data class ShopItem(val id: String, val name: String, val intro: String,
 
 /**
  * Rewards, opened from the dashboard's trophy:
- *  - points: 1 for every minute of focus, spent in the shop below
+ *  - points: 1 for every 10 minutes of focus, spent in the shop below
  *  - today's focus-time milestones (back to zero at midnight)
  *  - the shop: backgrounds and focus music bought with points
  */
@@ -172,7 +172,7 @@ private fun PointsCard(progress: RewardProgress) {
             Spacer(Modifier.width(12.dp))
             Column {
                 Text(text = formatPoints(progress.points), style = typography.statValue, color = colors.onSurface)
-                Text(text = "1 point for every minute of focus", style = typography.caption, color = colors.onSurfaceMuted)
+                Text(text = "1 point for every 10 minutes of focus", style = typography.caption, color = colors.onSurfaceMuted)
             }
         }
         Spacer(Modifier.height(16.dp))

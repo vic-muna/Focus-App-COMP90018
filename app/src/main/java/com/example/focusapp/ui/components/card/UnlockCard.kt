@@ -45,7 +45,7 @@ fun UnlockCard(
         UnlockRow(label = "Cost", value = "-$pricePoints pts", valueColor = colors.rejection)
         if (!canAfford) {
             Text(
-                text = "Not enough points yet - every minute of focus earns 1 point.",
+                text = "Not enough points yet - every 10 minutes of focus earns 1 point.",
                 style = FocusTheme.typography.caption,
                 color = colors.onSurfaceMuted,
                 modifier = Modifier.padding(start = 4.dp, top = 8.dp),

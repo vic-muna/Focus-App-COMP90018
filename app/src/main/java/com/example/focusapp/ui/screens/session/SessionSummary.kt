@@ -43,7 +43,7 @@ import kotlinx.coroutines.launch
 fun SessionSummaryOverlay(session: FocusSession, onDone: () -> Unit) {
     val colors = FocusTheme.colors
     val minutes = (session.durationMillis() / 60_000).toInt()
-    val points = minutes * RewardRules.POINTS_PER_MINUTE
+    val points = minutes / RewardRules.MINUTES_PER_POINT
 
     // The card pops in with a little bounce while the backdrop fades in.
     val scale = remember { Animatable(0.6f) }

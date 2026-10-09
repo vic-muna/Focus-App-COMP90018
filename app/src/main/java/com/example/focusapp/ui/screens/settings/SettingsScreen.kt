@@ -359,7 +359,7 @@ private fun SettingsContent(
                 ) { RowArrow() }
             }
 
-            // 1 point per minute of focus; points are spent on backgrounds and music in Rewards.
+            // 1 point per 10 minutes of focus; points are spent on backgrounds and music in Rewards.
             SettingsSection(title = "Rewards", icon = Icons.Filled.EmojiEvents) {
                 SettingsRow(label = "Total focus time") {
                     Text(

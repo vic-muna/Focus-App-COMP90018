@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit
  *    goal yet (today can still save the streak until midnight).
  *  - Best streak: the longest run of such days at any time. Unlike the daily streak it
  *    doesn't drop after a missed day.
- *  - Points: [RewardRules.POINTS_PER_MINUTE] for every minute of focus ever, minus [spentPoints].
+ *  - Points: 1 for every [RewardRules.MINUTES_PER_POINT] minutes of focus ever, minus [spentPoints].
  * A session that runs past midnight is split between the two days.
  * Days follow the phone's time zone. Nothing is stored: everything is worked out from the
  * sessions, so changing the goal applies to past days too.
@@ -50,7 +50,7 @@ class CalculateFocusRewardUseCase {
             streakGoalMinutes = streakGoalMinutes,
             bestStreakDays = bestStreakDays(minutesByDay, streakGoalMinutes),
             totalFocusMinutes = totalMinutes,
-            points = (totalMinutes * RewardRules.POINTS_PER_MINUTE - spentPoints).coerceAtLeast(0),
+            points = (totalMinutes / RewardRules.MINUTES_PER_POINT - spentPoints).coerceAtLeast(0),
         )
     }
 
