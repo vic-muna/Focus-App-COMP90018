@@ -11,16 +11,17 @@ import com.example.focusapp.domain.model.Friend
  */
 interface LocalDataSource {
 
-    /** The user's single saved focus zone, or null if none has been set yet. */
+    /** The first saved focus zone, or null if there are none. Kept for callers that only deal
+     *  with one zone - use [getFocusZones] for all of them. */
     suspend fun getFocusZone(): FocusZone?
 
-    /** Persists the user's one focus zone, overwriting any previously saved value. */
+    /** Adds or updates one zone by id; the other zones are kept (same as [addFocusZone] now). */
     suspend fun saveFocusZone(zone: FocusZone)
 
     /** Every saved zone (used by the Geofence code, which supports several zones). */
     suspend fun getFocusZones(): List<FocusZone>
 
-    /** Adds or updates one zone WITHOUT clearing the others (unlike [saveFocusZone]). */
+    /** Adds or updates one zone by id WITHOUT clearing the others. Returns whether it worked. */
     suspend fun addFocusZone(zone: FocusZone): Boolean
 
     /** Deletes the zone with this id. */
@@ -35,8 +36,8 @@ interface LocalDataSource {
     // are actually used). "Restrictions/plans" in the original project plan's
     // Remote Data Source description. ---
 
-    /** The saved zone, if any, that hasn't reached Firebase yet - null if there's no
-     *  zone or it's already synced. */
+    /** The first saved zone that hasn't reached Firebase yet - null if there are none or all
+     *  are synced. Only one zone is returned per call (the cloud keeps a single zone node). */
     suspend fun getUnsyncedZone(): FocusZone?
 
     suspend fun markZoneSynced(zoneId: String)

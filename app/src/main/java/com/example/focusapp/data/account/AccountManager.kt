@@ -59,6 +59,15 @@ object AccountManager {
     // case) and written only by whoever is - or is about to prove themselves to be, via
     // sign-in - that uid; see this class's README/chat notes for the exact rule.
     private const val RECOVERY_PATH = "accountRecovery"
+    /** [Claude, 2026-10-09] The questions offered at sign-up (AccountScreen shows exactly these).
+     *  Also where [getSecurityQuestion]'s decoy questions come from - see [decoyQuestionFor]. */
+    val SECURITY_QUESTIONS = listOf(
+        "What was your first pet's name?",
+        "What city were you born in?",
+        "What was the name of your first school?",
+        "What's your mother's maiden name?",
+        "What was your childhood nickname?",
+    )
     // users/{uid}/username - a label for people reading the database, see saveUsername().
     private const val USERNAME_KEY = "username"
     private const val PREFS_NAME = "focus_account"
@@ -138,23 +147,42 @@ object AccountManager {
         _account.value = Account(user.uid, username)
     }
 
-    /** The question to show on the "Forgot password" screen for [username], or null if no
-     *  account with that username has recovery set up (never created one, or signed up before
-     *  this feature existed). Doesn't require being signed in - a forgotten-password flow is
-     *  exactly the situation where the user can't sign in yet. */
-    suspend fun getSecurityQuestion(username: String): String? {
+    /**
+     * The question to show on the "Forgot password" screen for [username]. Doesn't require
+     * being signed in - a forgotten-password flow is exactly the situation where the user
+     * can't sign in yet.
+     *
+     * [Claude, 2026-10-09] Never returns null: a username with no recovery set up (no such
+     * account, never set one up, or signed up before this feature existed) gets a decoy
+     * question from [decoyQuestionFor] instead, so the screen looks the same whether or not
+     * the account exists - [recoverPassword] then fails that case with the same "That didn't
+     * match" message as a wrong answer.
+     *
+     * Limits: this only hides it in this UI. Sign-up still says "username already taken", and
+     * anyone who can read RECOVERY_PATH directly (the database rule has to allow signed-out
+     * reads) can still see which usernames exist - closing that properly needs a server-side
+     * check.
+     */
+    suspend fun getSecurityQuestion(username: String): String {
         val normalized = normalizeUsername(username)
         val snapshot = FirebaseDatabase.getInstance().getReference("$RECOVERY_PATH/$normalized/question").get().await()
-        return snapshot.getValue(String::class.java)
+        return snapshot.getValue(String::class.java) ?: decoyQuestionFor(normalized)
     }
+
+    /** [Claude, 2026-10-09] Same username -> same decoy every time. A random one would give the
+     *  game away on the second try, since a real account always returns the same question.
+     *  mod() rather than %, because hashCode() can be negative. */
+    private fun decoyQuestionFor(normalizedUsername: String): String =
+        SECURITY_QUESTIONS[normalizedUsername.hashCode().mod(SECURITY_QUESTIONS.size)]
 
     /**
      * Recovers access to [username]'s account by answering its security question, then sets
      * [newPassword]. Throws [SecurityAnswerException] for a wrong answer or a username with no
      * recovery set up (both read the same way to the UI: "that didn't work", with no hint about
      * which one it was - revealing "no such account" would let someone probe for valid
-     * usernames). Any other exception (network, etc.) is a normal Firebase exception - see
-     * [errorMessageFor].
+     * usernames; [getSecurityQuestion] keeps the first step from giving it away too, by
+     * returning a decoy question). Any other exception (network, etc.) is a normal Firebase
+     * exception - see [errorMessageFor].
      */
     suspend fun recoverPassword(context: Context, username: String, answer: String, newPassword: String) {
         val normalized = normalizeUsername(username)

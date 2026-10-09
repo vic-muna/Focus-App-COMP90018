@@ -18,12 +18,13 @@ class RoomLocalDataSource(context: Context) : LocalDataSource {
 
     private val db = FocusAppDatabase.getInstance(context)
 
+    // The first saved zone - kept for callers that only deal with one zone; getFocusZones() has all of them.
     override suspend fun getFocusZone(): FocusZone? =
         db.focusZoneDao().getAll().firstOrNull()?.toDomain()
 
-    // Single-zone contract: clear the table before inserting, so there is
-    // always at most one row, regardless of what id the new zone has.
-    // (The DAO/table itself stays general-purpose - see FocusZoneDao.)
+    // Upsert by id: a new id adds a zone, an existing id updates it in place. Other zones are
+    // kept - this used to clear the table first (single-zone), but the app supports several
+    // zones now. Same behaviour as addFocusZone() below; deleteFocusZone() removes one.
     override suspend fun saveFocusZone(zone: FocusZone) {
         db.focusZoneDao().upsert(zone.toEntity())
     }

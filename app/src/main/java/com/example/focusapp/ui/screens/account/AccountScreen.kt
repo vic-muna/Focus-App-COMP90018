@@ -346,14 +346,9 @@ private fun AccountContent(
 }
 
 /** [Claude, 2026-10-04] Picked from, not freely typed - see the state declaration in
- *  [AccountScreen] for why. */
-private val SECURITY_QUESTIONS = listOf(
-    "What was your first pet's name?",
-    "What city were you born in?",
-    "What was the name of your first school?",
-    "What's your mother's maiden name?",
-    "What was your childhood nickname?",
-)
+ *  [AccountScreen] for why. [Claude, 2026-10-09] The list itself now lives in [AccountManager],
+ *  because the decoy questions for Forgot password (step 1) are drawn from the same list. */
+private val SECURITY_QUESTIONS = AccountManager.SECURITY_QUESTIONS
 
 /** A plain tappable list, not a dropdown - this project has no existing dropdown component to
  *  match the rest of its look, and a short, always-visible list of five options doesn't really
@@ -448,14 +443,11 @@ private fun ForgotPasswordContent(
         isBusy = true
         scope.launch {
             try {
-                val found = AccountManager.getSecurityQuestion(username)
-                if (found != null) {
-                    question = found
-                    // Same vague wording a wrong answer gets later - see recoverPassword()'s
-                    // doc comment for why this doesn't say "no such account" outright.
-                } else {
-                    errorMessage = "Couldn't find that account."
-                }
+                // [Claude, 2026-10-09] Always a question: the real one, or a stable decoy for a
+                // username with no recovery set up (see AccountManager.getSecurityQuestion). So
+                // this step never says "no such account" - a wrong username only shows up at
+                // step 2, as the same "That didn't match" a wrong answer gets.
+                question = AccountManager.getSecurityQuestion(username)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

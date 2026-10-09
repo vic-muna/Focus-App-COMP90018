@@ -13,46 +13,53 @@ import com.example.focusapp.domain.model.Friend
  * Context, no emulator needed. Mirrors the *behaviour* the real
  * RoomLocalDataSource/DAOs promise closely enough to exercise
  * FocusRepositoryImpl's logic in a fast local JVM test:
- *  - saveFocusZone overwrites the single saved zone, matching
- *    RoomLocalDataSource's deleteAll()-then-upsert().
+ *  - saveFocusZone and addFocusZone both upsert a zone by id and keep the
+ *    other zones, matching RoomLocalDataSource (which no longer clears the
+ *    table first - several zones are allowed).
  *  - saveAppGroup is Upsert (replace-by-id), matching AppGroupDao.upsert.
  *  - saveFocusSession is append-only, matching FocusSessionDao.insert.
  *  - getSessionHistory is ordered newest-first, matching the DAO's
  *    `ORDER BY startTimeMillis DESC`.
- *  - synced state (for sessions, zone, and app groups alike) is tracked
+ *  - synced state (for sessions, zones, and app groups alike) is tracked
  *    the same way the real `synced` columns do, just as separate
- *    Sets/flags here since the domain models themselves don't carry that
+ *    Sets here since the domain models themselves don't carry that
  *    field (see FocusSessionEntity's doc comment for why).
+ *    A zone/app group that is saved (again) becomes unsynced, like the
+ *    real upsert, which writes synced = false.
  */
 class FakeLocalDataSource : LocalDataSource {
 
-    private var zone: FocusZone? = null
-    private var zoneSynced: Boolean = false
+    private val savedZones = mutableListOf<FocusZone>()
+    private val syncedZoneIds = mutableSetOf<String>()
     private val appGroups = mutableListOf<AppGroup>()
     private val syncedAppGroupIds = mutableSetOf<String>()
     private val sessions = mutableListOf<FocusSession>()
     private val syncedSessionIds = mutableSetOf<String>()
     private val friends = mutableListOf<Friend>()
-    private val extraZones = mutableListOf<FocusZone>()
 
-    override suspend fun getFocusZone(): FocusZone? = zone
-
-    override suspend fun saveFocusZone(zone: FocusZone) {
-        this.zone = zone
-        zoneSynced = false
+    // Add or replace by id, and mark it as not yet synced - what Room's upsert does.
+    private fun upsertZone(zone: FocusZone) {
+        savedZones.removeAll { it.id == zone.id }
+        savedZones.add(zone)
+        syncedZoneIds.remove(zone.id)
     }
 
-    override suspend fun getFocusZones(): List<FocusZone> = listOfNotNull(zone) + extraZones
+    override suspend fun getFocusZone(): FocusZone? = savedZones.firstOrNull()
+
+    override suspend fun saveFocusZone(zone: FocusZone) {
+        upsertZone(zone)
+    }
+
+    override suspend fun getFocusZones(): List<FocusZone> = savedZones.toList()
 
     override suspend fun addFocusZone(zone: FocusZone): Boolean {
-        extraZones.removeAll { it.id == zone.id }
-        extraZones.add(zone)
+        upsertZone(zone)
         return true
     }
 
     override suspend fun deleteFocusZone(zoneId: String): Boolean {
-        extraZones.removeAll { it.id == zoneId }
-        if (this.zone?.id == zoneId) this.zone = null
+        savedZones.removeAll { it.id == zoneId }
+        syncedZoneIds.remove(zoneId)
         return true
     }
 
@@ -64,10 +71,12 @@ class FakeLocalDataSource : LocalDataSource {
         syncedAppGroupIds.remove(group.id)
     }
 
-    override suspend fun getUnsyncedZone(): FocusZone? = zone?.takeIf { !zoneSynced }
+    // Like RoomLocalDataSource.getUnsyncedZone(): only the first unsynced zone.
+    override suspend fun getUnsyncedZone(): FocusZone? =
+        savedZones.firstOrNull { it.id !in syncedZoneIds }
 
     override suspend fun markZoneSynced(zoneId: String) {
-        if (zone?.id == zoneId) zoneSynced = true
+        syncedZoneIds.add(zoneId)
     }
 
     override suspend fun getUnsyncedAppGroups(): List<AppGroup> =
@@ -100,13 +109,17 @@ class FakeLocalDataSource : LocalDataSource {
         if (index != -1) sessions[index] = sessions[index].copy(aiFeedback = feedback)
     }
 
+    // Rows already on the phone (same id) are kept; downloaded rows count as already synced.
     override suspend fun importFromCloud(sessions: List<FocusSession>, zones: List<FocusZone>, appGroups: List<AppGroup>) {
         sessions.filter { s -> this.sessions.none { it.id == s.id } }.forEach {
             this.sessions.add(it)
             syncedSessionIds.add(it.id)
         }
-        val localZoneIds = getFocusZones().map { it.id }.toSet()
-        zones.filter { it.id !in localZoneIds }.forEach { addFocusZone(it) }
+        val localZoneIds = savedZones.map { it.id }.toSet()
+        zones.filter { it.id !in localZoneIds }.forEach {
+            savedZones.add(it)
+            syncedZoneIds.add(it.id)
+        }
         appGroups.filter { g -> this.appGroups.none { it.id == g.id } }.forEach {
             this.appGroups.add(it)
             syncedAppGroupIds.add(it.id)
@@ -114,14 +127,13 @@ class FakeLocalDataSource : LocalDataSource {
     }
 
     override suspend fun clearAll() {
-        zone = null
-        zoneSynced = false
+        savedZones.clear()
+        syncedZoneIds.clear()
         appGroups.clear()
         syncedAppGroupIds.clear()
         sessions.clear()
         syncedSessionIds.clear()
         friends.clear()
-        extraZones.clear()
     }
 
     override suspend fun getFriends(): List<Friend> =

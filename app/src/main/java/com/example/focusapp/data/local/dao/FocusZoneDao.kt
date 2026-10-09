@@ -5,10 +5,9 @@ import androidx.room.Query
 import androidx.room.Upsert
 import com.example.focusapp.data.local.entity.FocusZoneEntity
 
-// This DAO/table itself stays general-purpose (able to hold any number of
-// rows) - it's RoomLocalDataSource.saveFocusZone() that enforces the
-// app's single-zone contract, by calling deleteAll() before every
-// upsert() so at most one row ever exists. See that class for why.
+// Holds any number of zones - the app supports several (multi-geofence).
+// RoomLocalDataSource.saveFocusZone() and addFocusZone() both just upsert
+// by id; nothing limits the table to one row any more.
 @Dao
 interface FocusZoneDao {
     @Query("SELECT * FROM focus_zones")
@@ -19,14 +18,15 @@ interface FocusZoneDao {
     @Upsert
     suspend fun upsert(zone: FocusZoneEntity)
 
-    // Used by RoomLocalDataSource.saveFocusZone() to enforce "at most one
-    // saved zone" before inserting the new one.
+    // No longer called by RoomLocalDataSource.saveFocusZone() (it stopped clearing
+    // the table once several zones were allowed) - kept for FocusZoneDaoTest.
     @Query("DELETE FROM focus_zones")
     suspend fun deleteAll()
 
-    // Cloud sync (mirrors FocusSessionDao's getUnsynced/markSynced) - at most one
-    // row will ever come back given the single-zone contract above, but this stays
-    // a List for the same reason getAll() is: the DAO/table itself is general-purpose.
+    // Cloud sync (mirrors FocusSessionDao's getUnsynced/markSynced) - can return one
+    // row per unsynced zone. RoomLocalDataSource.getUnsyncedZone() only takes the
+    // first, and the cloud keeps a single users/{uid}/zone node, so only one zone
+    // is actually pushed (see FirebaseRemoteDataSource.pushFocusZone).
     @Query("SELECT * FROM focus_zones WHERE synced = 0")
     suspend fun getUnsynced(): List<FocusZoneEntity>
 

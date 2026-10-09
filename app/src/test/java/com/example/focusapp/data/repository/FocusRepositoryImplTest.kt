@@ -22,7 +22,7 @@ import org.junit.Test
  * Plain local unit test (host JVM, no emulator/Robolectric) - both
  * dependencies are fakes (FakeLocalDataSource / FakeRemoteDataSource), so
  * this exercises FocusRepositoryImpl's own orchestration logic:
- * validation-before-persist, single-zone overwrite-on-save, and
+ * validation-before-persist, zones saved by id (several allowed), and
  * offline-first sync (sessions, zone, and app groups all follow the same
  * save-locally-then-best-effort-push shape). DAO-level behaviour against
  * a real (in-memory) Room database is
@@ -79,7 +79,7 @@ class FocusRepositoryImplTest {
         assertEquals(null, repository.getFocusZone())
     }
 
-    // ---------------- single-zone ----------------
+    // ---------------- focus zones (several allowed, upsert by id) ----------------
 
     @Test
     fun saveFocusZone_thenGetFocusZone_returnsWhatWasSaved() = runBlocking {
@@ -92,16 +92,13 @@ class FocusRepositoryImplTest {
     }
 
     @Test
-    fun saveFocusZone_overwritesAnyPreviouslySavedZone() = runBlocking {
+    fun saveFocusZone_keepsEarlierZones_whenTheIdDiffers() = runBlocking {
         repository.saveFocusZone(FocusZone("z1", "Library", -37.8, 144.9, 50f))
         repository.saveFocusZone(FocusZone("z2", "Home", -37.81, 144.96, 15f))
 
-        val zone = repository.getFocusZone()
-
-        // Only the most recently saved zone remains - saveFocusZone
-        // replaces the user's one zone, it does not add a second one.
-        assertEquals("z2", zone?.id)
-        assertEquals("Home", zone?.name)
+        // The app supports several zones now: a different id adds a zone, it doesn't
+        // replace the first one (same id updates in place - see the next test).
+        assertEquals(listOf("z1", "z2"), repository.getFocusZones().map { it.id })
     }
 
     @Test

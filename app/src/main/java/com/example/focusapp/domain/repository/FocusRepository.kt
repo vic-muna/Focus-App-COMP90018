@@ -20,8 +20,8 @@ interface FocusRepository {
     /** Reads the user's first saved focus zone, or null if none has been set yet. */
     suspend fun getFocusZone(): FocusZone?
 
-    /** Persists the user's one focus zone, overwriting any previously saved value, then
-     *  best-effort pushes it to the cloud ("restrictions/plans" - see [syncPendingZoneAndAppGroups]). */
+    /** Adds or updates a focus zone by id (the other zones are kept), then best-effort pushes
+     *  it to the cloud ("restrictions/plans" - see [syncPendingZoneAndAppGroups]). */
     suspend fun saveFocusZone(zone: FocusZone)
 
     /** Removes a saved zone from local storage (the cloud copy isn't removed yet). */

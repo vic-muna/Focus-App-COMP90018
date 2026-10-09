@@ -26,11 +26,10 @@ import org.junit.runner.RunWith
  * Uses a fresh in-memory database per test (thrown away in @After), so
  * these tests never touch the real focus_app.db on the test device.
  *
- * NOTE: this DAO/table is intentionally still general-purpose (able to
- * hold several rows) - it's RoomLocalDataSource.saveFocusZone() one layer
- * up that enforces the app's "at most one saved zone" contract, by
- * calling deleteAll() before every upsert(). The multi-row test below is
- * still valid: it's checking the DAO mechanics, not the app-level policy.
+ * NOTE: this DAO/table holds any number of zones - the app supports several
+ * (multi-geofence), and RoomLocalDataSource.saveFocusZone()/addFocusZone()
+ * both just upsert by id. So the multi-row test below matches the real app
+ * behaviour, not only the DAO mechanics.
  */
 @RunWith(AndroidJUnit4::class)
 class FocusZoneDaoTest {
