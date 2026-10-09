@@ -267,8 +267,6 @@ Sensor Data Source → Repository → Domain Layer → ViewModel → UI Layer
 **Navigation concept:**
 Bottom navigation with four destinations — **Home, Location, Time Focus, Wi-Fi**. The Dashboard (history, Rewards, Focus Coach) opens from Home's picture, Party Mode from the group icon (top-left) and Settings from the gear (top-right).
 
-📎 [Figma Prototype](#) *(link in original document)*
-
 ---
 
 ## Requirement Coverage and Justification
