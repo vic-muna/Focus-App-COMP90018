@@ -19,18 +19,15 @@ object RewardRules {
 
     // --- Points (earned by focusing, spent in the Rewards shop) ---
 
-    /** Points earned for every whole minute of focus. */
-    const val POINTS_PER_MINUTE = 1
-
-    // TODO(rewards): prices are tiny for testing - set the real prices before release
-    // (keep the Run backgrounds above the others).
+    /** Minutes of focus that earn 1 point. */
+    const val MINUTES_PER_POINT = 10
 
     /** Price of each reward background (see BackgroundThemes). */
-    const val BACKGROUND_PRICE_POINTS = 1
+    const val BACKGROUND_PRICE_POINTS = 10
 
     /** Price of each Run background (see BackgroundThemes) - pricier than the others. */
-    const val RUN_BACKGROUND_PRICE_POINTS = 2
+    const val RUN_BACKGROUND_PRICE_POINTS = 20
 
     /** Price of each paid focus music track (see FocusMusics). */
-    const val MUSIC_PRICE_POINTS = 1
+    const val MUSIC_PRICE_POINTS = 10
 }

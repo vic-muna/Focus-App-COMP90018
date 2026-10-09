@@ -136,20 +136,20 @@ class CalculateFocusRewardUseCaseTest {
     }
 
     @Test
-    fun `every minute of focus ever earns a point`() {
+    fun `every 10 minutes of focus ever earns a point`() {
         val sessions = listOf(session(0, 9, 30), session(3, 9, 45), session(10, 9, 25))
 
         val result = useCase.execute(sessions, streakGoalMinutes = 120, now = now)
 
         assertEquals(100L, result.totalFocusMinutes)
-        assertEquals(100L, result.points)
+        assertEquals(10L, result.points)
     }
 
     @Test
     fun `spent points come off the total but never below zero`() {
         val sessions = listOf(session(1, 9, 200))
 
-        assertEquals(80L, useCase.execute(sessions, streakGoalMinutes = 120, spentPoints = 120, now = now).points)
+        assertEquals(5L, useCase.execute(sessions, streakGoalMinutes = 120, spentPoints = 15, now = now).points)
         assertEquals(0L, useCase.execute(sessions, streakGoalMinutes = 120, spentPoints = 500, now = now).points)
         assertEquals(200L, useCase.execute(sessions, streakGoalMinutes = 120, spentPoints = 500, now = now).totalFocusMinutes)
     }

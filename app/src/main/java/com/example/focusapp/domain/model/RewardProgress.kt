@@ -2,7 +2,7 @@ package com.example.focusapp.domain.model
 
 /**
  * What the Rewards page shows:
- *  - points: earned by focusing ([RewardRules.POINTS_PER_MINUTE]), spent in the shop
+ *  - points: earned by focusing (1 per [RewardRules.MINUTES_PER_POINT] minutes), spent in the shop
  *  - today's milestones: focus time added up since midnight (resets every day)
  *  - the daily streak: days in a row that reached [streakGoalMinutes]
  */
