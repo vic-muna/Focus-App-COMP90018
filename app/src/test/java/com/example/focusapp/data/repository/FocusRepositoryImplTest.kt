@@ -124,7 +124,7 @@ class FocusRepositoryImplTest {
         repository.saveFocusZone(zone) // must NOT throw just because "offline"
 
         assertEquals(zone, repository.getFocusZone())
-        assertEquals(zone, localDataSource.getUnsyncedZone())
+        assertEquals(listOf(zone), localDataSource.getUnsyncedZones())
         assertTrue(remoteDataSource.pushedZones.isEmpty())
     }
 
@@ -135,7 +135,7 @@ class FocusRepositoryImplTest {
         repository.saveFocusZone(zone)
 
         assertEquals(listOf(zone), remoteDataSource.pushedZones)
-        assertEquals(null, localDataSource.getUnsyncedZone())
+        assertTrue(localDataSource.getUnsyncedZones().isEmpty())
     }
 
     @Test
@@ -171,10 +171,65 @@ class FocusRepositoryImplTest {
         remoteDataSource.shouldFailPush = false
         repository.syncPendingZoneAndAppGroups() // retry, e.g. once back online
 
-        assertEquals(null, localDataSource.getUnsyncedZone())
+        assertTrue(localDataSource.getUnsyncedZones().isEmpty())
         assertTrue(localDataSource.getUnsyncedAppGroups().isEmpty())
         assertEquals(listOf(zone), remoteDataSource.pushedZones)
         assertEquals(listOf(group), remoteDataSource.pushedAppGroups)
+    }
+
+    // ---------------- several zones in the cloud (one node per zone) ----------------
+
+    @Test
+    fun savingTwoZonesOnline_pushesEachExactlyOnce() = runBlocking {
+        val z1 = FocusZone("z1", "Library", -37.8, 144.9, 50f)
+        val z2 = FocusZone("z2", "Cafe", -37.81, 144.96, 80f)
+
+        repository.saveFocusZone(z1)
+        repository.saveFocusZone(z2)
+
+        // z2's save must not push z1 again (z1 is already synced), and must not skip z2 either.
+        assertEquals(listOf(z1, z2), remoteDataSource.pushedZones)
+        assertTrue(localDataSource.getUnsyncedZones().isEmpty())
+    }
+
+    @Test
+    fun syncPendingZoneAndAppGroups_pushesEveryPendingZone_notJustTheFirst() = runBlocking {
+        remoteDataSource.shouldFailPush = true
+        val z1 = FocusZone("z1", "Library", -37.8, 144.9, 50f)
+        val z2 = FocusZone("z2", "Cafe", -37.81, 144.96, 80f)
+        val z3 = FocusZone("z3", "Home", -37.79, 144.95, 30f)
+        repository.saveFocusZone(z1)
+        repository.saveFocusZone(z2)
+        repository.saveFocusZone(z3)
+        assertEquals(3, localDataSource.getUnsyncedZones().size)
+
+        remoteDataSource.shouldFailPush = false
+        repository.syncPendingZoneAndAppGroups()
+
+        assertEquals(listOf(z1, z2, z3), remoteDataSource.pushedZones)
+        assertTrue(localDataSource.getUnsyncedZones().isEmpty())
+    }
+
+    @Test
+    fun deleteFocusZone_alsoDeletesTheCloudCopy() = runBlocking {
+        repository.saveFocusZone(FocusZone("z1", "Library", -37.8, 144.9, 50f))
+        repository.saveFocusZone(FocusZone("z2", "Cafe", -37.81, 144.96, 80f))
+
+        repository.deleteFocusZone("z1")
+
+        assertEquals(listOf("z2"), repository.getFocusZones().map { it.id })
+        assertEquals(listOf("z1"), remoteDataSource.deletedZoneIds)
+    }
+
+    @Test
+    fun deleteFocusZone_succeedsLocallyEvenWhenRemoteDeleteFails() = runBlocking {
+        repository.saveFocusZone(FocusZone("z1", "Library", -37.8, 144.9, 50f))
+        remoteDataSource.shouldFailPush = true
+
+        repository.deleteFocusZone("z1") // must NOT throw just because "offline"
+
+        assertTrue(repository.getFocusZones().isEmpty())
+        assertTrue(remoteDataSource.deletedZoneIds.isEmpty())
     }
 
     // ---------------- offline-first session sync ----------------
@@ -405,7 +460,7 @@ class FocusRepositoryImplTest {
         val session = FocusSession(id = "s1", startTimeMillis = 1_000L, endTimeMillis = 2_000L)
         val zone = FocusZone("z1", "Library", -37.8, 144.9, 150f)
         val group = AppGroup(id = "g1", groupName = "Social")
-        remoteDataSource.cloudUserData = CloudUserData(listOf(session), zone, listOf(group))
+        remoteDataSource.cloudUserData = CloudUserData(listOf(session), listOf(zone), listOf(group))
 
         repository.restoreFromCloud()
 
@@ -415,6 +470,19 @@ class FocusRepositoryImplTest {
         // Downloaded rows must not be uploaded straight back.
         assertTrue(localDataSource.getUnsyncedSessions().isEmpty())
         assertTrue(localDataSource.getUnsyncedAppGroups().isEmpty())
+    }
+
+    @Test
+    fun restoreFromCloud_importsEveryZone_asAlreadySynced() = runBlocking {
+        val z1 = FocusZone("z1", "Library", -37.8, 144.9, 150f)
+        val z2 = FocusZone("z2", "Cafe", -37.81, 144.96, 80f)
+        remoteDataSource.cloudUserData = CloudUserData(zones = listOf(z1, z2))
+
+        repository.restoreFromCloud()
+
+        assertEquals(listOf(z1, z2), repository.getFocusZones())
+        // Downloaded zones must not be uploaded straight back.
+        assertTrue(localDataSource.getUnsyncedZones().isEmpty())
     }
 
     @Test

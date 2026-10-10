@@ -97,10 +97,28 @@ class FocusRepositoryImpl(
     override suspend fun getFocusZone(): FocusZone? =
         localDataSource.getFocusZones().firstOrNull()
 
-    // Deletes on this phone only; the Firebase copy stays.
-    // TODO: add a RemoteDataSource delete and call it here, like saveFocusZone() does.
+    // Deletes on the phone first, then the Firebase copy (best-effort, fire-and-forget like every
+    // other cloud call here - see syncScope's doc comment). Limitation: a delete made while
+    // offline is NOT retried later - there's no record on the phone of "this zone was deleted"
+    // once its row is gone - so that zone's cloud copy stays and would come back on the next
+    // restore. Fixing that needs a small "pending deletes" list; not built yet.
     override suspend fun deleteFocusZone(zoneId: String) {
         localDataSource.deleteFocusZone(zoneId)
+        syncScope.launch { pushFocusZoneDelete(zoneId) }
+    }
+
+    private suspend fun pushFocusZoneDelete(zoneId: String) {
+        try {
+            withTimeout(FIREBASE_PUSH_TIMEOUT_MILLIS) {
+                remoteDataSource.deleteFocusZone(zoneId)
+            }
+        } catch (e: TimeoutCancellationException) {
+            // Treated exactly like any other failed call - see deleteFocusZone()'s limitation note.
+        } catch (e: CancellationException) {
+            throw e // real cancellation (app/scope shutting down) - must not be swallowed
+        } catch (e: Exception) {
+            // Offline / not signed in: the phone's copy is already gone, which is what matters here.
+        }
     }
 
     override suspend fun saveFocusZone(zone: FocusZone) {
@@ -125,7 +143,9 @@ class FocusRepositoryImpl(
      *  push gets the same [FIREBASE_PUSH_TIMEOUT_MILLIS] treatment as sessions - see
      *  [syncPendingSessions]'s doc comment for why a hang (not just a failure) needs one. */
     override suspend fun syncPendingZoneAndAppGroups() {
-        localDataSource.getUnsyncedZone()?.let { zone ->
+        // Every unsynced zone, each to its own cloud node - this used to push only the FIRST one
+        // per call, all to the same single node, so each zone overwrote the previous one there.
+        localDataSource.getUnsyncedZones().forEach { zone ->
             try {
                 withTimeout(FIREBASE_PUSH_TIMEOUT_MILLIS) {
                     remoteDataSource.pushFocusZone(zone)
@@ -231,7 +251,7 @@ class FocusRepositoryImpl(
         val cloud = withTimeout(FIREBASE_PUSH_TIMEOUT_MILLIS) { remoteDataSource.fetchUserData() }
         localDataSource.importFromCloud(
             sessions = cloud.sessions,
-            zones = listOfNotNull(cloud.zone),
+            zones = cloud.zones,
             appGroups = cloud.appGroups,
         )
     }

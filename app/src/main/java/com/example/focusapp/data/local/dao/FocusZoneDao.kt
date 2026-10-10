@@ -23,12 +23,16 @@ interface FocusZoneDao {
     @Query("DELETE FROM focus_zones")
     suspend fun deleteAll()
 
-    // Cloud sync (mirrors FocusSessionDao's getUnsynced/markSynced) - can return one
-    // row per unsynced zone. RoomLocalDataSource.getUnsyncedZone() only takes the
-    // first, and the cloud keeps a single users/{uid}/zone node, so only one zone
-    // is actually pushed (see FirebaseRemoteDataSource.pushFocusZone).
+    // Cloud sync (mirrors FocusSessionDao's getUnsynced/markSynced) - one row per
+    // unsynced zone; the sync pushes each to its own users/{uid}/zones/{zoneId} node
+    // (see FirebaseRemoteDataSource.pushFocusZone).
     @Query("SELECT * FROM focus_zones WHERE synced = 0")
     suspend fun getUnsynced(): List<FocusZoneEntity>
+
+    // One-off: see RoomLocalDataSource.resetZoneSyncFlagsOnce() for why every zone has to be
+    // re-flagged as unsynced once.
+    @Query("UPDATE focus_zones SET synced = 0")
+    suspend fun markAllUnsynced()
 
     @Query("UPDATE focus_zones SET synced = 1 WHERE id = :zoneId")
     suspend fun markSynced(zoneId: String)

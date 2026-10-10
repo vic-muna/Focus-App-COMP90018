@@ -36,9 +36,9 @@ interface LocalDataSource {
     // are actually used). "Restrictions/plans" in the original project plan's
     // Remote Data Source description. ---
 
-    /** The first saved zone that hasn't reached Firebase yet - null if there are none or all
-     *  are synced. Only one zone is returned per call (the cloud keeps a single zone node). */
-    suspend fun getUnsyncedZone(): FocusZone?
+    /** Every saved zone that hasn't reached Firebase yet (empty if all are synced). The cloud
+     *  keeps one node per zone, so the sync pushes all of these, not just the first. */
+    suspend fun getUnsyncedZones(): List<FocusZone>
 
     suspend fun markZoneSynced(zoneId: String)
 

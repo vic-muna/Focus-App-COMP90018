@@ -824,3 +824,17 @@ Before, only the host's phone went into focus. Now the group starts together:
   `docs/firebase-realtime-database-structure.md`.
 - Known issue: 4 tests in `FocusRepositoryImplTest` (`saveFocusZone...`) still fail; they
   are not related to this change.
+
+  ## 10/10/2026 Update (Yu-Hao Lu)
+
+Focus Zones now sync to the cloud as a list: each zone has its own node
+(`users/{uid}/zones/{zoneId}`), so saving a second zone no longer overwrites the first,
+and logging in on a new phone restores all of them. Before this, every zone was written to
+one shared node, so only the last-pushed zone survived in the cloud.
+
+- Syncing pushes every unsynced zone, not just the first.
+- Deleting a location now also deletes its cloud copy (an offline delete is not retried).
+- Backups made before this change (old `users/{uid}/zone` node) are still restored.
+- Zones previously marked "synced" are re-uploaded once, automatically.
+- No Realtime Database Rules change needed (zones sit under `users/$uid`).
+- Code: `FirebaseRemoteDataSource`, `FocusRepositoryImpl`, `RoomLocalDataSource`.

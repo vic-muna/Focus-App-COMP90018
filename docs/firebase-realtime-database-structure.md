@@ -47,15 +47,16 @@ Note: the local-only `synced` flag (see `FocusSessionEntity`) is a
 Room-side bookkeeping column and is **not** part of this JSON - by the
 time a session is written here it's already synced by definition.
 
-### `users/{uid}/zone`
+### `users/{uid}/zones/{zoneId}`
 
-The user's one saved [`FocusZone`](../app/src/main/java/com/example/focusapp/domain/model/FocusZone.kt) -
-"restrictions/plans" in the original project plan's Remote Data Source
-description. Written by `pushFocusZone()`, called from
-`FocusRepositoryImpl.syncPendingZoneAndAppGroups()` - same offline-first
-shape as sessions above (Room first, this best-effort). A single object,
-not a list of children, matching the app's single-zone design (see
-`FocusRepository.getFocusZone()`'s doc comment).
+One saved [`FocusZone`](../app/src/main/java/com/example/focusapp/domain/model/FocusZone.kt) per child,
+keyed by the zone's id - "restrictions/plans" in the original project plan's Remote
+Data Source description. Written by `pushFocusZone()`, called from
+`FocusRepositoryImpl.syncPendingZoneAndAppGroups()` (which pushes **every** unsynced
+zone, each to its own node) - same offline-first shape as sessions above (Room first,
+this best-effort). Removed by `deleteFocusZone()` when a location is deleted (best-effort:
+a delete made while offline is not retried, so that zone's cloud copy can come back on
+the next restore).
 
 ```json
 {
@@ -67,11 +68,17 @@ not a list of children, matching the app's single-zone design (see
 }
 ```
 
+**Old single node `users/{uid}/zone`:** before several locations were supported, the whole
+app had one zone, stored as a single object here, and every push overwrote it. It is no
+longer written. `fetchUserData()` still reads it (so a backup made before this change
+restores), and `deleteFocusZone()` clears it if it holds the zone being deleted. A zone
+in `zones/` wins over the old node when both have the same id.
+
 ### `users/{uid}/appGroups/{groupId}`
 
 One [`AppGroup`](../app/src/main/java/com/example/focusapp/domain/model/AppGroup.kt) ("restrictions/plans"),
 mirrors the local Room row. Written by `pushAppGroup()`, same
-offline-first shape as sessions/zone above.
+offline-first shape as sessions/zones above.
 
 ```json
 {

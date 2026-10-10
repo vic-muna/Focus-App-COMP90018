@@ -24,10 +24,19 @@ interface RemoteDataSource {
     /** Push one completed session to the cloud (used by the offline-sync flow). */
     suspend fun pushSession(session: FocusSession)
 
-    /** Push the user's one focus zone to the cloud - "restrictions/plans" in the original
-     *  project plan's Remote Data Source description. Used by the same offline-first
-     *  sync flow as [pushSession] (see FocusRepositoryImpl.syncPendingZoneAndAppGroups()). */
+    /** Push ONE focus zone to the cloud - "restrictions/plans" in the original project plan's
+     *  Remote Data Source description. Used by the same offline-first sync flow as
+     *  [pushSession] (see FocusRepositoryImpl.syncPendingZoneAndAppGroups()).
+     *
+     *  Every zone gets its own node (users/{uid}/zones/{zoneId}), so pushing a second zone
+     *  never overwrites the first. (It used to be ONE shared node, users/{uid}/zone, from when
+     *  the app only had a single zone - with several zones that silently kept only the
+     *  last-pushed one in the cloud.) */
     suspend fun pushFocusZone(zone: FocusZone)
+
+    /** Removes [zoneId]'s cloud copy - without this a zone deleted on the phone would come
+     *  straight back on the next restore. Succeeds quietly if the cloud never had it. */
+    suspend fun deleteFocusZone(zoneId: String)
 
     /** Push one app group ("restrictions/plans") to the cloud - see [pushFocusZone]. */
     suspend fun pushAppGroup(group: AppGroup)
@@ -72,9 +81,9 @@ interface RemoteDataSource {
     fun updateMyPartyStatus(partyId: String, status: PartyMemberStatus)
 }
 
-/** What [RemoteDataSource.fetchUserData] downloads: the user's backed-up sessions, zone and app groups. */
+/** What [RemoteDataSource.fetchUserData] downloads: the user's backed-up sessions, zones and app groups. */
 data class CloudUserData(
     val sessions: List<FocusSession> = emptyList(),
-    val zone: FocusZone? = null,
+    val zones: List<FocusZone> = emptyList(),
     val appGroups: List<AppGroup> = emptyList(),
 )

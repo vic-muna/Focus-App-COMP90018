@@ -16,6 +16,7 @@ import kotlinx.coroutines.withContext
  */
 class RoomLocalDataSource(context: Context) : LocalDataSource {
 
+    private val appContext = context.applicationContext
     private val db = FocusAppDatabase.getInstance(context)
 
     // The first saved zone - kept for callers that only deal with one zone; getFocusZones() has all of them.
@@ -47,8 +48,25 @@ class RoomLocalDataSource(context: Context) : LocalDataSource {
     // --- Cloud sync for zone/app groups (mirrors the session sync methods below -
     // see LocalDataSource's doc comment and FocusRepositoryImpl for how these are used). ---
 
-    override suspend fun getUnsyncedZone(): FocusZone? =
-        db.focusZoneDao().getUnsynced().firstOrNull()?.toDomain()
+    override suspend fun getUnsyncedZones(): List<FocusZone> {
+        resetZoneSyncFlagsOnce()
+        return db.focusZoneDao().getUnsynced().map { it.toDomain() }
+    }
+
+    /**
+     * Zones used to be pushed to ONE shared cloud node, one per sync call - each push overwrote
+     * the previous zone there, yet every zone was still marked synced locally. So after several
+     * zones, rows flagged "synced" may never actually have reached the cloud. Now that every
+     * zone has its own node, flag them all unsynced ONCE so the next sync uploads each of them
+     * to its new node (a zone that was already there is simply written again). Guarded by a
+     * flag so it only ever happens once per install, not on every sync.
+     */
+    private suspend fun resetZoneSyncFlagsOnce() {
+        val prefs = appContext.getSharedPreferences(ZONE_SYNC_PREFS, Context.MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_ZONES_PER_ID_RESYNC_DONE, false)) return
+        db.focusZoneDao().markAllUnsynced()
+        prefs.edit().putBoolean(KEY_ZONES_PER_ID_RESYNC_DONE, true).apply()
+    }
 
     override suspend fun markZoneSynced(zoneId: String) =
         db.focusZoneDao().markSynced(zoneId)
@@ -97,4 +115,9 @@ class RoomLocalDataSource(context: Context) : LocalDataSource {
 
     override suspend fun deleteFriend(uid: String) =
         db.friendDao().deleteByUid(uid)
+
+    private companion object {
+        const val ZONE_SYNC_PREFS = "focus_zone_sync"
+        const val KEY_ZONES_PER_ID_RESYNC_DONE = "zones_per_id_resync_done"
+    }
 }

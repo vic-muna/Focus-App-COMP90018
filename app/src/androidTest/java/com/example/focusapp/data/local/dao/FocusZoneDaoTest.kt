@@ -76,6 +76,19 @@ class FocusZoneDaoTest {
     }
 
     @Test
+    fun markAllUnsynced_flagsEveryZoneAsPending() = runBlocking {
+        dao.upsert(FocusZoneEntity("z1", "Library", -37.8, 144.9, 50f))
+        dao.upsert(FocusZoneEntity("z2", "Home", -37.81, 144.96, 15f))
+        dao.markSynced("z1")
+        dao.markSynced("z2")
+        assertEquals(0, dao.getUnsynced().size)
+
+        dao.markAllUnsynced()
+
+        assertEquals(setOf("z1", "z2"), dao.getUnsynced().map { it.id }.toSet())
+    }
+
+    @Test
     fun deleteAll_removesEveryZone() = runBlocking {
         dao.upsert(FocusZoneEntity("z1", "Library", -37.8, 144.9, 50f))
         dao.upsert(FocusZoneEntity("z2", "Home", -37.81, 144.96, 15f))

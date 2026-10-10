@@ -27,7 +27,8 @@ import kotlin.coroutines.resumeWithException
  *
  * Where the data lives in the database:
  *   users/{uid}/sessions/{sessionId}       focus sessions
- *   users/{uid}/zone                       the saved location
+ *   users/{uid}/zones/{zoneId}             the saved locations (one node per zone)
+ *   users/{uid}/zone                       OLD single-location node - only read (see fetchUserData)
  *   users/{uid}/appGroups/{groupId}        app groups
  *   users/{uid}/incomingInvites/{partyId}  invites sent to this user
  *   parties/{partyId}/invites/{uid}        invite status (pending / accepted / declined)
@@ -63,16 +64,15 @@ class FirebaseRemoteDataSource(
             )
         }
 
-        val zoneNode = user.child("zone")
-        val zone = run {
-            val id = zoneNode.child("id").getValue(String::class.java) ?: return@run null
-            FocusZone(
-                id = id,
-                name = zoneNode.child("name").getValue(String::class.java) ?: "Focus Zone",
-                latitude = zoneNode.child("latitude").getValue(Double::class.java) ?: return@run null,
-                longitude = zoneNode.child("longitude").getValue(Double::class.java) ?: return@run null,
-                radiusMeters = zoneNode.child("radiusMeters").getValue(Double::class.java)?.toFloat() ?: return@run null,
-            )
+        val zonesFromList = user.child("zones").children.mapNotNull { zoneFrom(it, it.key) }
+        // Backups made before zones/{zoneId} existed live in the old single users/{uid}/zone node.
+        // Still read here so that data comes back on restore; ignored if the same id is already in
+        // zones/ (the newer copy wins). Once every zone has been pushed to zones/ this is redundant.
+        val legacyZone = zoneFrom(user.child("zone"), null)
+        val zones = if (legacyZone != null && zonesFromList.none { it.id == legacyZone.id }) {
+            zonesFromList + legacyZone
+        } else {
+            zonesFromList
         }
 
         val appGroups = user.child("appGroups").children.mapNotNull { child ->
@@ -84,7 +84,23 @@ class FirebaseRemoteDataSource(
             )
         }
 
-        return CloudUserData(sessions = sessions, zone = zone, appGroups = appGroups)
+        return CloudUserData(sessions = sessions, zones = zones, appGroups = appGroups)
+    }
+
+    // Same field-by-field read as the sessions/app groups above (no empty constructor for
+    // Firebase's automatic getValue(Class)). [fallbackId] is the node's own key, for a zone whose
+    // "id" field is missing; null for the old single node, which has no key to fall back on.
+    // Returns null for a node that doesn't hold a complete zone (which is also what a node that
+    // doesn't exist at all looks like).
+    private fun zoneFrom(node: DataSnapshot, fallbackId: String?): FocusZone? {
+        val id = node.child("id").getValue(String::class.java) ?: fallbackId ?: return null
+        return FocusZone(
+            id = id,
+            name = node.child("name").getValue(String::class.java) ?: "Focus Zone",
+            latitude = node.child("latitude").getValue(Double::class.java) ?: return null,
+            longitude = node.child("longitude").getValue(Double::class.java) ?: return null,
+            radiusMeters = node.child("radiusMeters").getValue(Double::class.java)?.toFloat() ?: return null,
+        )
     }
 
     override suspend fun pushSession(session: FocusSession) {
@@ -94,7 +110,19 @@ class FirebaseRemoteDataSource(
 
     override suspend fun pushFocusZone(zone: FocusZone) {
         val uid = getUid()
-        db.getReference("users/$uid/zone").setValue(zone).await()
+        db.getReference("users/$uid/zones/${zone.id}").setValue(zone).await()
+    }
+
+    override suspend fun deleteFocusZone(zoneId: String) {
+        val uid = getUid()
+        db.getReference("users/$uid/zones/$zoneId").removeValue().await()
+        // If the zone being deleted is the one still sitting in the OLD single node (see
+        // fetchUserData), remove that too - otherwise the next restore would read it from there
+        // and bring the deleted zone straight back.
+        val legacyRef = db.getReference("users/$uid/zone")
+        if (legacyRef.child("id").get().await().getValue(String::class.java) == zoneId) {
+            legacyRef.removeValue().await()
+        }
     }
 
     override suspend fun pushAppGroup(group: AppGroup) {

@@ -71,9 +71,9 @@ class FakeLocalDataSource : LocalDataSource {
         syncedAppGroupIds.remove(group.id)
     }
 
-    // Like RoomLocalDataSource.getUnsyncedZone(): only the first unsynced zone.
-    override suspend fun getUnsyncedZone(): FocusZone? =
-        savedZones.firstOrNull { it.id !in syncedZoneIds }
+    // Like RoomLocalDataSource.getUnsyncedZones(): every zone not yet marked synced.
+    override suspend fun getUnsyncedZones(): List<FocusZone> =
+        savedZones.filter { it.id !in syncedZoneIds }
 
     override suspend fun markZoneSynced(zoneId: String) {
         syncedZoneIds.add(zoneId)

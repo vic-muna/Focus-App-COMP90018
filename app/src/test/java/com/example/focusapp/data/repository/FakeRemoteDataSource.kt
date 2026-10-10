@@ -34,6 +34,7 @@ class FakeRemoteDataSource : RemoteDataSource {
 
     val pushedSessions = mutableListOf<FocusSession>()
     val pushedZones = mutableListOf<FocusZone>()
+    val deletedZoneIds = mutableListOf<String>()
     val pushedAppGroups = mutableListOf<AppGroup>()
     val sentInvites = mutableListOf<Pair<String, String>>() // partyId to toUid
     val respondedInvites = mutableListOf<Pair<String, Boolean>>() // partyId to accept
@@ -60,6 +61,12 @@ class FakeRemoteDataSource : RemoteDataSource {
         if (shouldHangPush) awaitCancellation()
         if (shouldFailPush) throw IOException("simulated offline / push failure")
         pushedZones.add(zone)
+    }
+
+    override suspend fun deleteFocusZone(zoneId: String) {
+        if (shouldHangPush) awaitCancellation()
+        if (shouldFailPush) throw IOException("simulated offline / delete failure")
+        deletedZoneIds.add(zoneId)
     }
 
     override suspend fun pushAppGroup(group: AppGroup) {
