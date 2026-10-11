@@ -825,7 +825,7 @@ Before, only the host's phone went into focus. Now the group starts together:
 - Known issue: 4 tests in `FocusRepositoryImplTest` (`saveFocusZone...`) still fail; they
   are not related to this change.
 
-  ## 10/10/2026 Update (Yu-Hao Lu)
+## 10/10/2026 Update (Yu-Hao Lu)
 
 Focus Zones now sync to the cloud as a list: each zone has its own node
 (`users/{uid}/zones/{zoneId}`), so saving a second zone no longer overwrites the first,
@@ -838,3 +838,18 @@ one shared node, so only the last-pushed zone survived in the cloud.
 - Zones previously marked "synced" are re-uploaded once, automatically.
 - No Realtime Database Rules change needed (zones sit under `users/$uid`).
 - Code: `FirebaseRemoteDataSource`, `FocusRepositoryImpl`, `RoomLocalDataSource`.
+
+## 11/10/2026 Update (Yu-Hao Lu)
+
+Party Mode no longer tracks or uploads members' locations. The member status in
+`parties/{partyId}/members/{uid}` used to include latitude/longitude, sent on every GPS fix,
+but nothing in the app read them and they exposed every member's exact position to anyone
+with the group code. Party Mode only needs who is in the group, who is focusing and who has
+App Blocking on.
+
+- `PartyMemberStatus` has no location fields; the status is published only when it changes
+  (join, App Blocking on/off, start/stop focusing, host waiting, leave).
+- Creating or joining a group no longer asks for location permission (the Location tab
+  still does).
+- `SensorDataSource` is now unused.
+- No Realtime Database Rules change needed.
