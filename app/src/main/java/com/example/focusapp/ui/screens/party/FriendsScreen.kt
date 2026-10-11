@@ -42,7 +42,6 @@ import androidx.core.content.getSystemService
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.focusapp.domain.model.Friend
 import com.example.focusapp.domain.model.PartyInvite
-import com.example.focusapp.ui.common.rememberLocationPermissionState
 import com.example.focusapp.ui.theme.FocusAppTheme
 import com.example.focusapp.ui.theme.FocusSpacing
 import com.example.focusapp.ui.theme.FocusTheme
@@ -95,7 +94,6 @@ fun FriendsScreen(
     onQuickFocusAppsChange: (List<AppItem>) -> Unit = {},
     viewModel: PartyModeViewModel = viewModel(),
 ) {
-    val permissionState = rememberLocationPermissionState()
     val members by viewModel.members.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val friends by viewModel.friends.collectAsState()
@@ -183,7 +181,6 @@ fun FriendsScreen(
         onClose = onClose,
         onCreateGroupClick = {
             createCode = newPartyCode()
-            if (!permissionState.hasPermission) permissionState.request()
             viewModel.joinParty(createCode, "You (Host)")
             card = GroupCard.CREATE
         },
@@ -219,7 +216,6 @@ fun FriendsScreen(
                 errorMessage = errorMessage,
                 onClose = ::closeCard,
                 onJoin = {
-                    if (!permissionState.hasPermission) permissionState.request()
                     viewModel.joinParty(joinCode.trim(), "You")
                     joined = true
                 },

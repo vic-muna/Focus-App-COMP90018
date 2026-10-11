@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.example.focusapp.data.accessibility.AccessibilityBridge
 import com.example.focusapp.data.notification.PartyNotification
 import com.example.focusapp.data.repository.FocusRepositoryProvider
-import com.example.focusapp.data.sensor.SensorDataSource
 import com.example.focusapp.domain.model.Friend
 import com.example.focusapp.domain.model.PartyInvite
 import com.example.focusapp.domain.model.PartyMemberStatus
@@ -27,7 +26,8 @@ import com.example.focusapp.data.account.AccountManager
  * The 6-letter group code is the party's id in Firebase. Both the host and
  * the people joining call [joinParty] with that code, which:
  *  1. watches everyone in the party ([members]), and
- *  2. keeps publishing this phone's own status (location, focusing or not, App Blocking on or off).
+ *  2. publishes this phone's own status whenever it changes (focusing or not, App Blocking on or
+ *     off, host waiting). There is no location in the status - see PartyMemberStatus.
  *
  * Starting together: the host's Start ([requestStart]) is held back until every member has App
  * Blocking (Accessibility) on; the members who don't get a notification and the permission
@@ -56,7 +56,6 @@ import com.example.focusapp.data.account.AccountManager
 class PartyModeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = FocusRepositoryProvider.get(application)
-    private val sensorDataSource = SensorDataSource()
 
 
     /** A guest has no friend code, friend list or invites - only group codes ([joinParty]).
@@ -202,13 +201,11 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
     val permissionNeeded: SharedFlow<Unit> = _permissionNeeded.asSharedFlow()
 
     private var observeJob: Job? = null
-    private var publishJob: Job? = null
     private var accessibilityJob: Job? = null
 
     /**
      * Starts watching [partyId]'s members and publishing this phone's status.
      * Calling it again with another code leaves the old party first.
-     * GPS starts too; without location permission the status just has no location.
      */
     fun joinParty(partyId: String, displayName: String) {
         if (currentPartyId == partyId && observeJob?.isActive == true) return
@@ -216,17 +213,16 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
         currentPartyId = partyId
         this.displayName = displayName
 
-        sensorDataSource.startTracking(getApplication())
-
         observeJob = viewModelScope.launch { watchMembers(partyId) }
 
-        // Publishes right away and again whenever this phone turns App Blocking on or off, so
-        // the host's Start sees the change without waiting for a GPS fix.
+        // Publishes right away (a StateFlow hands its current value to a new collector) and
+        // again whenever this phone turns App Blocking on or off, so the host's Start sees the
+        // change. Every other change (focusing, host waiting) publishes from its own setter.
+        // This used to ALSO publish on every GPS fix, via a second job; with the location gone
+        // from the status there is nothing left for it to report.
         accessibilityJob = viewModelScope.launch {
             AccessibilityBridge.isServiceConnected.collect { publishNow() }
         }
-
-        publishJob = viewModelScope.launch { publishOnEveryLocation(partyId) }
     }
 
     /** Keeps [members] current and reacts to what the other members' statuses say. */
@@ -277,41 +273,21 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    /** Publishes this phone's status on every new GPS fix (the repository throttles the writes). */
-    private suspend fun publishOnEveryLocation(partyId: String) {
-        val uid = try {
-            repository.getMyUid()
-        } catch (e: Exception) {
-            _errorMessage.value = friendlyPartyErrorMessage(e)
-            return // Without an id we can't publish; watching members still works.
-        }
-        sensorDataSource.locationFlow.collect { location ->
-            try {
-                repository.updateMyPartyStatus(partyId, currentStatus(uid, location))
-            } catch (e: Exception) {
-                // Keep going; the next GPS update tries again.
-                _errorMessage.value = friendlyPartyErrorMessage(e)
-            }
-        }
-    }
-
-    private fun currentStatus(uid: String, location: Pair<Double, Double>?) = PartyMemberStatus(
+    private fun currentStatus(uid: String) = PartyMemberStatus(
         uid = uid,
         displayName = displayName,
-        latitude = location?.first,
-        longitude = location?.second,
         isFocusing = isFocusing,
         accessibilityReady = AccessibilityBridge.isServiceConnected.value,
         waitingForPermission = waitingOnMembers
     )
 
-    /** Pushes this phone's status now (not waiting for the next GPS fix). */
+    /** Pushes this phone's status now. */
     private fun publishNow() {
         val partyId = currentPartyId ?: return
         viewModelScope.launch {
             try {
                 val uid = repository.getMyUid()
-                repository.updateMyPartyStatus(partyId, currentStatus(uid, sensorDataSource.locationFlow.value))
+                repository.updateMyPartyStatus(partyId, currentStatus(uid))
             } catch (e: Exception) {
                 _errorMessage.value = friendlyPartyErrorMessage(e)
             }
@@ -366,8 +342,6 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
 
         observeJob?.cancel()
         observeJob = null
-        publishJob?.cancel()
-        publishJob = null
         accessibilityJob?.cancel()
         accessibilityJob = null
 

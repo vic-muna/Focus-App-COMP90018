@@ -124,7 +124,7 @@ always exactly "still-pending invites", nothing more.
 
 ### `parties/{partyId}/members/{uid}`
 
-Live snapshot of one member's focus/location status inside a party -
+Live snapshot of one member's focus status inside a party -
 mirrors the `PartyMemberStatus` domain model exactly (it's the one model
 that only ever lives here, never in Room - see that class's doc comment).
 Written by `updateMyPartyStatus()`, read as a live stream by
@@ -135,8 +135,6 @@ every change under this node).
 {
   "uid": "uid-of-member",
   "displayName": "Alex",
-  "latitude": -37.7963,
-  "longitude": 144.9614,
   "focusing": true,
   "accessibilityReady": true,
   "waitingForPermission": false
@@ -150,8 +148,12 @@ mapper writes and reads that one property under two *different* keys, so it alwa
 Because of that, `FirebaseRemoteDataSource.observePartyMembers()` does not use the automatic
 mapping at all: it reads each key by hand.
 
-`latitude`/`longitude` are nullable (a member can share focus status
-without location).
+**No location.** This node used to also hold `latitude`/`longitude`, uploaded on every GPS fix, but
+nothing in the app ever read them and they exposed every member's exact position to anyone with the
+group code, so they were removed. The status is only written when it changes (joining, App
+Blocking turning on/off, focusing starting/stopping, the host waiting, leaving). Each write
+replaces the member's whole node, so an old `latitude`/`longitude` pair disappears the next time
+that member publishes; an old party's nodes whose members never publish again keep theirs.
 
 `accessibilityReady` is whether that phone has App Blocking (Accessibility) turned on. The host
 can't start the group's session until every member has it. A missing key counts as ready.

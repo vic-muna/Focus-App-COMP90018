@@ -238,8 +238,6 @@ class FirebaseRemoteDataSource(
                     PartyMemberStatus(
                         uid = child.child("uid").value as? String ?: child.key.orEmpty(),
                         displayName = child.child("displayName").value as? String ?: "",
-                        latitude = (child.child("latitude").value as? Number)?.toDouble(),
-                        longitude = (child.child("longitude").value as? Number)?.toDouble(),
                         isFocusing = child.child("focusing").value as? Boolean ?: false,
                         accessibilityReady = child.child("accessibilityReady").value as? Boolean ?: true,
                         waitingForPermission = child.child("waitingForPermission").value as? Boolean ?: false

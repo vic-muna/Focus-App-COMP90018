@@ -357,11 +357,11 @@ class FocusRepositoryImplTest {
         assertEquals("fake-uid", repository.getMyUid())
     }
 
-    // ---------------- updateMyPartyStatus throttling (battery/Firebase-quota answer) ----------------
+    // ---------------- updateMyPartyStatus throttling (don't re-send an unchanged status) ----------------
 
     @Test
     fun updateMyPartyStatus_firstCallForAPartyAndUid_alwaysPushes() {
-        val status = PartyMemberStatus(uid = "me", latitude = -37.8, longitude = 144.9)
+        val status = PartyMemberStatus(uid = "me", displayName = "Alex")
 
         repository.updateMyPartyStatus("party-1", status)
 
@@ -369,20 +369,19 @@ class FocusRepositoryImplTest {
     }
 
     @Test
-    fun updateMyPartyStatus_repeatedCallsWithBarelyMovedLocation_withinInterval_areThrottled() {
-        val first = PartyMemberStatus(uid = "me", latitude = -37.8000, longitude = 144.9000)
+    fun updateMyPartyStatus_repeatingAnUnchangedStatus_withinInterval_isThrottled() {
+        val first = PartyMemberStatus(uid = "me", displayName = "Alex")
         repository.updateMyPartyStatus("party-1", first)
 
-        // Same-ish location, well under the 20m threshold, and no time has passed.
-        val second = first.copy(latitude = -37.80001, longitude = 144.90001)
-        repository.updateMyPartyStatus("party-1", second)
+        // Identical status, no time has passed.
+        repository.updateMyPartyStatus("party-1", first.copy())
 
         assertEquals(1, remoteDataSource.updatedStatuses.size)
     }
 
     @Test
-    fun updateMyPartyStatus_pushesAgainOnceMinIntervalElapsed_evenWithoutMoving() {
-        val status = PartyMemberStatus(uid = "me", latitude = -37.8, longitude = 144.9)
+    fun updateMyPartyStatus_pushesAgainOnceMinIntervalElapsed_evenIfUnchanged() {
+        val status = PartyMemberStatus(uid = "me", displayName = "Alex")
         repository.updateMyPartyStatus("party-1", status)
 
         fakeNowMillis += 30_000L
@@ -392,20 +391,19 @@ class FocusRepositoryImplTest {
     }
 
     @Test
-    fun updateMyPartyStatus_pushesAgainOnceMovedFarEnough_evenWithinInterval() {
-        val first = PartyMemberStatus(uid = "me", latitude = -37.8000, longitude = 144.9000)
-        repository.updateMyPartyStatus("party-1", first)
+    fun updateMyPartyStatus_accessibilityOrWaitingChange_alwaysPushesImmediately() {
+        val ready = PartyMemberStatus(uid = "me", displayName = "Alex", accessibilityReady = true)
+        repository.updateMyPartyStatus("party-1", ready)
 
-        // Roughly 100m north - well over the 20m threshold - with no time elapsed.
-        val moved = first.copy(latitude = -37.7991)
-        repository.updateMyPartyStatus("party-1", moved)
+        repository.updateMyPartyStatus("party-1", ready.copy(accessibilityReady = false))
+        repository.updateMyPartyStatus("party-1", ready.copy(accessibilityReady = false, waitingForPermission = true))
 
-        assertEquals(2, remoteDataSource.updatedStatuses.size)
+        assertEquals(3, remoteDataSource.updatedStatuses.size)
     }
 
     @Test
     fun updateMyPartyStatus_isFocusingChange_alwaysPushesImmediately() {
-        val notFocusing = PartyMemberStatus(uid = "me", latitude = -37.8, longitude = 144.9, isFocusing = false)
+        val notFocusing = PartyMemberStatus(uid = "me", isFocusing = false)
         repository.updateMyPartyStatus("party-1", notFocusing)
 
         val startedFocusing = notFocusing.copy(isFocusing = true)
@@ -417,7 +415,7 @@ class FocusRepositoryImplTest {
 
     @Test
     fun updateMyPartyStatus_throttlesIndependentlyPerPartyAndPerUid() {
-        val status = PartyMemberStatus(uid = "me", latitude = -37.8, longitude = 144.9)
+        val status = PartyMemberStatus(uid = "me")
 
         repository.updateMyPartyStatus("party-1", status)
         repository.updateMyPartyStatus("party-2", status) // different party -> separate throttle bucket

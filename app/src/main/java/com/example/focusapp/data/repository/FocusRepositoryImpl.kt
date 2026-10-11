@@ -22,19 +22,14 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
-import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.sin
-import kotlin.math.sqrt
 
-// --- updateMyPartyStatus() throttle tuning (battery-drain answer - see chat/README) ---
-// A naive "call updateMyPartyStatus() on every GPS fix" burns both battery (radio wakeups)
-// and Firebase write quota. These two thresholds are OR'd together: a push goes through once
-// EITHER enough time has passed OR the device has moved far enough, so a stationary user still
-// heartbeats occasionally but a fast-moving one doesn't wait the full interval to update friends.
+// --- updateMyPartyStatus() throttle tuning ---
+// A status identical to the last one pushed for the same party+user is dropped, unless this much
+// time has passed. (This used to also let a push through once the phone had moved 20 m, back
+// when the status carried the member's GPS position - it doesn't any more, see
+// PartyMemberStatus. Nothing calls this on a timer now, so the interval is just a harmless
+// "re-send an unchanged status if asked again after a while".)
 private const val PARTY_STATUS_MIN_INTERVAL_MILLIS = 30_000L
-private const val PARTY_STATUS_MIN_DISTANCE_METERS = 20.0
-private const val EARTH_RADIUS_METERS = 6_371_000.0
 
 // How long a single Firebase push gets before syncPendingSessions()/syncPendingZoneAndAppGroups()
 // give up on it and treat it as "still offline, retry later" - see syncPendingSessions()'s doc
@@ -277,17 +272,13 @@ class FocusRepositoryImpl(
         remoteDataSource.observePartyMembers(partyId)
 
     /**
-     * Throttled pass-through to RemoteDataSource. If a caller (e.g. a GPS callback) calls this
-     * on every new location fix, that would fire a Firebase write - and a radio wakeup - every
-     * few seconds per user, which is both a battery and a cost problem. This lets a status
-     * through only when:
+     * Throttled pass-through to RemoteDataSource: repeating an unchanged status doesn't cost a
+     * Firebase write (and a radio wakeup). A status goes through only when:
      *  - it's the first status we've ever pushed for this partyId+uid (always show up), OR
-     *  - isFocusing, accessibilityReady, waitingForPermission or displayName changed (a real state change, not just noisy GPS jitter -
-     *    friends should see "started focusing" immediately, not up to 30s late), OR
-     *  - at least [PARTY_STATUS_MIN_INTERVAL_MILLIS] has passed since the last push, OR
-     *  - the device has moved at least [PARTY_STATUS_MIN_DISTANCE_METERS] since the last push.
-     * Everything else is dropped - the caller can keep calling this on every GPS tick without
-     * worrying about throttling itself; that's this data layer's job, not the sensor/UI layer's.
+     *  - isFocusing, accessibilityReady, waitingForPermission or displayName changed (a real
+     *    state change - friends should see "started focusing" immediately), OR
+     *  - at least [PARTY_STATUS_MIN_INTERVAL_MILLIS] has passed since the last push.
+     * Everything else is dropped, so callers don't have to dedupe themselves.
      */
     override fun updateMyPartyStatus(partyId: String, status: PartyMemberStatus) {
         val key = "$partyId/${status.uid}"
@@ -299,8 +290,7 @@ class FocusRepositoryImpl(
             previous.first.accessibilityReady != status.accessibilityReady ||
             previous.first.waitingForPermission != status.waitingForPermission ||
             previous.first.displayName != status.displayName ||
-            now - previous.second >= PARTY_STATUS_MIN_INTERVAL_MILLIS ||
-            distanceMetersBetween(previous.first, status) >= PARTY_STATUS_MIN_DISTANCE_METERS
+            now - previous.second >= PARTY_STATUS_MIN_INTERVAL_MILLIS
 
         if (!shouldPush) return
 
@@ -308,21 +298,6 @@ class FocusRepositoryImpl(
         remoteDataSource.updateMyPartyStatus(partyId, status)
     }
 
-    /** Haversine distance in meters. Returns Double.MAX_VALUE (i.e. "definitely moved") if either
-     *  status is missing a location fix, so a status only just gaining/losing GPS still pushes. */
-    private fun distanceMetersBetween(a: PartyMemberStatus, b: PartyMemberStatus): Double {
-        val lat1 = a.latitude
-        val lon1 = a.longitude
-        val lat2 = b.latitude
-        val lon2 = b.longitude
-        if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return Double.MAX_VALUE
-
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLon = Math.toRadians(lon2 - lon1)
-        val h = sin(dLat / 2) * sin(dLat / 2) +
-            cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLon / 2) * sin(dLon / 2)
-        return EARTH_RADIUS_METERS * 2 * atan2(sqrt(h), sqrt(1 - h))
-    }
 
     override suspend fun getFriends(): List<Friend> = localDataSource.getFriends()
 
