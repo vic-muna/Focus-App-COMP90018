@@ -853,3 +853,17 @@ App Blocking on.
   still does).
 - `SensorDataSource` is now unused.
 - No Realtime Database Rules change needed.
+
+## 12/10/2026 Update (Yu-Hao Lu)
+
+- **Time Focus – Usage access prompt.** A time slot's limits (max opens / max minutes) are
+  counted from Android's usage log, so without Usage access the accessibility service skips the
+  limit check and the slot silently does nothing. Time Focus now shows a "Usage access needed"
+  banner with an Open settings button whenever a slot is switched on but Usage access is off.
+  It re-checks when the user comes back from Android's settings, so the banner disappears once
+  the permission is granted. Quick Focus, Location, Wi-Fi and Flip to Focus never needed it.
+- **Party Mode – real usernames.** The member list used to show "You" / "You (Host)", and because
+  that text was also published to Firebase, every other phone in the group saw the same. Members
+  now appear under their signed-in username (host: "username (Host)", guests: "Guest"), including
+  when joining by accepting an invite.
+- Code: `TimeFocusScreen`, `PartyModeViewModel`, `FriendsScreen`.
