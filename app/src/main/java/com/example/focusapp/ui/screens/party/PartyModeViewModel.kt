@@ -156,12 +156,20 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    /**
+     * This phone's name in the member list: the signed-in username (a guest is just "Guest").
+     * It used to be the literal "You" - which is also what got published to Firebase, so every
+     * OTHER phone in the group saw the host and each member as "You" instead of their name.
+     */
+    val myName: String
+        get() = AccountManager.account.value?.username ?: "Guest"
+
     /** Accepts or declines [invite]. Accepting also joins that party. */
     fun respondToInvite(invite: PartyInvite, accept: Boolean) {
         viewModelScope.launch {
             try {
                 repository.respondToPartyInvite(invite.partyId, accept)
-                if (accept) joinParty(invite.partyId, displayName)
+                if (accept) joinParty(invite.partyId, myName)
             } catch (e: Exception) {
                 _errorMessage.value = friendlyPartyErrorMessage(e)
             }
@@ -171,7 +179,7 @@ class PartyModeViewModel(application: Application) : AndroidViewModel(applicatio
     // --- The party this phone is in right now ---
 
     private var currentPartyId: String? = null
-    private var displayName: String = "You"
+    private var displayName: String = ""
     private var myUid: String? = null
 
     // --- What this phone says about itself to the party (see PartyMemberStatus) ---

@@ -181,7 +181,7 @@ fun FriendsScreen(
         onClose = onClose,
         onCreateGroupClick = {
             createCode = newPartyCode()
-            viewModel.joinParty(createCode, "You (Host)")
+            viewModel.joinParty(createCode, "${viewModel.myName} (Host)")
             card = GroupCard.CREATE
         },
         onJoinGroupClick = { card = GroupCard.JOIN },
@@ -194,7 +194,7 @@ fun FriendsScreen(
         when (card) {
             GroupCard.CREATE -> CreateGroupCard(
                 code = createCode,
-                members = memberNames("You (Host)"),
+                members = memberNames("${viewModel.myName} (Host)"),
                 errorMessage = startBlockedMessage ?: errorMessage,
                 onClose = ::closeCard,
                 onStart = {
@@ -212,11 +212,11 @@ fun FriendsScreen(
                 codeInput = joinCode,
                 onCodeInputChange = { joinCode = it },
                 joined = joined,
-                members = memberNames("You"),
+                members = memberNames(viewModel.myName),
                 errorMessage = errorMessage,
                 onClose = ::closeCard,
                 onJoin = {
-                    viewModel.joinParty(joinCode.trim(), "You")
+                    viewModel.joinParty(joinCode.trim(), viewModel.myName)
                     joined = true
                 },
                 modifier = Modifier.consumeTaps(),

@@ -1,9 +1,25 @@
 package com.example.focusapp.ui.screens.timefocus
 
+import android.content.Intent
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import com.example.focusapp.data.usagestats.hasUsageAccessPermission
+import com.example.focusapp.ui.components.button.FocusPillButton
+import com.example.focusapp.ui.theme.FocusTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -109,6 +125,19 @@ fun TimeFocusScreen(
     var confirmDiscard by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<BlockedAppGroup?>(null) }
 
+    // Time Focus's limits (max opens / max minutes) are counted from Android's usage log, which
+    // only an app with "Usage access" can read - without it the accessibility service skips the
+    // limit check entirely and a time slot silently does nothing. Re-read every time the screen
+    // comes back, because the user may have just turned it on in the settings page the banner opens.
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var usageAccessOn by remember { mutableStateOf(hasUsageAccessPermission(context)) }
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            usageAccessOn = hasUsageAccessPermission(context)
+        }
+    }
+
     LaunchedEffect(groupToShow) {
         if (groupToShow != null) {
             viewingGroupId = groupToShow
@@ -174,6 +203,9 @@ fun TimeFocusScreen(
     TimeFocusContent(
         groups = groups,
         headerArt = headerArt,
+        // Only worth a banner when a slot is actually switched on and can't work yet.
+        showUsageAccessBanner = !usageAccessOn && groups.any { it.enabled },
+        onOpenUsageAccessSettings = { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) },
         onEnabledChange = { group, enabled -> updateGroup(group.id) { it.copy(enabled = enabled) } },
         onGroupClick = { viewingGroupId = it.id },
         onGroupLongClick = { pendingDelete = it },
@@ -242,6 +274,8 @@ private fun TimeFocusContent(
     onEditorClose: () -> Unit,
     onEditorConfirm: () -> Unit,
     onOutsideCardClick: () -> Unit,
+    showUsageAccessBanner: Boolean = false,
+    onOpenUsageAccessSettings: () -> Unit = {},
 ) {
     GroupListLayout(
         selectedTab = MainTab.SCHEDULE,
@@ -303,6 +337,9 @@ private fun TimeFocusContent(
             }
         },
     ) {
+        if (showUsageAccessBanner) {
+            UsageAccessBanner(onOpenSettings = onOpenUsageAccessSettings)
+        }
         groups.forEach { group ->
             TimeSlotCard(
                 name = group.name,
@@ -314,6 +351,39 @@ private fun TimeFocusContent(
                 onLongClick = { onGroupLongClick(group) },
             )
         }
+    }
+}
+
+/** Shown above the slots while a slot is on but Usage access is off - see [TimeFocusScreen]. */
+@Composable
+private fun UsageAccessBanner(onOpenSettings: () -> Unit) {
+    val colors = FocusTheme.colors
+    val typography = FocusTheme.typography
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(colors.surfaceSunken)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(text = "Usage access needed", style = typography.tileTitle, color = colors.onSurface)
+        Text(
+            text = "Without it, Focus can't count how often or how long each app is used, so your time " +
+                "slots won't block anything. Turn on Usage access for Focus in Android's settings.",
+            style = typography.body,
+            color = colors.onSurfaceMuted,
+        )
+        FocusPillButton(
+            label = "Open settings",
+            containerColor = colors.primaryAction,
+            contentColor = colors.onPrimaryAction,
+            onClick = onOpenSettings,
+            enabled = true,
+            height = 44.dp,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
