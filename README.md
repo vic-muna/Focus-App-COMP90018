@@ -80,7 +80,7 @@ flowchart TD
   - **Continue as guest** (anonymous). A guest's data can't be recovered after logging out, so Settings warns before it.
 - **Forgot password?** (on the Log in form): type the username, the account's security question appears, answer it and choose a new password. No email is sent: the password is stored encrypted with a key made from the answer (`data/account/PasswordRecovery.kt`).
 - A guest can become an account later in **Settings → Account → Create account**; the user id stays the same, so saved data is kept.
-- Logging in on a new phone restores the account's sessions, Focus Zone and app groups from Firebase. When a different user logs in, the previous user's data on the phone is cleared first.
+- Logging in on a new phone restores the account's sessions and Focus Zones from Firebase (each feature's blocked-app list stays on the phone, see Known limitations). When a different user logs in, the previous user's data on the phone is cleared first.
 
 ### 2. Allow the permissions
 - **Asked at launch:** location (and "Allow all the time" for geofences) and, on Android 13+, notifications.
@@ -145,8 +145,8 @@ In Time Focus, tap a card for its summary, the pencil to edit, hold to delete. A
 **Account** (signed in as, Create account for guests, Log out) · **Rewards** (total focus time, points) · **Noise Alert** (on/off, threshold 40–85 dB) · **Flip to Focus** (on/off, its apps) · **Music** (Focus Music, Background Music) · **Permissions**.
 
 ### 12. Where the data lives
-- **On the phone:** Room (sessions, Focus Zone, app groups, friends) and SharedPreferences (each feature's blocked-app list, Wi-Fi networks, theme, music, shop purchases, Noise Alert / Flip settings, Focus Coach consent and daily count).
-- **Firebase Realtime Database:** sessions, the Focus Zone and app groups (restored at login), parties, friend codes and invites.
+- **On the phone:** Room (sessions, Focus Zones, friends, plus an app-group table that no screen uses yet) and SharedPreferences (each feature's blocked-app list, Wi-Fi networks, theme, music, shop purchases, Noise Alert / Flip settings, Focus Coach consent and daily count).
+- **Firebase Realtime Database:** sessions and Focus Zones (restored at login), parties, friend codes and invites.
 - **Firebase Auth:** accounts and guests. **Firebase AI Logic:** Focus Coach.
 
 ---
@@ -194,7 +194,7 @@ Following Android's official recommended app architecture, the app is structured
 - **Domain Layer** – Core business logic as Use Cases (`EvaluateFocusTriggerUseCase`, `EvaluateUsageLimitUseCase`, `CalculateFocusRewardUseCase`, `BuildWeeklyFocusSummaryUseCase`, `NoiseLevelTracker`, `ShakeDetector`).
 - **Data Layer** – A Repository unifies three data sources:
   - **Sensor Data Source** – GPS and geofencing, accelerometer / gravity / proximity (gestures), microphone level, Wi-Fi state, app-usage stats and Accessibility events
-  - **Local Data Source** – Room (sessions, Focus Zone, app groups, friends) and SharedPreferences (blocked-app lists and settings), so the app works offline
+  - **Local Data Source** – Room (sessions, Focus Zones, friends; the app-group table is not used by any screen yet) and SharedPreferences (blocked-app lists and settings), so the app works offline
   - **Remote Data Source** – Firebase Realtime Database and Auth (session / zone / app-group sync, accounts, Party Mode, friend codes); Firebase AI Logic for the Focus Coach
 
 ---
@@ -593,7 +593,7 @@ Quick Focus changes below). David's logic is kept; only the UI and wiring change
 - **Guest → account:** Settings → Account → **Create account** links the new
   username/password to the guest, so the uid and all saved data stay the same.
 - **Restore on login:** logging in on a new phone (or after a reinstall) downloads
-  the account's sessions, Focus Zone and app groups from Firebase into Room and
+  the account's sessions and Focus Zones from Firebase into Room and
   re-registers the zone geofences. A failed download is retried on the next start.
 - **Switching users:** when a different user signs in, the previous user's data on
   the phone (Room, blocked-app lists, saved Wi-Fi, geofences) is cleared first.
@@ -607,9 +607,16 @@ Quick Focus changes below). David's logic is kept; only the UI and wiring change
 ### Known limitations
 - No email. ~~So a forgotten password can't be reset.~~ Since 04/10 it can be recovered with a
   security question (see the 04/10 update by Yu-Hao Lu).
-- Only sessions, the Focus Zone and app groups sync. Per-feature blocked-app lists,
+- Only sessions and Focus Zones sync (one cloud node per zone). Per-feature blocked-app lists,
   Wi-Fi networks, friends and the theme are still phone-only.
-- Firebase keeps one `zone` per user, so only the last saved location is restored.
+- The Room `AppGroup` pipeline (`saveAppGroup()`, `pushAppGroup()`, restore, `users/{uid}/appGroups`)
+  is implemented and unit-tested, but no screen calls it, so nothing is ever written there. The
+  lists the screens really use are `BlockedAppGroup`s in SharedPreferences (`BlockedAppGroupStorage`).
+- ~~Firebase keeps one `zone` per user, so only the last saved location is restored.~~ Fixed: every
+  Focus Zone has its own cloud node (`users/{uid}/zones/{id}`), so all of them are restored. A zone
+  deleted while offline is not deleted in the cloud and can come back on the next restore.
+- A failed upload is not retried when the connection returns: it stays marked as unsynced and is
+  sent the next time a session or zone is saved, and when the user logs out.
 
 ## 03/10/2026 Update (David Shiau) - Rewards
 

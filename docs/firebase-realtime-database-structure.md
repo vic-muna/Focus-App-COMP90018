@@ -76,8 +76,14 @@ in `zones/` wins over the old node when both have the same id.
 
 ### `users/{uid}/appGroups/{groupId}`
 
+> **Nothing writes to this node yet.** `saveAppGroup()` / `pushAppGroup()` and the restore of this
+> node are implemented and unit-tested, but no screen saves a Room `AppGroup` (only tests call
+> `saveAppGroup()`). The groups the screens really use are `BlockedAppGroup`s kept in
+> SharedPreferences by `BlockedAppGroupStorage`, which are **not** synced - see the end of this
+> section.
+
 One [`AppGroup`](../app/src/main/java/com/example/focusapp/domain/model/AppGroup.kt) ("restrictions/plans"),
-mirrors the local Room row. Written by `pushAppGroup()`, same
+mirrors the local Room row. It would be written by `pushAppGroup()`, with the same
 offline-first shape as sessions/zones above.
 
 ```json
@@ -87,6 +93,14 @@ offline-first shape as sessions/zones above.
   "packageNames": ["com.instagram.android", "com.zhiliaoapp.musically"]
 }
 ```
+
+### Not in Firebase (phone only)
+
+- The blocked-app lists of Time Focus, Location, Wi-Fi, Quick Focus and Flip to Focus
+  (`BlockedAppGroupStorage`, SharedPreferences) - so they are not restored on a new phone.
+- Friends (Room), Wi-Fi networks, theme, music and shop purchases, Noise Alert / Flip settings.
+- A zone deleted while offline: the phone's row is gone, so nothing remembers to delete the cloud
+  copy, and it can come back on the next restore.
 
 ### `parties/{partyId}/invites/{uid}`
 
